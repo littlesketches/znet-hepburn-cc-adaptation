@@ -1,0 +1,170 @@
+
+:root{
+    /* Palette */
+    --darkGreen:        #00261B;
+    --brightGreen:      #04e79f;
+    --midGreen:         hsl(161, 37%, 46%);
+    --lightGreen:       #9CBAAC;
+    --midGrey:          #666666;
+    --lightGrey:        #f8f8f8;
+    --offWhite:         #EFEFEF;
+    --foreground:       #2b167d;
+    --bg-color:         #fff;
+    --color-overlay-1:  #03E69F;
+    --color-overlay-2:  #caa02f;
+    --color-overlay-3:  #00261B;
+
+    /* Google palette for testing */
+    --nodeBase:         var(--brightGreen);
+    --nodeLabel:        var(--darkGreen);
+    --flood:            #4285F4;
+    --heat:             #F4B400;
+    --fire:             #DB4437;
+    --drought:          #0F9D58;
+
+    --healing-country:  #00261B;
+
+    --approach-bg:      #9CBAAC;
+    --risk-bg:          #2b167d;
+    --resilience-bg:    #03E69F;
+
+    --bg-blend:          multiply;
+    --blur:              0px;
+    --fg-blend:          lighten;
+    --spacing:           0.5rem;
+
+    --scale-shadow:     rgba(104, 104, 104, 0.15);
+    --scale-local:       #fff;  
+    --scale-regional:    var(--scale-shadow); 
+    --scale-state:       var(--scale-shadow); 
+    --scale-national:    var(--scale-shadow); 
+
+    --postacard-img-height: 40vh;
+}
+html, body {
+	position: relative;
+	width: 100%;
+	height: 100%;
+}
+
+body {
+	color: #333;
+	margin: 0;
+	/* padding: 8px; */
+	box-sizing: border-box;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+figure{
+    margin: 0;
+}
+a {
+	color: rgb(0,100,200);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:visited {
+	color: rgb(0,80,160);
+}
+
+label {
+	display: block;
+}
+
+input, button, select, textarea {
+	font-family: inherit;
+	font-size: inherit;
+	-webkit-padding: 0.4em 0;
+	padding: 0.4em;
+	margin: 0 0 0.5em 0;
+	box-sizing: border-box;
+	border: 1px solid #ccc;
+	border-radius: 2px;
+}
+
+input:disabled {
+	color: #ccc;
+}
+
+button {
+	color: #333;
+	background-color: #f4f4f4;
+	outline: none;
+}
+
+button:disabled {
+	color: #999;
+}
+
+button:not(:disabled):active {
+	background-color: #ddd;
+}
+
+button:focus {
+	border-color: #666;
+}
+
+p, li{
+    color: 	var(--color-content-text);
+}
+p{
+    margin-block-start: 0.5rem;
+    line-height: 1.5;
+}
+li{
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+}
+
+.about-container p,
+.about-container ul{
+    font-size:      1rem;
+}
+
+*,
+*::after,
+*::before {
+    box-sizing: border-box;
+} 
+
+
+
+body {
+    margin: 0;
+    --color-text: #2e2e2e;
+    --color-text-frame: #fff;
+    --color-bg: #fff;
+    --color-link: #555;
+    --color-link-hover: #fff;
+    --color-hero-bg: #0e0e0e;
+    --color-hero-title: #fff;
+    --color-enter: #fff;
+    --color-content-title: #111;
+    --color-content-text: #868181;
+    --color-select: #111;
+    --color-select-item: #868181;
+    --color-select-item-hover: #000;
+    --color-select-current: #111;
+    --color-social: #555;
+    --color-social-hover: #000;
+    --color-reel-number: #111;
+    --color-menu-link: #101010;
+    --color-menu-link-hover: #000;
+
+    color:                      var(--color-text);
+    background-color:           var(--color-bg);
+    text-rendering:             optimizeLegibility;
+    -webkit-font-smoothing:     antialiased;
+    -moz-osx-font-smoothing:    grayscale;
+}
+
+
+
+/* .hero__title span {
+    will-change: transform;
+    display: inline-block;
+    white-space: pre;
+} */
