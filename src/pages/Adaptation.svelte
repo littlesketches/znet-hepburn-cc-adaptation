@@ -65,7 +65,7 @@
         </div>
 
         <div class = "vis-wrapper">
-            <img src="../static/img/christian-bass-11UT32fql64-unsplash.jpg" alt=''>
+            <img src="./static/img/christian-bass-11UT32fql64-unsplash.jpg" alt=''>
         </div>
     </section>
 
@@ -153,7 +153,7 @@
         </div>
 
         <div class = "vis-wrapper">
-            <img src="../static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg" alt=''>
+            <img src="./static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg" alt=''>
         </div>
     </section>
 
