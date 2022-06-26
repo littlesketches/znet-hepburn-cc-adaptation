@@ -93,8 +93,6 @@
                 gsap.fromTo(el, 
                     {
                         opacity:                0,
-                        x:                      i == 0 ? 0 : 0, 
-                        y:                      0,
                     },
                     {       
                         scrollTrigger: {
@@ -105,8 +103,6 @@
                             markers:            debug.scene
                         },
                         opacity:                1,
-                        x:                      0,
-                        y:                      0,
                         onStart:               () => updateScene(el),
                         onReverseComplete:     () => updateScene(i === 0 ? sections[0] : sections[i-1])  
                     }

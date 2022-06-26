@@ -19,6 +19,10 @@ const schema = {
         data:           [],
         fields:         ["Variable", "Australian Climate Futures tool full name", "Description", "Linked hazard events", "recordID"]
     },
+    climateVariablesCH: {
+        data:           [],
+        fields:         ["Variable", "Alias", "Data availability", "Unit", "Change unit", "Description", "order", "Linked hazards", "Linked hazard events", "recordID"]
+    },
     ipccHazards: {
         data:           [],
         fields:         ["IPCC impactHazard (IPCC)", "Description", "Linked hazards", "recordID"]

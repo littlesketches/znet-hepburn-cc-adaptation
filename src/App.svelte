@@ -3,6 +3,7 @@
 	import { onMount }          from 'svelte';
 	import { ui, data }         from './data/stores.js'	 
     import { gsap, Quad, Quint, Expo} from 'gsap'
+    import { tsv }              from 'd3'
     import { Revealer }         from './utils/revealers.js'
 	import Postcards 		    from './pages/Postcards.svelte'
 	import Adaptation 		    from './pages/Adaptation.svelte'
@@ -10,13 +11,16 @@
 
 	export let actionData;
 	export let schemaData;
+	export let climateData;
 	export let queryParams = {};
 
-    // Store loaded data adn schema
+
+    // Store loaded action data and schema
     $data.actions       = actionData["Adaptation actions"].filter(d => d["*** State ***"] === "Include" )
     $data.stakeholders  = actionData["Stakeholders"]
     $data.references    = actionData["References"]
     $data.schema        = schemaData
+    $data.climate       = climateData
 
     // Calc and store data stats
     $data.stats.actions = {
@@ -210,12 +214,14 @@
 
         // Set page view if set via query param
         if(queryParams.get('page')) showPage(queryParams.get('page'))
+
     });
 
 </script>
 
 
 <!-- HTML COMPONENT MAKUP-->
+
 <main id = "app-container"> 
     <!-- "Page" section with basic control flow -->
     <section class = "chapters">
@@ -278,12 +284,9 @@
 </main>
 
 
+
 <!-- STYLES -->
 <style>
-
-
-
-
     main {
         position:               relative;
         width:                  100%;

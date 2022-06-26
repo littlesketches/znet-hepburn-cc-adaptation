@@ -2,6 +2,7 @@
     import Logo                 from '../components/shared/Logo.svelte'
     import { gsap, ScrollTrigger } from "gsap/all";
 	import { ui, data }         from '../data/stores.js'
+	import { tsv }              from 'd3'
     import Type                 from '../components/byPage/actions/vis/Type.svelte'
     import ClimateVariables     from '../components/byPage/adaptation/vis/ClimateVariables.svelte'
     import ClimateHazards       from '../components/byPage/adaptation/vis/ClimateHazards.svelte'
@@ -13,9 +14,11 @@
             .scrollIntoView({behavior: 'smooth'})
     };
 
+
 </script>
 
 <!-- HTML COMPONENT MARKUP -->
+
 <!-- Hero page section-->
 <div class = 'hero-wrapper'>
     <div class="hero-content">
@@ -178,42 +181,6 @@
     </section>
 </div>
 
-
-<!-- 
-<div class="content content--grid">
-    <h3 class="content__title">
-        <span class = "title--mute">about</span><br/>
-        climate change<br/>
-        <span class = "title--highlight">adapation</span>
-    </h3>
-    <div class="content__text">
-        <p> The process of adjustment to actual or expected climate and its effects.
-            In human systems, adaptation seeks to moderate or avoid harm or
-            exploit beneficial opportunities. In some natural systems, human intervention may facilitate adjustment to expected climate and its effects
-        </p>
-        <p>&mdash;&mdash; IPCC</p>
-    </div>
-
-    <div class="social">
-    </div>
-    <div class="reel">
-        <img class="reel__img" src="./static/img/christian-bass-11UT32fql64-unsplash.jpg" alt="Some image" /><span class="reel__number">001</span>
-        <img class="reel__img" src="./static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg" alt="Some image" /><span class="reel__number">002</span>
-        <img class="reel__img" src="./static/img/david-von-diemar-tpXsqQMCFrM-unsplash.jpg" alt="Some image" /><span class="reel__number">003</span>
-        <img class="reel__img" src="./static/img/lady-romy-ozu-OQzvHkm5oNw-unsplash.jpg" alt="Some image" /><span class="reel__number">004</span>
-    </div>
-    <div class="select">
-        <h4 class="select__heading">select</h4>
-        <a class="select__item select__item--current">all</a>
-        <a class="select__item">portraits</a>
-        <a class="select__item">b &amp; w</a>
-    </div>
-    <div class="logo">
-        <div class="logo__wrapper">
-            <Logo/>
-        </div>
-    </div>
-</div> -->
 
 
 <!-- STYLES -->
