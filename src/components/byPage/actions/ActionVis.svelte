@@ -26,6 +26,7 @@
 
     // Node and schema data
     const nodes = $data.actions.map( d => d )
+
     const typeData =  {
         nodes:  $data.schema.actionTypeNodes.data,
         links:  $data.schema.actionTypeLinks.data
@@ -78,8 +79,8 @@
 
 
     // Base force configurations
-    const centerPos =  {x: dims.width * 0.5, y:dims.height * 0.5 },
-        centerForce = {
+    const centerPos =  {x: dims.width * 0.5, y:dims.height * 0.5 }
+    const centerForce = {
             x:  d3.forceX().x(centerPos.x),
             y:  d3.forceY().y(centerPos.y)
         }
@@ -89,9 +90,8 @@
         .radius(dims.width * 0.5)
 
     $: collisionType =  $ui.state.actionVis.nodes.shadow ? 'scale' : 'standard'
-    $: forceCollide = (function(){
 
-        console.log(collisionType)
+    $: forceCollide = (function(){
         const colissionMargin = 2.5
         switch(collisionType){
             case 'scale':
@@ -206,6 +206,24 @@
                                             .strength(  (d, i) => i%2 === 0 ? 2 : 0) ]
                     ]
 
+                // case "cluster-type": 
+                //     schema = $data.schema.actionTypes.data
+                //     const actionTypeNodes = $data.schema.actionTypeNodes.data
+                //     return [
+                //         ["x",           d3.forceX().x(d => {
+                //                             const type = schema.filter(e => e.recordID === d["Action type"][0])[0].Type
+                //                             return ( $data.schema.actionTypeNodes.data.filter(d => d.Name === type)[0].xPos * 0.5 + 0.5) *  dims.width 
+                //                         })
+                //         ],
+                //         ["y",           d3.forceY().y(d => {
+                //                             const type = schema.filter(e => e.recordID === d["Action type"][0])[0].Type
+                //                             return  $data.schema.actionTypeNodes.data.filter(d => d.Name === type)[0].yPos  *  dims.height 
+                //                         })
+                //         ],
+                //         ["collide",     forceCollide ],
+                //         ["charge",      d3.forceManyBody().strength(10) ]
+                //     ]
+
                 case "cluster-type": 
                     schema = $data.schema.actionTypes.data
                     const actionTypeNodes = $data.schema.actionTypeNodes.data
@@ -223,6 +241,7 @@
                         ["collide",     forceCollide ],
                         ["charge",      d3.forceManyBody().strength(10) ]
                     ]
+
 
                 case "cluster-concrete-abstract": 
                     schema = $data.schema.actionTypes.data

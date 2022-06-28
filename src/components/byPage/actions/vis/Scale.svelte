@@ -7,7 +7,8 @@
     import { slugify }              from "../../../../utils/helpers.js"
 
     export let dims     = {}                
-    export let scaleData     = []                
+    export let scaleData     = []            
+ 
 </script>
 
 

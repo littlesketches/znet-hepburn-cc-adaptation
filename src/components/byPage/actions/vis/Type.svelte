@@ -28,7 +28,7 @@
                     .style('transform' , d => `translate( ${(d.xPos * 0.5 ) * dims.width}px, ${d.yPos * dims.height}px`)
 
                 const bg = group.append('rect')
-                    .style('fill', 'var(--bg-color')
+                    .style('fill', 'var(--bg-color)')
                     .style('stroke',   d => d.Class ==='foundation' ? '#000' : 'none')
                     .style('stroke-width',  '3px')
                     .style('border-radius',  '3px')
@@ -38,25 +38,22 @@
                 group.append('path').classed('flow', true)
                     .style('transform', d =>  d.nodeCurve !== "invert" ? `translate(0px, ${d.curveYoffset}px)` : `translate(0px, ${d.curveYoffset - 20}px) scaleY(-1)`)
                     .attr('d', d => d.Class === 'type' ? "M -100 10 C -30 50, 30 50, 100 10" : null)
+                    .classed('remove', d => d.Class !== 'type')
                     .style('fill', 'var(--bg-color')
 
                 let text
-                text  = group.append('text').classed(`action-node-label `, true)
+                text = group.append('text').classed(`action-node-label `, true)
                     .attr('x' , 0).attr('y',  0).attr('dy' , 0)
-                    .text(d => d.Class === 'type' ? d.Name : null)
+                    .text(d => d.Name)
+                    .classed(d => d.Class, true)
                     .call(textWrap, dims.width * 0.2, 1.1, true)
-
-                text  = group.append('text').classed(`action-node-label `, true)
-                    .attr('x' , 0).attr('y',  0).attr('dy' , 0)
-                    .text(d => d.Class !== 'type' ? d.Name : null)
-                    .call(textWrap, dims.width * 0.2, 1.1, true)
-
 
                 let box = text.node().getBBox()
+
                 bg.attr('width', d => d.Class === 'foundation' ? box.width + 80 : 180)
-                bg.attr('height',d => d.Class === 'foundation' ? box.height + 20:  70)
+                bg.attr('height',d => (d.Class === 'foundation' || d.Class === 'response') ? box.height + 50:  70)
                 bg.attr('x', d => d.Class === 'foundation' ? -box.width * 0.5 - 40 : -90)
-                bg.attr('y', d => d.Class === 'foundation' ? -box.height * 0.5- 15 : -35)
+                bg.attr('y', d => (d.Class === 'foundation' || d.Class === 'response') ? -box.height * 0.5 - 30 : -35)
             })
 
     

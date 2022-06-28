@@ -39,7 +39,12 @@
     --scale-state:       var(--scale-shadow); 
     --scale-national:    var(--scale-shadow); 
 
-    --postacard-img-height: 40vh;
+    --rcp45:            #00ffff;
+    --rcp85:             rgb(226, 31, 252);
+
+    --postcard-img-height: 40vh;
+
+
 }
 html, body {
 	position: relative;

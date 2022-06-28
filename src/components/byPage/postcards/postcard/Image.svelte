@@ -26,7 +26,7 @@
         overflow:            hidden;
         padding:             var(--spacing);
         position:            relative;
-        height:              var(--postacard-img-height);
+        height:              var(--postcard-img-height);
     }
 
     .img-wrapper img {
