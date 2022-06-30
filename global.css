@@ -40,7 +40,7 @@
     --scale-national:    var(--scale-shadow); 
 
     --rcp45:            #00ffff;
-    --rcp85:             rgb(226, 31, 252);
+    --rcp85:             #e21ffc;
 
     --postcard-img-height: 40vh;
 
@@ -135,7 +135,12 @@ li{
     box-sizing: border-box;
 } 
 
-
+figure {
+    display:                block;
+    text-align:             center;
+    width:                  100%;
+    overflow:               hidden;
+}
 
 body {
     margin: 0;
