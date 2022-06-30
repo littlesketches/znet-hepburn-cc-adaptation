@@ -1,9 +1,9 @@
 <script>
     import { ui, data }     from '../../../data/stores.js'
-	import { fade }    from 'svelte/transition';
-import { filter, map } from 'd3';
+	import { fade }         from 'svelte/transition';
 
 
+    console.log($data.schema.communityRisks.data)
 
 </script>
 
@@ -14,16 +14,19 @@ import { filter, map } from 'd3';
     <tr>
         <th>Risk theme</th>
         <th>Community risk</th>
-        <th>Climate hazards</th>
         <th>Hazard events</th>
+        <!-- <th>Climate hazards</th> -->
     </tr>
 
     {#each $data.schema.communityRisks.data as d, i}
+    {@const riskGroupArray = d["Risk area"].map(recordID => $data.schema.riskArea.data.filter(e => e.recordID === recordID)[0]["Risk area"]) } 
+    {@const riskArray = [...new Set(d["Linked hazards"])].map(recordID => $data.schema.hazards.data.filter(e => e.recordID === recordID)[0]["Hazard"] )  }
+
     <tr>
-        <td class = 'community-theme'>{d["Risk group"] ? d["Risk group"].join(" | ") : ''}</td>
+        <td class = 'community-theme'>{ riskGroupArray ? riskGroupArray.join(", ") : '' }</td>
         <td class = 'community-risk'>{d["Community risk"]}</td>
-        <td class = 'hazard'>TBA</td>
         <td class = 'hazard-event'>{d["Hazard events"] ? d["Hazard events"].map(d => $data.schema.hazardEvents.data.filter(e => e.recordID === d)[0]["Hazard event"]).join(", ")  : 'None'} </td>
+        <!-- <td class = 'hazard'>{riskArray ? riskArray.join(", ") : '' }</td> -->
     </tr>
     {/each}
 
@@ -34,7 +37,6 @@ import { filter, map } from 'd3';
     table{ 
         width: 100%;
          border-collapse: collapse;
-
     }
 	th{
         font-size:      1rem;

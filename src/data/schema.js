@@ -5,7 +5,7 @@ export  {
 const schema = {
     actionTypes: {
         data:           [],
-        fields:         ["Type", "Description", "Foundational response", "Response type", 'Description', 'Linked adaptation actions', 'recordID', 'links', 'nodeX', 'nodeY', 'filterOut']
+        fields:         ["Type", "Description", "Response type", 'Description', 'Linked adaptation actions', 'recordID']
     },
     hazardEvents: {
         data:           [],
@@ -13,7 +13,7 @@ const schema = {
     },
     hazards: {
         data:           [],
-        fields:         ["Hazard", "Description", "Climate hazard (IPCC)", "Trend", "Linked hazard events", "Linked adaptation actions", "recordID"]
+        fields:         ["Hazard","Trend", "Climate hazard (IPCC)",  "Linked hazard events", "Link climate variables", "Linked adaptation actions", "recordID"]
     },
     climateVariables: {
         data:           [],
@@ -37,13 +37,12 @@ const schema = {
     },
     communityRisks: {
         data:           [],
-        fields:         ["Community risk", "Risk group", "Risk bearer", "Hazard events", "IPCC impact", "recordID"]
+        fields:         ["Community risk", "Risk area", "Risk bearer", "Hazard events", "Linked hazards", "IPCC impact", "recordID"]
     },
-    riskGroup: {
+    riskArea: {
         data:           [],
-        fields:         ["Risk group", "Description", "recordID"]
+        fields:         ["Risk area", "Description", "recordID"]
     },
-
     ipccImpacts: {
         data:           [],
         fields:         ["IPCC impact", "IPCC Impact theme", "Impacted system", "Description", "Hazard", "Baseline frequency", "Projected frequency", "recordID"]

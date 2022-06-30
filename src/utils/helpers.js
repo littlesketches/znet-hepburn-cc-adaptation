@@ -54,7 +54,7 @@ function textWrap(text, width, lineHeight, centerVertical = false) {
             }                    
         }            
         if(centerVertical){
-            text.style("transform",  "translateY(-"+(10 * (lineNumber))+"px)")
+            text.style("transform",  "translateY(-"+(14 * (lineNumber))+"px)")
         }
     })
 }; // end wrap()

@@ -99,6 +99,7 @@
                 </p> 
                 <p>The role of model projections and different climate scenarios will be used to highlight how the occurence of hazard events is expected to increase in every scenario. This reiterates the need to take action to adapt, and how its important that actions are robust and need to perform well under a wide range of climate futures.</p>
                 <p>The difference between a hazard and an event will also be clarifed, as well as the link to climate variables that drive thhe hazards. These relationaships will be presented in a visual to show how the change in cliamte, measured and observed in climate variables, increases the frequency and severity of hazards, and leads to more hazard events. </p>
+                <p>Acknowledge that the IPCC has 'has developed the more general concept of ‘climatic impact driver’ to provide information about “natural or human-induced climate events or trends that may have an impact (detrimental or beneficial) on an element of society or ecosystems” </p> 
             </div>
         </div>
 
@@ -112,10 +113,11 @@
         <div class = "narrative-wrapper">
             <div scene = 0>
                 <hr>
-                <h2>Climate risks are community risks </h2>
-                <p>This section will iilustrate the concept of climate risk through potential community impacts. These impacts can be quite specific and unqiue to Hepburn and the community, and are likely to be aggregated into themes and focus areas (for the region.)
+                <h2>Climate risks and community impacts </h2>
+                <p>This section will explain risk and iilustrate the concept of through potential community impacts(?).  These impacts can be quite specific and unqiue to Hepburn and the community, and are likely to be aggregated into themes and focus areas (for the region.)
                 </p> 
                 <p>The initial aim here is to make the concept of climate risks as tangible as posible by framing them as (potential) community impacts. An information visualisation might be possible here IF impacts/risks are well structured.</p>
+                <p>Another consideration is the idea of risk as "the potential for adverse consequences" and "earlier definitions centred on the interaction between hazard, vulnerability and exposure" (which is more closley related to a section the inlcudes adaptive capacity) </p>
             </div>
         </div>
 
@@ -192,7 +194,7 @@
     .section-wrapper{
         display:                grid;
         column-gap:             6rem;
-        min-height:             100vh;
+        /* min-height:             100vh; */
         padding-bottom:         25vh;
     }
     .col-1-2{
