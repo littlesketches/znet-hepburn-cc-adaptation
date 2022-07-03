@@ -4,7 +4,7 @@
     import * as d3                  from 'd3'
     import { textWrap, slugify }    from "../../../../utils/helpers.js"
     import { ui, data }             from '../../../../data/stores.js';
-    import { icons }                from "../../../../utils/icons.js"
+    import { icons, circleAntiClockwise }   from "../../../../utils/icons.js"
 
     const dims = {
         width:              1600, 
@@ -15,53 +15,54 @@
         .map( d => d["Linked hazard events"].length)
         .map((sum => value => sum += value)(0)))
         .map( (d, i) => d + i* 0.65 - 1)
+
 </script>
 
 <!-- HTML COMPONENT MARKUP-->
 <figure class = "svg-container">
     <svg class = "climate-hazards-vis" viewBox = '0 0 {dims.width} {dims.height}'>
         <defs>
-            <linearGradient id="gr-hazard" x1="0" y1="0" x2="100%" y2="100%">
-                <stop stop-color="hsl(50, 100%, 70%)" offset="10%"/>
-                <stop stop-color="hsl(320, 100%, 50%)" offset="90%"/>
+
+            <linearGradient id="gr-risk" x1="0" y1="0" x2="100%" y2="100%">
+                <stop stop-color="hsl(144, 97%, 70%)" offset="30%"/>
+                <stop stop-color="hsl(236, 60%, 85%)" offset="90%"/>
             </linearGradient>
         </defs>
 
         <g style = 'transform: translate({0}px, {100}px)'>
             <g style='transform: translate({dims.width * 0.5}px, 0px)'>
-                <text class = "header"> Climate <tspan class = "hazard-text">hazards</tspan> and community risks</text>
-                <text class = "sub-header" y = 40>Linking hazards to risk</text>
-                <text class = "sub-header" y = 70>.</text>
+                <text class = "header">Determinants of <tspan class = "risk-text">Climate risk</tspan></text>
+                <text class = "sub-header" y = 40>How climate hazards interact with hazard exposure and vulnerability to form risk.</text>
+                <text class = "sub-header" y = 70>And the how our response through adaptation and mitigation actions can manage and frame climate risk.</text>
             </g>
         </g>
 
-        <g class = "hazards-group" style="transform:translate({ dims.width * 0.25}px, 0px)">
-            {#each $data.schema.hazards.data as obj , i}
-            <g style="transform:translate(0px, {   (eventsByHazard[i] / $data.schema.hazardEvents.data.length * dims.height * 0.8) + dims.height * 0.2 }px)">
-                <path class = "hazard-icon" d = {icons[slugify(obj.Hazard)]} style="transform:translate(0px, -80px) scale(1.25)" />
-                <text class = "hazard-label">{@html obj.Hazard}</text>
-                {#each $data.schema.hazardEvents.data.filter(d => d.Hazard[0] === obj.recordID) as d, i}
-                <g style = 'transform: translate({0}px, {80 * i + 60}px)'>
-                    <text class = "event-label">{@html d["Hazard event"]}</text>
-                    <text class = "event-description" dy = 25>{@html d["Description"]}</text>
+        <g class = "risk-ovals-group" style="transform:translate({dims.width * 0.5}px, { dims.height * 0.55}px)">
+            <circle class = "response-circle" r={dims.width * 0.35}/>
+            <g style="transform:translate({dims.width * 0.1}px, {dims.width * 0}px)">
+                {#each $data.schema.riskDeterminants.data as obj , i}
+                <g class = "oval-group {slugify(obj.Name)}">
+                    <ellipse class = "oval-bg"  cx="0" cy="0" rx="{dims.width * 0.2}" ry="{dims.width * 0.125}" style="transform-origin: {-dims.width * 0.1}px 0; transform:rotate({i * 360 / $data.schema.riskDeterminants.data.length - 90}deg)"/>
+                    <ellipse class = "oval-fg"  cx="0" cy="0" rx="{dims.width * 0.2}" ry="{dims.width * 0.125}" style="transform-origin: {-dims.width * 0.1}px 0; transform:rotate({i * 360 / $data.schema.riskDeterminants.data.length - 90}deg)"/>
+                    <g style="transform-origin: {-dims.width * 0.1}px 0; transform:rotate({i * 360 / $data.schema.riskDeterminants.data.length -90}deg)">
+                        <text class = "determinant-label" 
+                            x = {dims.width * 0.1 * (i === 2 ? -1 : 1)} 
+                            style="transform:rotate({i === 2 ? 180 : 0}deg)">
+                            {obj.Name}
+                        </text>
+                    </g>
                 </g>
                 {/each}
             </g>
-            {/each}
+            <text class = "center-label risk-label" dy = 40>Risk</text>
+            <path id = "response-label-path" class = "label-path" d={circleAntiClockwise({x: 0, y: 0}, dims.width * 0.35 + 45 )} />
+            <text>
+                <textPath class = 'response-label' href ="#response-label-path" startOffset="25%">Response to climate change</textPath>
+            </text>
         </g>
-
-        <!-- <g class = "risks-group">
-            {#each $data.schema.hazardEvents.data.filter(d => d.Hazard[0] === obj.recordID) as d, i}
-            <g style = 'transform: translate({0}px, {80 * i + 60}px)'>
-                <text class = "event-label">{@html d["Hazard event"]}</text>
-                <text class = "event-description" dy = 25>{@html d["Description"]}</text>
-            </g>
-            {/each}
-        </g> -->
 
     </svg>
 </figure>
-
 
 
 
@@ -71,7 +72,7 @@
         display:                block;
         width:                  100%;
         overflow:               hidden;
-        background:              radial-gradient(circle, rgb(9, 63, 47)0%, rgba(29,1,36,1) 63%, rgba(2,0,36,1) 100%);
+        background:              radial-gradient(circle, #207127 0%, rgba(29,1,36,1) 63%, rgba(2,0,36,1) 100%);
     }
     svg{ 
         overflow:               visible;
@@ -113,11 +114,51 @@
     .hazard-text{
         fill:                   url(#gr-hazard); 
     }
-    .hazard-icon{
-        fill:                   #fff;
-        mix-blend-mode:         color-dodge;
-        opacity:                0.2;
+    .risk-text{
+        fill:                   url(#gr-risk); 
     }
+
+
+    .oval-bg{
+        fill:                   rgb(0 145 103);
+        mix-blend-mode:         plus-lighter;
+    }
+    .oval-fg{       
+        fill:                   #fff;
+        opacity:                0.3;
+    }
+    .determinant-label{
+        fill:                   #767676;
+        font-size:              45px;
+        font-weight:            700;
+        mix-blend-mode:         multiply;
+        text-anchor:            middle;
+    }
+    .center-label{
+        fill:                   url(#gr-risk); 
+        fill:                   var(--darkGreen);
+        font-size:              80px;
+        text-anchor:            middle;
+        font-weight:            700;
+    }
+
+    .response-circle{
+        stroke:                 var(--brightGreen);
+        stroke-width:           10px;
+        fill:                   rgb(69 100 77);
+        mix-blend-mode:         luminosity;
+    }
+
+    .label-path{
+        fill:                   none;
+        stroke:                   none;
+    }
+    .response-label{
+        font-size:              45px;
+        font-weight:            700;
+        text-anchor:            middle;
+    }
+
 </style>
 
 

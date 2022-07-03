@@ -2,7 +2,7 @@
     import * as d3              from 'd3'
 	import { onMount }          from 'svelte';
     import { ui, data }         from '../../../data/stores.js'
-    import Legend                from './vis/Legend.svelte'
+    import Legend               from './vis/Legend.svelte'
     import Force                from './vis/Force.svelte'
     import Intro                from './vis/Intro.svelte'
     import Hazard               from './vis/Hazard.svelte'
@@ -43,7 +43,7 @@
         },
         {   name: 'None',   
             standard: {x: dims.width * 0.5, y: dims.height * 0.75 },
-            wide:   {x: dims.width * 0.5, y: dims.height * 0.65 }
+            wide:     {x: dims.width * 0.5, y: dims.height * 0.65 }
         }
     ]
     const ratingData = {
@@ -51,16 +51,22 @@
             name: "No regrets",      y: 0.1 * dims.height
         },
         forRating: {
-            name: "Actions for consideration",     y: 0.65 * dims.height
+            name: "Actions for consideration",     y: 0.5 * dims.height
+        },
+        discard: {
+            name: "Limited adaptation benefit",     y: 0.85 * dims.height
         },
         twoCriteria: {
-            name: "Tier one",     y: 0.35 * dims.height
+            name: "Higher priority",     y: 0.35 * dims.height
         },
         oneCriteria: {
-            name: "Tier two",     y: 0.6 * dims.height
+            name: "Lower priority",     y: 0.6 * dims.height
         },
         zeroCriteria: {
-            name: "No adaptation benefit",     y: 0.85 * dims.height
+            name: "Uncertain adaptation benefit",     y: 0.75 * dims.height
+        },
+        discardCriteria: {
+            name: "Limited adaptation benefit",     y: 0.85 * dims.height
         }
     }
     let schema
@@ -205,24 +211,6 @@
                                             .radius(dims.height * 0.25)
                                             .strength(  (d, i) => i%2 === 0 ? 2 : 0) ]
                     ]
-
-                // case "cluster-type": 
-                //     schema = $data.schema.actionTypes.data
-                //     const actionTypeNodes = $data.schema.actionTypeNodes.data
-                //     return [
-                //         ["x",           d3.forceX().x(d => {
-                //                             const type = schema.filter(e => e.recordID === d["Action type"][0])[0].Type
-                //                             return ( $data.schema.actionTypeNodes.data.filter(d => d.Name === type)[0].xPos * 0.5 + 0.5) *  dims.width 
-                //                         })
-                //         ],
-                //         ["y",           d3.forceY().y(d => {
-                //                             const type = schema.filter(e => e.recordID === d["Action type"][0])[0].Type
-                //                             return  $data.schema.actionTypeNodes.data.filter(d => d.Name === type)[0].yPos  *  dims.height 
-                //                         })
-                //         ],
-                //         ["collide",     forceCollide ],
-                //         ["charge",      d3.forceManyBody().strength(10) ]
-                //     ]
 
                 case "cluster-type": 
                     schema = $data.schema.actionTypes.data
@@ -373,7 +361,7 @@
                                             } else if( screen.Robust === 'Yes'){
                                                 return dims.width * 0.5
                                             } else {
-                                                return dims.width * 0.5
+                                                return dims.width * 0.5 
                                             } 
                                         }).strength(0.3)
                         ],
@@ -407,7 +395,17 @@
                     return [
                         ["collide",     forceCollide],
                         ["x",           centerForce.x],
-                        ["y",           d3.forceY().y(d =>  d["Screening outcome"] === "=> No regrets" ? ratingData.noRegrets.y : ratingData.forRating.y ) ]
+                        ["y",           d3.forceY().y(d =>  {
+                                            switch( d["Screening outcome"]  ){
+                                                case "=> No regrets": 
+                                                    return ratingData.noRegrets.y
+                                                case "=> Discard":
+                                                    return ratingData.discard.y
+                                                default:
+                                                    return ratingData.forRating.y 
+                                                }
+                                        })
+                        ]
                     ]
 
                 case "cluster-adaptation-criteria":
@@ -417,23 +415,23 @@
                                             const screen = {}
                                             for( const obj of schema){  screen[obj.Screen] = d[obj.fieldName]  }
                                             if( screen.Flexible === 'Yes' && screen.Robust === "Yes"  && screen.Viable === "Yes" ){
-                                                return dims.width * 0.5
+                                                return dims.width * 0.65
                                             } else if( screen.Flexible === 'Yes'  && screen.Viable === "Yes" ){
-                                                return dims.width * 0.7
+                                                return dims.width * 0.8
                                             } else if( screen.Flexible === 'Yes' && screen.Robust === "Yes" ){
-                                                return dims.width * 0.5
+                                                return dims.width * 0.65
                                             } else if( screen.Viable === 'Yes' &&  screen.Robust === "Yes" ){
-                                                return dims.width * 0.3
+                                                return dims.width * 0.5
                                             } else if( screen.Flexible === 'Yes'){
-                                                return dims.width * 0.7
+                                                return dims.width * 0.8
                                             } else if( screen.Viable === 'Yes'){
-                                                return dims.width * 0.5
+                                                return dims.width * 0.65
                                             } else if( screen.Robust === 'Yes'){
-                                                return dims.width * 0.3
-                                            } else {
                                                 return dims.width * 0.5
+                                            } else {
+                                                return dims.width * 0.65
                                             }
-                                        }).strength(0.05)
+                                        }).strength(0.15)
                         ],
                         ["y",           d3.forceY().y(d => {
                                             const screen = {}
@@ -463,13 +461,15 @@
                 case "cluster-rating":
                     return [
                         ["collide",     forceCollide],
-                        ["x",           centerForce.x.strength(0.15)],
+                        ["x",           d3.forceX().x(dims.width* 0.65).strength(0.15)],
                         ["y",           d3.forceY().y(d => {
                                             const screen = {}
                                             for( const obj of schema){ screen[obj.Screen] = d[obj.fieldName] }
 
                                             if( screen.Flexible === 'Yes' && screen.Robust === "Yes"  && screen.Viable === "Yes" ){
                                                 return ratingData.noRegrets.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1)
+                                            } else if( screen.Flexible === 'No' || screen.Robust === "No"  || screen.Viable === "No" ){
+                                                return ratingData.discard.y 
                                             } else if( screen.Flexible === 'Yes'  && screen.Viable === "Yes" ){
                                                 return ratingData.twoCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1)
                                             } else if( screen.Flexible === 'Yes' && screen.Robust === "Yes" ){
@@ -479,7 +479,7 @@
                                             } else if( screen.Flexible === 'Yes'){
                                                 return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1)
                                             } else if( screen.Viable === 'Yes'){
-                                                return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.)
+                                                return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1)
                                             } else if( screen.Robust === 'Yes'){
                                                 return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1)
                                             } else {
@@ -554,6 +554,7 @@
         display:            grid;
         justify-items:      center;
         align-items:        center;
+        overflow:           visible;
     }
     svg {
         max-width:          100%;

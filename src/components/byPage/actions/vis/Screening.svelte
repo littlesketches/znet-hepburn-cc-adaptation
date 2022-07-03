@@ -10,9 +10,7 @@
         width:          1600,
         height:         1600
     }              
-
     const radius = dims.width * 0.25
-    const noRegretslabel = { x: dims.width * 0.75, y: dims.width * 0.25  }
 </script>
 
 
@@ -59,7 +57,7 @@
         {/each}
 
         <g class = 'no-regrets-group' class:hidden="{$ui.state.actionVis.scene !== 2}">
-            <path d = "M0,0 v{-radius * 0.33} l{radius * 0.5}, {-radius * 0.5} h{radius * 0.5}"/>
+            <path d = "M0,0 v{-radius * 0.33} q{0}, {-radius * 0.5} {radius * 0.5}, {-radius * 0.5} h{radius * 0.5}"/>
             <text class = 'no-regrets-label' x="{radius + 5}" y="{-0.833 * radius}"> No regrets actions</text>
             <text class = 'no-regrets-number' x="{radius + 5}" y="{-0.833 * radius + 35}">{$data.stats.actions.noRegrets} actions expected to be</text>
             <text class = 'no-regrets-number' x="{radius + 5}" y="{-0.833 * radius + 65}">robust, viable and flexible</text>

@@ -1,8 +1,6 @@
 <script>
     import Logo                 from '../components/shared/Logo.svelte'
-    import { gsap, ScrollTrigger } from "gsap/all";
 	import { ui, data }         from '../data/stores.js'
-	import { tsv }              from 'd3'
     import Type                 from '../components/byPage/actions/vis/Type.svelte'
     import ClimateVariables     from '../components/byPage/adaptation/vis/ClimateVariables.svelte'
     import ClimateHazards       from '../components/byPage/adaptation/vis/ClimateHazards.svelte'
@@ -13,12 +11,10 @@
         document.querySelector(`section[act=${this.getAttribute('actName')}]`)
             .scrollIntoView({behavior: 'smooth'})
     };
-
-
 </script>
 
-<!-- HTML COMPONENT MARKUP -->
 
+<!-- HTML COMPONENT MARKUP -->
 <!-- Hero page section-->
 <div class = 'hero-wrapper'>
     <div class="hero-content">
@@ -32,7 +28,7 @@
             <span class = "title--highlight">in Hepburn</span>
         </h1>
         <div class="hero-content__text">
-            <p>The climate is changing and we need to make sure our community will adapt to the risks of climate change. This includes more severe and frequent events like bushfires, floods, droughts and heatwaves. In this section we'll summarise the research and modelling of how Hepburn's climate is expected to change, and introduce the key concepts of climate change adpatation.
+            <p>The climate is changing and we need to make sure our community is ready to adapt to future with more frequent adn severe climate-related events like bushfires, floods, droughts and heatwaves. In this section we will: summarise the latest climate change modelling for Hepburn; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.
             </p>
         </div>
         <div class ="select">
@@ -41,10 +37,8 @@
                 <li class = "select__item" on:click={scrollTo} actName = "intro">Introduction</li>
                 <li class = "select__item" on:click={scrollTo} actName = "variables">Climate variables</li>
                 <li class = "select__item" on:click={scrollTo} actName = "hazards">Hazards and events</li>
-                <li class = "select__item" on:click={scrollTo} actName = "risk">Climate risk</li>
-                <li class = "select__item" on:click={scrollTo} actName = "communityRisk">Community risks</li>
-                <li class = "select__item" on:click={scrollTo} actName = "riskAdaptiveCap">Risk and adaptive capacity</li> 
-                <li class = "select__item" on:click={scrollTo} actName = "acitonType">Adaptation action</li>
+                <li class = "select__item" on:click={scrollTo} actName = "climateRisk">Climate risk</li>
+                <li class = "select__item" on:click={scrollTo} actName = "communityRisk">Community impact</li>
             </ul>
         </div>
     </div>
@@ -58,12 +52,12 @@
             <div scene = 0>
                 <hr>
                 <h2>Climate change adaptation</h2>
-                <p>We'll start by acknowledging that the climate is changing - regardless of mitigation efforts, because there's inertia from greenhouse gases that have already been released into the atmosphere - and that as a community, we need be ready for the impacts climate change. Climate change adaptation seems <em>fairly</em> simple then, or at least the goal of it is. Howt you need to know to better understand:</p>
-                <ul>
-                    <li>what we need to adapt to: how climate variables are projected to change and how this increases likelihood of climate hazard events</li>
-                    <li>what we mean by climate risk through the potential impact on the community</li>
-                    <li>how adaptation can be framed as managing and reducing risk; and increasing our resilience or adapative capacity</li>
-                </ul>
+                <p>Our climate <em>is</em> changing. The Paris Agreement - the legally binding international treaty on climate change - sets the goal of <strong>limiting global warming to well below 2, preferably to 1.5 degrees Celsius</strong>, compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and drawdown greenhouse gas emissions. And in Hepburn, we've been coordinating actions to reduce emissions through <a class ='underline' href = "https://hepburnznet.org.au/" target="_blank">Z-NET Hepburn</a>. These emissions reduction actions also known as <em>mitigation</em> actions. But how do we deal with the climate change we're already locked into? 
+                </p>
+                <p>This is where climate change adaptation comes in: it's the "process of adjustment to actual or expected climate and its effects". In other words, making sure our community is prepared and able to cope with climate change. On the surface, adaptation seems <em>fairly</em> straightforward however it encompasses a chain of concepts - many of which overlap with other domains and 'ways of seeing the world' - which can make adaptation difficult to fully grasp. 
+                </p>
+                <p>This aim of this guide is help you understand what adaptation is all about, and why it matters to Hepburn.
+                </p>
             </div>
         </div>
 
@@ -77,10 +71,15 @@
         <div class = "narrative-wrapper">
             <div scene = 0>
                 <hr>
-                <h2>Measuring how the climate is changing</h2>
-                <p>Here we take a look at climate variables and how they're projected to change under different climate modelling scenarios. Climate variables are observations be can see in recognisable weather patterns, like temperature and rainfall: they are easy to grasp and associate with climate hazard events like floods, heatwaves, fires and drought.
-                </p> 
-                <p>The role of model projections and different climate scenarios will be used to highlight how the occurence of hazard events is expected to increase in every scenario. This reiterates the need to take action to adapt, and how its important that actions are robust and need to perform well under a wide range of climate futures.</p>
+                <h2>How the climate is changing</h2>
+                <p>Let's start with some definitions (and data!) <strong>Climate variables</strong> are observations that you might recognise from weather forecasts and meteorological data. These are ways we can describe and measure climate change.
+                </p>
+                <p>It gets more interesting when we look at climate models that project how these variables might change over time. Modelling by <a href = "https://www.climatechange.vic.gov.au/victorias-changing-climate" target ="_blank"> CSIRO for the Victorian Government (DEWLP)</a> for the Central Highlands region (which includes Hepburn) <a href = "https://www.climatechangeinaustralia.gov.au/en/projects/victorian-climate-projections-2019/vcp19-accessing-datasets/" target ="_blank">projects the change in each climate variable</a> between 2019 and 2090. Each model projection assumes an emissions scenarios that corresponds to a "Representative Concentration Pathway" (RCP) that corresponds to different levels of average global warming by 2100. The <strong>RCP4.5</strong> and <strong>RCP8.5</strong> scenarios shown here and correspond to global warming of 4.5&#8451; and 8.5&#8451; respectively, by 2100. 
+                </p>
+                <p>We can (very simply) think of these as medium and higher warming scenarios. But more importantly, together they are illustrate<strong> the general trend and level of uncertainty</strong> of climate modelling for Hepburn.
+                </p>
+                <p>The last idea we'll consider here are <strong>climate hazards</strong> and how they are driven by climate variables. Four hazards were identified in a <a href ="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target="_blank">situational analysis</a> (by RMIT) that supports the regional <a href="https://adaptgrampians.com.au/"target="_blank" >Adapt Grampians</a>  initiative, which includes Hepburn Shire. These <strong> hazards represent threats to our community </strong>that will be <strong> amplified under all climate change scenarios</strong>.    
+               </p>
             </div>
         </div>
 
@@ -95,11 +94,13 @@
             <div scene = 0>
                 <hr>
                 <h2>Climate hazards in Hepburn</h2>
-                <p>Not every impact of climate change is relavent to Hepburn (e.g. sea level rise). And not every climate hazard can be linked to climate change (e.g. wind events)
+                <p>Hazards are quite easy for us to understand, however it's their related <strong>climate events</strong> that are directly experienced by the community. Climate events come in two kinds:</p>
+                <ul>
+                    <li><strong>Shocks</strong>: these are intense, shortly sustained events that are commonly known natural (or climate) disasters; and </li>
+                    <li><strong>Stresses</strong>: these are events that build and compound over longer periods.</li>
+                </ul>
+                <p>Climate scientists - aided by models and projections - tell us that climate change will lead to <strong>more frequent and more intense climate events</strong>. Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn.
                 </p> 
-                <p>The role of model projections and different climate scenarios will be used to highlight how the occurence of hazard events is expected to increase in every scenario. This reiterates the need to take action to adapt, and how its important that actions are robust and need to perform well under a wide range of climate futures.</p>
-                <p>The difference between a hazard and an event will also be clarifed, as well as the link to climate variables that drive thhe hazards. These relationaships will be presented in a visual to show how the change in cliamte, measured and observed in climate variables, increases the frequency and severity of hazards, and leads to more hazard events. </p>
-                <p>Acknowledge that the IPCC has 'has developed the more general concept of ‘climatic impact driver’ to provide information about “natural or human-induced climate events or trends that may have an impact (detrimental or beneficial) on an element of society or ecosystems” </p> 
             </div>
         </div>
 
@@ -108,16 +109,20 @@
         </div>
     </section>
 
-    <!-- Climate risks and community impacts Act-->
-    <section act = "risks"  class = "section-wrapper col-2-1">
+    <!-- Risk drivers and adaptive capacity-->
+    <section act = "climateRisk"  class = "section-wrapper col-2-1">
         <div class = "narrative-wrapper">
             <div scene = 0>
                 <hr>
-                <h2>Climate risks and community impacts </h2>
-                <p>This section will explain risk and iilustrate the concept of through potential community impacts(?).  These impacts can be quite specific and unqiue to Hepburn and the community, and are likely to be aggregated into themes and focus areas (for the region.)
+                <h2>Climate risk</h2>
+                <p>The core definition of climate risk &mdash; provided by the <a href="https://www.ipcc.ch/site/assets/uploads/2021/02/Risk-guidance-FINAL_15Feb2021.pdf" target="_blank">IPCC</a> &mdash; is the <strong>"potential for adverse consequence for human or ecological systems</strong> [.. and I]n the context of climate change, risks can arise from potential <em>impacts</em> of climate change as well as human <em>responses</em> to climate change". 
+                </p>
+                <p>We'll start by focusing on risk in the context of the impacts of climate change as these impacts are directly experienced by the community. These <strong>"risks result from dynamic interactions between climate-related hazards with the exposure and vulnerability of the affected human or ecological system to the hazards"</strong>. In other words, the hazards that we've been talking about are just one determinant of risk: we also need to consider the concepts of <strong>exposure</strong> and <strong>vulnerability</strong>. 
+                </p>
+                <p>Exposure to a hazard (related event) is hopefully an easy concept to grasp, because events are spatial and protection often involves a physical response or intervention. Vulnerability is trickier as it involves our individual and collective capacities to adapt to and cope with "adverse consequences". Vulnerability is closely associated with <strong>adaptive capacity</strong> and  <strong>resilience</strong> (which is often be used in other closely related contexts). For our purposes, we think of resilience and adaptive capacity as having similar qualities that reduce vulnerability.
+                </p>
+                <p>The <strong>response</strong> to climate change can also <a href = "https://www.sciencedirect.com/science/article/pii/S2590332221001792" target="_blank">be considered as a fourth determinant or risk</a>. We'll look at this in more detail by examining Hepburn's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in  community level.
                 </p> 
-                <p>The initial aim here is to make the concept of climate risks as tangible as posible by framing them as (potential) community impacts. An information visualisation might be possible here IF impacts/risks are well structured.</p>
-                <p>Another consideration is the idea of risk as "the potential for adverse consequences" and "earlier definitions centred on the interaction between hazard, vulnerability and exposure" (which is more closley related to a section the inlcudes adaptive capacity) </p>
             </div>
         </div>
 
@@ -126,34 +131,16 @@
         </div>
     </section>
 
-    <section act = "communityImpact"  class = "section-wrapper col-2-1 table invert">
-        <div class = "invert-bg" >
-            <div class ='invert-bg-clip'></div>
-        </div>
-        <div class = "narrative-wrapper">
-            <div scene = 0>
-                <h2>Translating risk into community impacts</h2>
-                <p>This table would show all the identified community risks and the claimte hazards and events that are linked to them (note: list is unsorted and woudd be grouped by theme. Icons to be used for hazards). This table would be designed to suit the collated impact data.: "Risk bearer" may also be collected (i.e. 'parts of the community') and/or focus area could be tagged. 
-                </p> 
-            </div>
-        </div>
-        <div class = 'table-wrapper'>
-            <RiskTable/> 
-        </div>
-    </section>
-
-    <!-- Risk drivers and adaptive capacity-->
-    <section act = "riskAdaptiveCap"  class = "section-wrapper col-1-2">
+    <!-- Climate risks and community impacts Act-->
+    <section act = "communityRisk"  class = "section-wrapper col-1-2">
         <div class = "narrative-wrapper">
             <div scene = 0>
                 <hr>
-                <h2>Exposure, vulnerability and adapative capacity</h2>
-                <p>Here we identify the exposure and vulnerability as key drivers of risk. And while exposure to a hazard is relatively easy to comprehend (as it has a tangible 'spatial' characteristic), vulnerabilty is more difficult to define and measure.</p>
-                <p>An illustrative example might be to think about climate hazards in the developing world and how ill-prepapred some commiunties are in facing, responding to, and recovering from natural climate disasters. Not only might they ve more exposed to incerasing climate hazards, but (in general) they much more vulnerable than Australian's and their communities and institutions lack what's called '(coping and) adaptive capacity': these include the capcity to anticpate risk, to rspond to risk, and to recover and change. All of these considerations reduce risk and the impact on communities, of climate events.
+                <h2>Climate risks and community impacts </h2>
+                <p>We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn, and help us to understand what's at stake.
                 </p> 
-                <p>The international example is extreme but real. It is easy to then recognise that there are differences in exposure, vulnerability and adaptive capacity between say, regional and urban areas of Victoria. And that that  </p>
-                <p>Note: might use images rather than any diagramatic reprsentation. Or have a basic HTML relationship of: </p>
-                <p><strong>Risk determinants = Hazard x Vulnerability x Exposure</strong></p>
+                <p><em>Placeholder message for before consultation</em>: These risks have been proposed as a starting point and prompt for community input and review. They are grouped into "risk areas" that help to group and classify them into broader themes that can help us think about the wide-ranging impacts of climate hazards and events.</p>
+                <p><em>To be updated to after community consultation and input</em>: These risks and risk areas have been sourced and reviewed by the Hepburn community and reflect their concerns, inputs and experience of how these known climate hazards affect the community.</p>
             </div>
         </div>
 
@@ -162,23 +149,18 @@
         </div>
     </section>
 
-    <!-- Action types-->
-    <section act = "actions"  class = "section-wrapper col-2-1">
+    <!-- Community impact table-->
+    <section act = "communityImpact"  class = "section-wrapper table invert">
+        <div class = "invert-bg" >
+            <div class ='invert-bg-clip'></div>
+        </div>
         <div class = "narrative-wrapper">
             <div scene = 0>
-                <hr>
-                <h2>What does adapatation action look like?</h2>
-                <p>This section will emphasise taht not only do we need to take action to adapt to climate change, but that we need a suite of actions need to be well coordinated to respond to risk and build resilience. This is an obious but recurring theme with adapation: that it is a broad endeavaor that overlaps with many of our communities natural goals. In effect, a lot of the activities and actions we are already doing have adapation benefits. And a lot of adpation actions have other benefits (and potentially unintended consequences!)
-                </p> 
-                <p>We need to be mindful of all of these adaptation concepts and how they might be linked to our existing goals and intitiaves. We also need ot be mindful that there are a lot of differnet actors and stakaholder that are invovled in actions that have adaptation benefits. These actors all operate in their spheres of responsibility and influence; and so when we look at actions, a key goal is to not just look at individual actions, but to understand how all our acitons work together to meet our adpatation challenges.</p>
-                <p>Ends with &rarr; to explore the action 'portfolio'
+                <h2>Translating risk into community impacts</h2>
             </div>
         </div>
-
-        <div class = "vis-wrapper">
-            <svg viewBox = "0 0 1600 1600" width="100%">
-                <Type/> 
-            </svg>
+        <div class = 'table-wrapper'>
+            <RiskTable/> 
         </div>
     </section>
 </div>
@@ -188,13 +170,9 @@
 <!-- STYLES -->
 <style>
     /** PAGE / VIS STORY SECTION **/
-    .content-wrapper{
-        border-bottom:          5px #000 solid;
-    }
     .section-wrapper{
         display:                grid;
         column-gap:             6rem;
-        /* min-height:             100vh; */
         padding-bottom:         25vh;
     }
     .col-1-2{
@@ -205,11 +183,12 @@
         grid-template-columns:  2fr 1fr;
         grid-template-areas:    'vis narrative';
     }
-    .col-2-1.table{
-        grid-template-columns:  2fr 1fr;
+    .table{
+        grid-template-columns:   1fr;
         grid-template-areas:    
-            'narrative ...'
-            'table table';
+            'narrative'
+            'table';
+        padding-bottom:         0;
     }
     .invert{
         color:                  var(--brightGreen);
@@ -222,12 +201,13 @@
         background-color:       var(--darkGreen);
         z-index:                -10;
         width:                  calc(100% + 6rem);
+        height:                 calc(100% + 15vh);
     }
     .invert-bg-clip{
-        width:              0;
-        height:             0;
-        border-top:         10vh solid #ffffff;
-        border-right:       100vw solid transparent;
+        width:                  0;
+        height:                 0;
+        border-top:             10vh solid #ffffff;
+        border-right:           100vw solid transparent;
     }
     .narrative-wrapper{
         grid-area:              narrative;
@@ -249,7 +229,6 @@
         width:                  100%;
         height:                 100%;
     }
-
     hr{
         border-bottom:          5px #000 solid;
         margin-block-start:     0;
@@ -278,7 +257,6 @@
             'title title'
             'text select'
     }
-
     .hero-content__title {
         grid-area:              title;
         font-weight:            700;
@@ -299,8 +277,8 @@
         top:                    100%;
         left:                   0;
     }
-        .title--mute{       color:  var(--midGrey);     }
-        .title--highlight{  color:  var(--brightGreen); }
+        .title--mute{           color:  var(--midGrey);     }
+        .title--highlight{      color:  var(--brightGreen); }
 
     .hero-content__text {
         grid-area:              text;
@@ -320,14 +298,6 @@
         color:                  var(--color-select);
         font-size:              0.65rem;
     }
-
-    .select__heading {
-        display: inline-block;
-        cursor: default;
-        font-size: 0.65rem;
-        font-weight: 700;
-    }
-
     .select__item {
         margin:                 0 0 0 0.5rem;
         display:                inline-block;
@@ -335,7 +305,6 @@
         font-size:              0.65rem;
         font-weight:            300;
     }
-
     .select__item:hover {
         color:                  var(--foreground);
         font-weight:            700;
@@ -369,9 +338,6 @@
             margin-top: auto;
             align-self: end;
         }
-        .select__heading {
-            display: block;
-        }
         .select__item {
             display: block;
             margin: 0;
@@ -382,18 +348,19 @@
             padding:                2rem 0;
             margin:                 0 3rem;
             display:                grid;
-            /* column-gap:             4rem;
-            grid-template-columns:  calc(33% - 2rem) calc(67% - 2rem); */
         }
     }
 
     @media print{
+        p, ul{
+            font-size:              9pt;
+        }
         .hero-wrapper, 
         .section-wrapper{
             height:                 190mm;
             overflow:               hidden;
             grid-row-gap:           10mm;
-            grid-column-gap:        20mm;
+            grid-column-gap:        10mm;
             padding:                10mm;
             page-break-after:       always;
         }
@@ -404,6 +371,9 @@
         }
         .hero-content__title {
             font-size:              4.5rem;
+        }
+        .select{
+            display:                none
         }
     }
 

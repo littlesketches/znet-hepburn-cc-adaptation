@@ -6,7 +6,8 @@
     export let actionData 
 </script>
 
-<!-- HTML COMPONENT MAKRUP-->
+
+<!-- HTML COMPONENT MARKUP-->
 <section class ="title">
     <div class = "main-title">
         <h1 class:three-line="{actionData.Name.length > 70}">{@html actionData.Name}</h1>
@@ -21,9 +22,6 @@
         </h3>
         {/if}
     </div>
-    <div class = 'icon'>
-        <Logo/>
-    </div>
 </section>
 
 
@@ -32,7 +30,6 @@
     section{
         grid-area:              title;
         display:                grid;
-        grid-template-columns: 5fr 1fr;
         border-bottom:          5px solid var(--foreground);
         height:                 fit-content;
     }
@@ -43,6 +40,8 @@
         margin-block-end:       0rem;
         margin-block-start:     0rem;
         text-transform:         uppercase;
+        line-height:            1;
+        padding-top:            5vh;                
         color:                  var(--foreground);
     }
     h1.three-line{
@@ -63,10 +62,5 @@
         flex-direction:         column;
         height:                 100%;
         justify-content:        space-between;
-    }
-    .icon{
-        justify-content:        end ;
-        align-content:          end ;
-        padding-bottom:         1rem;
     }
 </style>

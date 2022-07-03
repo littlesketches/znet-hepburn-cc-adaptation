@@ -12,8 +12,8 @@
     }    
 
     const shockStressOffsets = [0 , 150, 300, 450, 600, 750, 900, 1050, 1200    ]
-    const hazardOffset = 0.65
-    const eventOffset = 75
+    const hazardOffset = 0.6
+    const eventOffset = 72.5
     const textLength = 550
 
     const eventsByHazard = [1].concat($data.schema.hazards.data
@@ -71,9 +71,9 @@
 
         <g style = 'transform: translate({0}px, {100}px)'>
             <g style='transform: translate({dims.width * 0.5}px, 0px)'>
-                <text class = "header"> Climate <tspan class = "hazard-text">hazards</tspan> and events</text>
+                <text class = "header"> Climate <tspan class = "hazard-text">hazards</tspan> and related events</text>
                 <text class = "sub-header" y = 40>There are four climate hazards that trigger events that impact the Hepburn community.</text>
-                <text class = "sub-header" y = 70>Projected climate change is projected to increase the frequecy and intensity of these events.</text>
+                <text class = "sub-header" y = 70>Projected climate change will lead to an increase the frequency and/or intensity of these events.</text>
             </g>
         </g>
 
@@ -95,7 +95,6 @@
             {/each}
             <g class = 'event-description-group'> </g>
         </g>
-
     </svg>
 </figure>
 

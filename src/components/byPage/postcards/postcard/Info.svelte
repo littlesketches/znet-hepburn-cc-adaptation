@@ -6,7 +6,6 @@
     import { slugify }              from '../../../../utils/helpers.js'
     import { mapIcons, icons, triangle }      from  '../../../../utils/icons.js' 
 
-
     export let actionData 
 
     // Ge action data
@@ -16,15 +15,39 @@
     const actionApproachTheme = actionApproachThemeArray.length === 2 ? "Reduce risk and increase resilience" : actionApproachThemeArray[0]
     const actionScale = actionData.Scale ? schema.actionScale.data.filter( d => d.recordID === actionData.Scale[0])[0].Scale : null 
     const focusAreas = [...new Set(actionData['Focus areas'])].map( d => schema.adaptationFocus.data.filter(e => e.recordID === d)[0]["Alias"]) 
-    const criteria ={
-        flexible:       actionData[$data.schema.adaptationScreens.data.filter( d=> d.Screen === "Flexible")[0].fieldName] === "Yes" ? true : false,
-        robust:         actionData[$data.schema.adaptationScreens.data.filter( d=> d.Screen === "Robust")[0].fieldName] === "Yes" ? true : false,
-        viable:         actionData[$data.schema.adaptationScreens.data.filter( d=> d.Screen === "Viable")[0].fieldName] === "Yes" ? true : false
+    const criteria = {
+        flexible:       actionData[$data.schema.adaptationScreens.data.filter( d => d.Screen === "Flexible")[0].fieldName],
+        robust:         actionData[$data.schema.adaptationScreens.data.filter( d => d.Screen === "Robust")[0].fieldName], 
+        viable:         actionData[$data.schema.adaptationScreens.data.filter( d => d.Screen === "Viable")[0].fieldName] 
     }
-    const assessment = ""
-
+    let assessment = ''
+    switch(actionData["Screening outcome"]){
+        case  "=> No regrets":
+            assessment =  "No regrets: highest priority"
+            break
+        case  "=> Discard":
+            assessment =  "No adaptation benefit"
+            break
+        default:
+            switch(Object.values(criteria).filter(d => d === "Yes").length){
+                case 3:
+                    assessment =  "No regrets"
+                    break
+                case 2:
+                    assessment =  "High priority"
+                    break
+                case 1:
+                    assessment =  "Low priority"
+                    break
+                case 0:
+                    assessment =  "Uncertain adaptation benefit"
+                    break
+            }
+    }
 </script>
 
+
+<!-- COMPONENT HTML MARKUP -->
 <section>
     <!-- Action type-->
     <div class ='info-container'>
@@ -46,11 +69,11 @@
     <!-- Adaptation approach-->
     <div class ='info-container'>
         <div class = 'header'>
-            <h4>Adapation approach</h4>
+            <h4>Adaptation approach</h4>
         </div>
         <div class = "response-wrapper">
              <div class = "icon-wrapper">
-                <svg class ="scale-icon" viewBox= "0 0 100 100" width = "75%">
+                <svg class ="scale-icon" viewBox= "0 0 100 100" width = "100%">
                     {#if actionApproachThemeArray.includes('Increase resilience')}
                     <path  d ={triangle(50)} style="transform:translate( 50px, 50px)"/>
                     {/if}
@@ -74,7 +97,7 @@
         </div>
         <div class = "response-wrapper icon-label">
              <div class = "icon-wrapper">
-                <svg class ="scale-icon" viewBox= "-50 -50 100 100" width = "75%">
+                <svg class ="scale-icon" viewBox= "-50 -50 100 100" width = "100%">
                     <path  d ={mapIcons[actionScale]}/>
                 </svg>
             </div>
@@ -86,26 +109,7 @@
         </div>
     </div>
 
-    <!-- Focus area -->
-    <div class ='info-container'>
-        <div class = 'header'>
-            <h4>Focus areas</h4>
-        </div>
-        <div class = 'response-wrapper list'>
-            {#each focusAreas as focusArea}
-            <div class = 'focusArea-wrapper'>
-                <div class = "focusArea-icon-wrapper" >
-                    <svg class = "focusArea-icon" viewBox = "-50 -50 100 100" width= "100%" height= "4rem">
-                        <path d = {icons[slugify(focusArea)]}/>
-                    </svg>
-                </div>
-                <div class = "focusArea-response response">{@html focusArea}</div>
-            </div>
-            {/each}
-        </div>
-    </div>
-
-    <!-- Adapation screening criteria  -->
+    <!-- Adaptation screening criteria  -->
     <div class ='info-container'>
         <div class = 'header'>
             <h4>Adaptation criteria</h4>
@@ -115,102 +119,79 @@
                 <AdaptationCriteria {criteria}/>
             </div>
             <div class =  "label-wrapper">
-                <div class = "response">No regrets</div>
-                <!-- <div class>Very high adapation benefits</div> -->
+                <div class = "response">{@html assessment}</div>
             </div>
         </div>
     </div>
-
 </section>
 
 
+<!-- STYLES-->
 <style>
     section{
-        grid-area: info;
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
-    }
-    .info-container{
-        display:                grid;
-        grid-template-rows:     auto 1fr;
-    }
-    .info-container:not(:last-of-type){
-        border-right:          solid 2px var(--foreground);
-    }
-    .header{
-        height:                 fit-content;
+        grid-area:                  info;
+        display:                    grid;
+        grid-template-columns:      1fr 1fr 1fr 1fr;
     }
     h4{
-        color:                  var(--midGrey);
-        font-weight:            100;
-        margin-block-start:     0;
-        margin-block-end:       0;
-        text-align:             center;
-        text-transform:         uppercase;
-        letter-spacing:         0.125rem;
+        color:                      var(--midGrey);
+        font-weight:                100;
+        font-size:                  1vw;
+        margin-block-start:         0;
+        margin-block-end:           0;
+        text-align:                 center;
+        text-transform:             uppercase;
+        letter-spacing:             0.1vw;
     }
+    .info-container{
+        display:                    grid;
+    }
+    .info-container:not(:last-of-type){
+        border-right:               solid 2px var(--foreground);
+    }
+    .header{
+        height:                     1.5rem;
+        grid-area:                  1 / 1 / 2 / 2;
+        display:                    grid;
+        justify-content:            center;
+        align-content:              center;
+        padding:                    0 1vw;        
+    }
+
     /* Box icon and label wrapper */
     .response-wrapper{
-        display:                grid;
-        height:                 100%
+        grid-area:                  1 / 1 / 2 / 2;
+        display:                    grid;
+        justify-content:            center;
+        align-content:              end;
+        padding-top:                0.75rem;
     }
-
     .icon-wrapper, 
     .label-wrapper {
-        grid-area:              1 / 1/ 2/ 2;
-        display:                grid;
-        align-content:          center;
-        justify-content:        center;
-        padding:                0 1rem;
+        grid-area:                  1 / 1 / 2 / 2;
+        display:                    grid;
+        align-content:              center;
+        justify-content:            center;
+        padding:                    0 1vw;
     }
-    .icon-wrapper{
-        display:                flex;
-        align-content:          center;
-        justify-content:        center;
-    }
-
     .icon-label{
-        display:                grid;
+        display:                    grid;
     }
-    .list{
-        display:                flex;
-        flex-direction:         column;
-        justify-content:        space-evenly;
-        height:                 calc(100% - 1.5rem);
-    }
-
     .response{
-        display:                flex;
-        text-align:             center;
-        color:                  var(--foreground);
-        font-size:              1rem;
-        font-weight:            700;
-        line-height:            1;
-        align-self:             center;
-        justify-self:           center;
+        display:                    flex;
+        text-align:                 center;
+        color:                      var(--foreground);
+        font-size:                  1.25vw;
+        font-weight:                700;
+        line-height:                1;
+        align-self:                 center;
+        justify-self:               center;
         text-shadow:  
              0.25px  0.25px 3px #fff,
              0.25px -0.25px 3px #fff,
             -0.25px  0.25px 3px #fff,
             -0.25px -0.25px 3px #fff;
     }
-
-    /* Foucs Areas */
-    .focusArea-wrapper{
-        display:                grid;
-        grid-template-columns:  1fr 2fr;
-    }
-    .focusArea-response{
-        justify-self:           start;
-        text-align:             start;
-    }
-    .focusArea-icon-wrapper{
-        margin:                 0 0;
-    }
-    .focusArea-icon{
-        fill:                   var(--brightGreen);
-    }
-
 
     /* Action scale */
     .scale-icon{
@@ -220,11 +201,14 @@
 
     @media print{
         .response{
-        text-shadow:  
-             0.25px  0.25px 0px #fff,
-             0.25px -0.25px 0px #fff,
-            -0.25px  0.25px 0px #fff,
-            -0.25px -0.25px 0px #fff;
+            text-shadow:  
+                0.25px  0.25px 0px #fff,
+                0.25px -0.25px 0px #fff,
+                -0.25px  0.25px 0px #fff,
+                -0.25px -0.25px 0px #fff;
+        }
+        h4{
+            font-size:         10pt;
         }
     }
 </style>

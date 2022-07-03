@@ -75,7 +75,7 @@
     onMount( () => {
         const variablesLayer = d3.select('.text-wrap-layer')
         variablesLayer.selectAll('.variable-description')
-            .data( $data.schema.climateVariablesCH.data)
+            .data( $data.schema.climateVariables.data)
             .join('text').classed('variable-description', true)
             .attr('x', 50)
             .attr('y',(d, i) => dims.variableSpacing * i + 20)
@@ -101,12 +101,12 @@
 
 
         <rect class = "bg" x = "-300" y = 0 width = {dims.width + 600} height = {dims.height}/>
-        <text class = "source" x = {dims.width - 50} y = {dims.height - 20}>Source: All projection data and variable defintions from CSIRO and the Victorian Government, 2019</text>
+        <text class = "source" x = {dims.width - 50} y = {dims.height - 50}>Source: All projection data and variable definitions from CSIRO and the Victorian Government, 2019</text>
 
         <g style = 'transform: translate({0}px, {100}px)'>
             <g style='transform: translate({50}px, 0px)'>
                 <text class = "header"> Climate variables</text>
-                <text class = "sub-header" y = 40>Meaures of the climate models used in</text>
+                <text class = "sub-header" y = 40>Measures of the climate models used in</text>
                 <text class = "sub-header" y = 70>the Victorian Climate Projections 2019</text>
                 <text class = "sub-header" y = 100>for the Central Highlands region</text>
             </g>
@@ -125,7 +125,7 @@
         </g>
 
         <g class = "links-group">
-            {#each $data.schema.climateVariablesCH.data as nodeObj, i }
+            {#each $data.schema.climateVariables.data as nodeObj, i }
                 {#if nodeObj["Linked hazards"] }
                     {#each nodeObj["Linked hazards"] as recordID} 
                         {@const hazard = $data.schema.hazards.data.filter(d => d.recordID === recordID)[0].Hazard}
@@ -158,10 +158,10 @@
             {/each}
             <g class = "text-wrap-layer"></g>
 
-            {#each $data.schema.climateVariablesCH.data as d, i}
+            {#each $data.schema.climateVariables.data as d, i}
                 {@const chartData45 = $data.climate.variables.projectedChange["RCP4.5"].Annual[d.Variable]  }
                 {@const chartData85 = $data.climate.variables.projectedChange["RCP8.5"].Annual[d.Variable]  }
-                {@const chartUnit = $data.schema.climateVariablesCH.data.filter(e => e.Variable ===  d.Variable)[0]["Change unit"]  }
+                {@const chartUnit = $data.schema.climateVariables.data.filter(e => e.Variable ===  d.Variable)[0]["Change unit"]  }
                 {@const max = $data.climate.variables.projectedChange["RCP8.5"].Annual[d.Variable] ? d3.max([$data.climate.variables.projectedChange["RCP8.5"].Annual[d.Variable].Upper["2090"], $data.climate.variables.projectedChange["RCP4.5"].Annual[d.Variable].Upper["2090"] ]) : 0 }
                 {@const min = $data.climate.variables.projectedChange["RCP8.5"].Annual[d.Variable] ? d3.min([$data.climate.variables.projectedChange["RCP8.5"].Annual[d.Variable].Lower["2090"], $data.climate.variables.projectedChange["RCP4.5"].Annual[d.Variable].Lower["2090"] ]) : 0 }
                 {@const scaleY = getScaleY(d.Variable)   }

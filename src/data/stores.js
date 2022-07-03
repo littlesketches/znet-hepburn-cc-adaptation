@@ -23,6 +23,11 @@ export const ui = writable({
                 scale:          false
 
             }
+        },
+        postcards: {
+            view:           'table',
+            style:          'duotone',
+            selectedAction: null
         }
     }, 
     el:        {},

@@ -1,62 +1,78 @@
 <script>
+    import {fade }          from 'svelte/transition'
     import Logo             from '../components/shared/Logo.svelte'
     import Postcard         from '../components/byPage/postcards/Postcard.svelte'
-	import {  data }        from '../data/stores.js'	 
+    import ActionTable      from '../components/byPage/postcards/ActionTable.svelte'
+	import { data, ui }     from '../data/stores.js'	 
+
+    const showTable = () => $ui.state.postcards.view = 'table'
+    const showPostcards = () => $ui.state.postcards.view = 'all-postcards'
 </script>
 
 
 <!-- HTML COMPONENT MARKUP -->
-<!-- Hero page section-->
-<div class = 'hero-wrapper'>
-    <div class="hero-content">
-        <!-- Hero page section -->
-        <div class="hero-logo">
-            <div class="hero-logo__wrapper"><Logo/></div>
-        </div>
-        <h1 class="hero-content__title">
-            <span class = "title--mute">hepburn</span><br/>
-            adapation action<br/>
-            <span class = "title--highlight">postcards</span>
-        </h1>
-        <div class="hero-content__text">
-            <p>This section provides a set of summary 'postcards' for <em>every</em> adaptation considered in this research. These postcards provide descriptions, details and links to further information about each action; and can be added to via the Hepburn Z-NET adaptation action database. 
-            </p>
-            <p class = 'note'>Note: Options for selecting and styling each action postcards will be provided. The default development view (as shown) is to 
-            </p>
-        </div>
-        <div class ="select">
-            <ul>
-                <li class = "select__item" on:click={scrollTo} actName = "maker">Postcard maker</li>
-                <li class = "select__item" on:click={scrollTo} actName = "menu">Actions menu</li>
-            </ul>
+{#if $ui.state.postcards.view === 'postcard'}
+    <Postcard actionData={$ui.state.postcards.selectedAction}/>
+{:else}
+    <!-- Hero page section-->
+    <div class = 'hero-wrapper' transition:fade>
+        <div class="hero-content">
+            <!-- Hero page section -->
+            <div class="hero-logo">
+                <div class="hero-logo__wrapper"><Logo/></div>
+            </div>
+            <h1 class="hero-content__title">
+                <span class = "title--mute">hepburn</span><br/>
+                adaptation action<br/>
+                <span class = "title--highlight">postcards</span>
+            </h1>
+            <div class="hero-content__text">
+                <p>This section provides access to a set of summary 'postcards' for <em>every</em> adaptation considered in this research. These postcards provide descriptions and details about each action; and can be added to via the Hepburn Z-NET adaptation action database. 
+                </p>
+            </div>
+            <div class ="select">
+                <ul>
+                    <li class = "select__item" on:click={showTable}>Action menu</li>
+                    <li class = "select__item" on:click={showPostcards}>Postcard gallery</li>
+                </ul>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Page content section-->
-<div class = "content-wrapper">
-    <section class = "option-container col-1-2">
-        <div>
-            <h2>Options for viewing creating adapation action postcards</h2>
+    <!-- Page content section-->
+    <div class = "content-wrapper" transition:fade>
+        <section class = "option-container col-1-2">
             <div>
-                <div>Select an action from a list</div>
-                <div>Select an action from table</div>
-                <div>Select an action from table</div>
+                <h2>Options for viewing creating adaptation action postcards</h2>
+                <div>
+                    <div>Select an action from a list</div>
+                    <div>Select an action from table</div>
+                    <div>Select an action from table</div>
+                </div>
+                <div>
+                    <h3>Postcard styling options</h3>
+                    <div>Color palette options</div>
+                    <div>Image style options</div>
+                </div>
             </div>
-            <div>
-                <h3>Postcard styling options</h3>
-                <div>Color palette options</div>
-                <div>Image style options</div>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <section class = "postcards-container">
-        {#each $data.actions as action }
-        <Postcard actionData={action}></Postcard>
-        {/each}
-    </section>
-</div>
+        {#if $ui.state.postcards.view === 'all'}
+        <section class = "postcards-container" transition:fade>
+            {#each $data.actions as action }
+            <Postcard actionData={action}/>
+            {/each}
+        </section>
+        {:else}
+        <section class = "table-container" transition:fade>
+            <h2>Table of adaptation actions</h2> 
+            <p><em>Tap on any action to open its summary postcard</em></p> 
+            <ActionTable/>
+        </section>
+        {/if}
+
+    </div>
+{/if}
 
 <!-- STYLES -->
 <style>
@@ -138,7 +154,9 @@
         color:                  var(--foreground);
         font-weight:            700;
     }
-
+    .table-container{
+        padding:                3rem;
+    }
 
     @media screen and (min-width: 53em) {
         .hero-content {
@@ -151,22 +169,22 @@
                 'text select'
         }
         .hero-content__title {
-            font-size: 4.5rem;
-            margin: 0 0 4rem 0;
-            padding: 0 0 2rem 0;
+            font-size:              4.5rem;
+            margin:                 0 0 4rem 0;
+            padding:                0 0 2rem 0;
         }
         .hero-content__text {
             max-width: var(--min-col-width);
         }
 
         .select {
-            text-align: right;
-            margin-top: auto;
-            align-self: end;
+            text-align:             right;
+            margin-top:             auto;
+            align-self:             end;
         }
         .select__item {
-            display: block;
-            margin: 0;
+            display:                block;
+            margin:                 0;
         }
         .content-wrapper{
             width:                  100vw;
@@ -178,16 +196,15 @@
 
     @media print{
         .hero-wrapper{
-            height:             190mm;
-            overflow:           hidden;
-            grid-row-gap:       10mm;
-            grid-column-gap:    20mm;
-            padding:            10mm;
-            page-break-after:   always;
+            height:                 190mm;
+            overflow:               hidden;
+            grid-row-gap:           10mm;
+            grid-column-gap:        20mm;
+            padding:                10mm;
+            page-break-after:       always;
         }
-        .select,    
-        .note{
-            display:            none
+        .select{
+            display:                none
         }
         .hero-content__title {
             font-size:              4.5rem;

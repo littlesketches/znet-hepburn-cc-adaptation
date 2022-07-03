@@ -1,10 +1,11 @@
 <script>
+	import { onMount }      from 'svelte';
 	import { fade }         from 'svelte/transition';
     import * as d3          from 'd3'
     import { schema }       from '../../../../data/schema.js';
     import { ui, data }     from "../../../../data/stores.js";
-    import { slugify  }     from "../../../../utils/helpers.js"
     import { icons  }       from "../../../../utils/icons.js"
+    import { slugify, textWrap  }     from "../../../../utils/helpers.js"
 
     export let dims     = {}                // SVG dimensions
     const sortedFocus = $data.schema.adaptationFocus.data.sort( (x, y) => {
@@ -24,7 +25,30 @@
         d3.select('.instruction').classed('hidden', true)
         d3.select('.selector-wrapper')
             .style("transform" ,  `translate(0px, ${100 * ((sortedFocus.length -1) * 0.5 - index )}px)`)
+        d3.selectAll('.focus-area-description').classed('hidden', true)
+        d3.select(`.focus-area-description.${slugify(focus)}`).classed('hidden', false)
     };
+
+    // Add text wrapped lables
+    onMount( () =>{
+        const container = d3.select('.focus-area-description-container')
+
+        container.selectAll('.focus-area-description')
+            .data(sortedFocus)
+            .join('text')
+            .attr('class', d => `${slugify(d["Focus area"])} focus-area-description hidden` )
+            .attr('x', 0)
+            .attr('y', 0)
+            .attr('dy', 0)
+            .style('transition', 'all 300ms')
+            .style('pointer-events', 'none')
+            .style('font-size', 25)
+            .style('font-weight', 300)
+            .style('fill', 'var(--midGrey)')
+            .style('text-anchor', 'middle')
+            .text(d => d.Description)
+            .call(textWrap, dims.width * 0.65, 1.1, true)
+    })
 
 </script>
 
@@ -33,18 +57,19 @@
 <g id ="focus-area-vis-container" in:fade>    
     <g class = 'selector-container'  style = "transform: translate({dims.width * 0.5}px, {dims.height * 0.25}px)">
         <g class = 'selector-wrapper'>
-            <text class = "instruction" y = "{- 100 * (sortedFocus.length) * 0.5 - 50}">Tap on a focus area to view actions</text> 
+            <text class = "instruction" y = "{-100 * (sortedFocus.length) * 0.5 - 50}">Tap on a focus area to view actions</text> 
             {#each  sortedFocus.sort( (a,b) => a.Alias < b.Alias) as obj, i}
             <g style = "transform: translate({0}px, {100 * (i - (sortedFocus.length - 1) * 0.5 )}px)" >
                 <text on:click={selectFocus} class = "focus-area-label" name ="{(obj["Focus area"])}" index ={i}>
                     {@html obj["Alias"]}
                 </text>
-                <text class = "focus-area-action-label {slugify(obj["Focus area"])}" dy = "-60">{@html obj["Linked adaptation actions"].length} actions related to</text>
-                <path class = 'icon {slugify(obj["Focus area"])}' d = {icons[slugify(obj["Alias"])]} style = "transform: translate({0}px, {-200}px) scale(3)" />
+                <text class = "focus-area-action-label {slugify(obj["Focus area"])}" dy = "-80">{@html obj["Linked adaptation actions"].length} actions related to</text>
+                <path class = 'icon {slugify(obj["Focus area"])}' d = {icons[slugify(obj["Alias"])]} style = "transform: translate({0}px, {-250}px) scale(3)" />
             </g>
             {/each}
         </g>
     </g>
+    <g class="focus-area-description-container"style = "transform: translate({dims.width * 0.5}px, {dims.height * 0.575}px)"></g>
 </g>
 
 
@@ -53,7 +78,6 @@
 <style>
     .focus-area-label, 
     .focus-area-action-label{
-        dominant-baseline:  middle;
         text-anchor:        middle;
         fill:               var(--midGrey);
         transition:         all 300ms;
@@ -105,13 +129,9 @@
     .instruction{
         font-size:          40px;
         font-weight:        700;
-        dominant-baseline:  middle;
         text-anchor:        middle;
         fill:               var(--brightGreen);
         transition:         all 300ms;
         pointer-events:     none;
-    }
-    .hidden{
-        opacity:            0
     }
 </style>

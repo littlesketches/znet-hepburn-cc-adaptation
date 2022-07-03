@@ -20,7 +20,7 @@
 
 
 <!-- HTML COMPONENT MARKUP-->
-<svg viewBox="0 0 {dims.width} {dims.height}" width="75%"  in:fade>
+<svg viewBox="0 0 {dims.width} {dims.height}" width="100%"  in:fade>
     <g class = "flow-diagram"  style='transform:translate({dims.width * 0.5}px, 0px)'>
         <g class = 'connector-container'>
             {#each typeData.links as link}

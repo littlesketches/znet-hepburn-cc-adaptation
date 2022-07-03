@@ -18,13 +18,13 @@
             }
         }
     })
-
 </script>
 
 
 <!-- HTML COMPONENT MARKUP -->
 <section class ="hazards-wrapper">
-    <h3>Response to climate hazards and events</h3>
+    <div class = "wedge"></div>
+    <h3>Action ratings vs climate hazards</h3>
     <div class ="hazards-container">
         {#each hazardList as hazard}
         <div class = "hazard-container {slugify(hazard)}">
@@ -55,42 +55,50 @@
 <!-- STYLES -->
 <style>
     section{
-        grid-area: hazards;
+        grid-area:              1 / 1 / 3 / 3;
+        height:                 fit-content;
+        color:                  var(--foreground);
+        margin:                 var(--spacing);
+        align-self:             end;
+
     }
     h3{
-        margin-block-start:     0;
+        font-size:              1.25vw;
+        margin-block-start:     0rem;
+        margin-block-end:       0rem;
+        padding-bottom:         0.75rem;
+        text-align:             center;
+        background-color:       rgba(255, 255, 255, 0.7);
     }
-
-    .hazards-wrapper {
-        grid-area:              hazards;
-        color:                  var(--foreground);
-        background-color:       var(--brightGreen);
+    .wedge{
+        height:                 7.5vh;
+        width:                  100%;
+        background-color:       rgba(255, 255, 255, 0.7);
         padding:                var(--spacing);
-        height:                 var(--postacard-img-height);
+        clip-path:              polygon(0% 100%, 100% 0%, 100% 100%, 0% 130%) 
     }
-
     .hazards-container{
         display:                flex;
         flex-direction:         column;
         justify-content:        space-between;
+        background-color:       rgba(255, 255, 255, 0.7);
     }
 
     /* Hazard container styling */
     .hazard-container{
-        padding-bottom:         0.5rem;
-        font-weight:            600;
         display:                grid;
         grid-template-columns:  1fr 1fr 2fr;
+        grid-template-rows:     40% 60%;
         grid-template-areas:    'icon title title'
                                 'icon events rating'
     }                              
-
     .hazard-label-wrapper{
         grid-area:              title;
         display:                grid;
         justify-content:        start;
         align-content:          end;
-        font-size:             1rem;
+        font-size:              1.25vw;
+        font-weight:            700;
         z-index:                10;
         line-height:            1;
         text-transform:         uppercase;
@@ -99,16 +107,15 @@
         grid-area:              icon;
         display:                grid;
         justify-content:        center;
-        align-content:          start;
     }
     .hazard-event-wrapper{
         grid-area:              events;
-        padding-bottom:         0.5rem;
+        padding-bottom:         0.75vw;
         font-size:              1rem;
         font-weight:            600;
     }
     .marker-wrapper{
-        grid-area:              rating;
+        grid-area:              1 / 3 / 3 / 4;
         display:                flex;
         justify-content:        center;
         align-items:            center;
@@ -117,16 +124,15 @@
     .hazard-icon{
         fill:                   var(--foreground);
         width:                  100%;
+        height:                 100%;
     }
     .event{
-        font-size:                  0.5rem;
-        font-weight:                300;
+        font-size:              0.75vw;
+        font-weight:            300;
     }
-
-
     .marker{
-        height:                 0.75rem;
-        width:                  0.75rem;
+        height:                 1vw;
+        width:                  1vw;
         border-radius:          50%;
         border:                 1px solid var(--foreground)   
     }
@@ -134,7 +140,7 @@
         background:             var(--foreground)
     }
     .marker:not(:last-of-type){
-        margin-right:           0.125rem;
+        margin-right:           0.2vw;
     }
 
     @media print{

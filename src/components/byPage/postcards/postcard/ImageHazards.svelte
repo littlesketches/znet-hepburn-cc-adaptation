@@ -19,13 +19,9 @@
 <!-- STYLES -->
 <style>
     section{
-        grid-area:              imgHaz;
+        grid-area:              img;
         display:                grid;
-        grid-template-columns:  1fr 0.5fr;
-        grid-template-rows:     1fr;
-        grid-template-areas:    'img hazards';
     }
-
     @media print {
 
     }

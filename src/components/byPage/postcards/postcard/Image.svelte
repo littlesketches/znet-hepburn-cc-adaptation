@@ -1,6 +1,7 @@
 <!-- IMAGE WITH EFFECTS -->
 <script>
     export let imgURL 
+
 </script>
 
 
@@ -16,17 +17,19 @@
 
 <!-- STYLES -->
 <style>
-
+    section{
+        z-index:            -10;
+        height:             100%;
+    }
     /* Duotone */
     .img-wrapper {
-        grid-area:           img;
+        grid-area:           1 / 1 / 3 / 3;
         background-color:    var(--brightGreen);
         display:             flex;
         flex:                1 1 100%;
         overflow:            hidden;
         padding:             var(--spacing);
         position:            relative;
-        height:              var(--postcard-img-height);
     }
 
     .img-wrapper img {

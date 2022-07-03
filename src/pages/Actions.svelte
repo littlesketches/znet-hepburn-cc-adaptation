@@ -5,7 +5,6 @@
 	import { ui, data }     from '../data/stores.js'
     import Logo             from '../components/shared/Logo.svelte'
     import ActionVis        from '../components/byPage/actions/ActionVis.svelte';
-    import Table            from '../components/byPage/actions/Table.svelte';
 	import Switch 		    from '../components/shared/Switch.svelte'
 
 
@@ -25,7 +24,6 @@
         if(el.getAttribute('nodeSymbol'))   $ui.state.actionVis.nodes.symbols = el.getAttribute('nodeSymbol') === "true" ? true : false
         if(el.getAttribute('nodeShadow'))   $ui.state.actionVis.nodes.shadow = el.getAttribute('nodeShadow') === "true" ? true : false
     }
-
 
     const updateAct = (el) => {
         // Update the act
@@ -111,7 +109,6 @@
         }
     })
 
-
     // Seutp the flow diagram switch function
     let flowDiagramState = null;
     const flowDiagramOptions = ['Abstract to concrete', 'Action type flow']
@@ -142,16 +139,15 @@
             <span class = "title--highlight">actions</span>
         </h1>
         <div class="hero-content__text">
-            <p>There's a lot to consider when thinking about the actions we need prepare and adapt our community for the impacts of climate change. In this section we'll take a closer look at key actions that that area already happening in and around Hepburn, through a series of different adaptation lenses. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.
+            <p>There's a lot to consider when thinking about the actions we need to take to prepare and adapt our community for climate change. In this section we'll take a closer look at key actions that area already happening in and around Hepburn, through a series of different adaptation 'lenses'. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.
             </p>
         </div>
         <div class ="select">
             <ul>
                 <li class = "select__item" on:click={scrollTo} actName = "intro">Introduction</li>
                 <li class = "select__item" on:click={scrollTo} actName = "hazards">Hazards</li>
-                <li class = "select__item" on:click={scrollTo} actName = "approach">Appraoch</li>
+                <li class = "select__item" on:click={scrollTo} actName = "approach">Approach</li>
                 <li class = "select__item" on:click={scrollTo} actName = "scale">Scale</li>
-                <li class = "select__item" on:click={scrollTo} actName = "other">Other</li>
                 <li class = "select__item" on:click={scrollTo} actName = "type">Type</li>
                 <li class = "select__item" on:click={scrollTo} actName = "focusArea">Focus area</li>
                 <li class = "select__item" on:click={scrollTo} actName = "screening">Adaptation criteria</li>
@@ -164,7 +160,7 @@
 
 <!-- Page content section-->
 <div class = "content-wrapper">
-    <!-- Narrative pane content-->
+    <!-- Narrative pane content -->
     <div class = "narrative-wrapper">
         <div act = "intro" class = "act-narrative">
             <div scene = 0 force='cluster-center'>
@@ -173,12 +169,12 @@
                 <p>We've identified {@html $data.stats.actions.total} actions (so far) that are helping Hepburn adapt to climate change. Let's start by representing each action as a little <span class = "action-dot">dot</span> on the screen.</p> 
             </div>
             <div scene = 1 force="ring-outer">
-                <p>This seems nice an orderly: {@html $data.stats.actions.total} actions <em>seems</em> reasonable...or is it!? Adaptation actions vary wildy in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.</p>
+                <p>This seems nice an orderly: {@html $data.stats.actions.total} actions <em>seems</em> reasonable...or is it!? Adaptation actions vary wildly in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.</p>
             </div>
             <div scene = 2 act="intro" force = "arrow-down">
-                <p>So how can we see how these actions match up to <em>our</em> adaptation needs? How can we tell if what we're doing is effective? Are we doing enough? And are we doing enough in ther right places?
+                <p>So how can we see how these actions match up to <em>our</em> adaptation needs? How can we tell if what we're doing is effective? Are we doing <em>enough</em>? And are we doing enough in the <em>right places?</em>
                 </p>
-                <p>This guide will walk you through some key ways to look at Hepburn's adaptation actions. It won't definitively answer these questions - becuase 'adaptation' and our 'adaptive capacity' aren't quantifiable - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.
+                <p>This guide walks you through some key ways to view Hepburn's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.
                 </p>
             </div>
         </div>
@@ -191,11 +187,11 @@
                 </p>
             </div>
             <div scene = 1 force="cluster-hazard" nodeBase="true" nodeArcs = "false" nodeShapes = "false" nodeShadow = "false">
-                <p>We want to see how our actions address each hazard. To begin with, we can count how many actions address each hazard. We can also try to position each action near the hazards they are trying to address. But what we quickly notice is that there are <strong>many actions that address multiple hazards</strong>.
+                <p>We want to see how our actions address each hazard. To begin with, we can <em>count how many</em> actions address each hazard. We could try to position each action near the hazards they are trying to address. But we quickly notice is that there are <strong>actions that address multiple hazards</strong>.
                 </p>
             </div>
             <div act="hazards" scene = 2 force="cluster-center" nodeBase="false" nodeArcs = "true" nodeShapes = "false" nodeShadow = "false">
-                <p>So how about we re-design our dots by putting some matching <span class="text-arcs">coloured arcs</span> on our actions. Its a bit busy, but now we some idea about which actions address which hazards!
+                <p>So how about we re-design our dots by putting some matching <span class="text-arcs">coloured arcs</span> around our actions. Its a bit busy, but now we can identify which actions address which hazards!
                 </p>
             </div>
         </div>
@@ -203,41 +199,39 @@
         <div act = "approach" class = "act-narrative" legendHazards = 0.5 legendApproach = "false">
             <div scene = 0 force = "diagonal-up">
                 <hr>
-                <h2>Adaptive capacity and approaches</h2>
-                <p>There are two broad approaches when in comes improving adaptive capacity:</p>
+                <h2>Adaptation approaches</h2>
+                <p>There are two approaches when in comes to adaptation:</p>
                 <ul>
                     <li> We can <strong>reduce risk</strong>; and</li>
                     <li> We can <strong>increase resilience</strong></li>
                 </ul>
-                <p>Each of these broad approaches contains a handful of more specific types or approaches, and our actions can take multiple approaches. What we want is good spread of actions so that we have a diversified approach to building of capacity to adapt.
+                <p>Each of these  approaches contains a handful of more specific approaches, and our actions can take multiple approaches. What is obvious is that we want is good spread of actions so that our approach to adaptation is diverse.
                 </p>
             </div>
             <div scene = 1 force="cluster-approach" nodeBase="false" nodeArcs = "true" nodeShapes = "false" nodeShadow = "false" >
-                <p> We can try to position actions over these broad approaches, but we again run into the problem with actions that both reduce risk and increase resilience. There might also be somes actions that don't really fit either approach: usually because they're quite 'indirect' or 'high-level'.  
+                <p> We can try to position actions over these two approaches, but we again run into the problem with actions that both reduce risk and increase resilience. There might also be some actions that don't really fit either approach: usually because they're quite 'indirect' or 'high-level'.  
                 </p>
             </div>
             <div act="approach" scene=2  force = "cluster-approach-wide"  nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "false" >
                 <p>So to help us better identify the adaptation approach of each action, we're going to put little triangle symbols inside each action. 
                 </p>
             </div>
-
         </div>
 
-        <div act = "scale" class = "act-narrative"  legendHazards = 0.35  legendApproach = 0.65>
+        <div act = "scale" class = "act-narrative"  legendHazards = 0.35  legendApproach = 0.65 legendScale = "false">
             <div scene = 0 force="cluster-scale" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "false" nodeSymbol = "false">
                 <hr>
                 <h2>Actions scale</h2>
-                <p>The next lens we'll take to look at our actions through is their <strong>scale</strong>. This is a classification of whether an action is specific to the <em>local</em> Hepburn area, or if the action operates at broader scale of say, the <em>regional</em> level (e.g. Grampians), the Victorian <em>state</em> level, or at a <em>national</em> level.
+                <p>The next lens we'll look at our actions through concerns their <strong>scale</strong>. This is a classification of whether an action is specific to the <em>local</em> Hepburn area, or if the action operates at broader scale of either: a <em>regional</em> level (e.g. Grampians or Central Highlands), the Victorian <em>state</em> level, or at a <em>national</em> level.
                 </p>
             </div>
             <div scene = 1 force="cluster-scale" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "true" nodeSymbol = "false" >
-                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; we could adjust the overall size of each action. However <strong>we're interested in how these actions affect Hepburn</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a sublte, shadow-y ring around the actions that are beyond local scale and move on!
+                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; maybe we could adjust the overall size of each action? However <strong>we're interested in how these actions affect Hepburn</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!
                 </p>
             </div>
         </div>
 
-
-        <div act = "other" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75>
+        <!-- <div act = "other" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75>
             <div scene = 0 force="cluster-center">
                 <hr>
                 <h2>Healing country </h2>
@@ -245,18 +239,18 @@
                 </p>
             </div>
             <div scene = 1 force="cluster-center" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "true" nodeSymbol = "true" >
-                <p>Healing county is a candidate and may end up being the only one that uses this, in which case this section would be re-shaped to be about how to indicate actions that have a healing county component (and/or traditioanl owners consultation??). If included here, a legend entry would be created. Note that if other classifiers are included (with a different symbol)
+                <p>Healing county is a candidate and may end up being the only one that uses this, in which case this section would be re-shaped to be about how to indicate actions that have a healing county component (and/or traditional owners consultation??). If included here, a legend entry would be created. Note that if other classifiers are included (with a different symbol)
                 </p>
             </div>
-        </div>
+        </div> -->
 
-        <div act = "type" class = "act-narrative" >
+        <div act = "type" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75 >
             <div scene = 0 force = "right-line" >
                 <hr>
                 <h2>Types of actions</h2>
             </div>
             <div scene = 1  force = "cluster-concrete-abstract-right">
-                <p>Now that we can see some of the key characteristics of our actions, we can start to think about more sophisticated classifcations that give us insight into how well coordinated our adaptation are.</p>
+                <p>Now that we can see some of the key characteristics of our actions, we can start to think about more sophisticated classifications that give us insight into how well coordinated our adaptation are.</p>
                 <p>This diagram shows how actions of different <strong>types</strong> might be connected, and how the knowledge gained from more <em>abstract</em> actions, helps to inform more <em>concrete</em> responses to climate risk.</p>
             </div>
             <div scene = 2 force="cluster-type"> 
@@ -271,8 +265,9 @@
         <div act = "focusArea" class = "act-narrative" >
             <div scene = 0 force="ring-focusArea" >
                 <hr>
-                <h2>Actions in focus areas</h2>
-                <p><strong>Five focus areas</strong> have been identified for the Hepburn Shire from a series of studies and research of climate risks in the broader Grampians region. These  areas are another useful lens for assessing how well distributed our adapatation actions are across <strong> areas that matter to Hepburn</strong>.</p>
+                <h2>Adaptation focus areas</h2>
+                <p><strong>Five focus areas</strong> have were identified through a <a href="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target ="_blank">climate adaptation situational analysis study</a> for broader <a href="https://adaptgrampians.com.au/" target ="_blank"> Grampians region</a>. These areas are another useful lens for assessing how well distributed our adaptation actions are across <strong> areas that matter to Hepburn</strong>.</p>
+                <p>For Hepburn, we've added a sixth important focus area of <strong>healing country</strong> to highlight the importance of actions that embrace the views and practices of Traditional Owners' to manage climate risk.</p>
                 <p>Now of course, many actions address multiple focus areas - so we'll another way to show which actions gravitate to a given focus area. To do this, <strong>you can tap on any of the focus area names to see which actions relate to that area.</strong></p>
             </div>
         </div>
@@ -283,31 +278,31 @@
                 <h2>Key adaptation criteria</h2>
             </div>
             <div scene = 1 force="cluster-screening">
-                <p>We've looked at different ways to classify and cluster actions that hopefully provides some insight into how they collectivley respond to our adapatation challenge. Now we're going to look at ways of evaluating and prioritising these actions.
+                <p>We've looked at different ways to classify and cluster actions that hopefully provides some insight into how they collectively respond to our adaptation challenge. Now we're going to look at ways of evaluating and prioritising these actions.
                 </p>
-                <p>We start by answering three simple questions of each action that are aligned to key <strong>adapatation criteria</strong>. These are questions that can be answered with a(n emapthic) "yes", or a "no" or "unsure". And they simply consider whether an action is <strong>robust</strong>, <strong>flexible</strong> and/or <strong>viable</strong>.</p>
+                <p>We start by answering three simple questions of each action that are aligned to key <strong>adaptation criteria</strong>. These are questions that can be answered with a(n emphatic) "yes" or "no", or "unsure". These questions simply consider whether an action is <strong>robust</strong>, <strong>flexible</strong> and/or <strong>viable</strong>.</p>
             </div>
             <div scene = 2 force="cluster-screening">
-                <p>Actions that meet all criteria are automatically considered as <strong>no regrets actions</strong>: there's is no reason to not do these actions, so we should implement and support them!</p>
-                <p>The actions that aren't immediately screened (by these questions) to being no regrets, are the one's that we look at more closely... </p>
+                <p>Actions that meet all criteria are automatically classed as <strong>no regrets actions</strong>: there's no reason to not do these actions, so we should implement and support them!</p>
+                <p>Actions that answer "no" to <em>any of the three criteria</em> are considered to have limited adaptation benefit, or may lead to maladaptation. These actions are de-prioritised and essentially discarded from consideration. Next we'll look at How we might go further and prioritise these actions.</p>
             </div>    
         </div>
 
         <div act = "rating" class = "act-narrative">
             <div scene = 0 force="cluster-noregets-vs-others">
                 <hr>
-                <h2>rating actions for climate change adaptation</h2>
-                <p>We've separated our actions into two groups: those that are no regrets actions, and those that need a bit more consideration.
+                <h2>Prioritising adaptation actions</h2>
+                <p>We've separated our actions into three groups based on key adaptation criteria. So what next?
                 </p>
             </div>
             <div scene = 1 force="cluster-adaptation-criteria">
-                <p>We can use our adaptation screening criteria further by creating tiers for those actions that met two, one or none of the criteria. Again, this is a imperfect way of stratifying actions but is relateively logical and robust: actions that meeti more key adapation criteria tend to float to the top.
+                <p>We can use our adaptation criteria further to create priority tiers for those actions that met two, one or none of the criteria. This is a imperfect way of stratifying actions but is relatively logical and robust: actions that expected to meet more key adaptation criteria float to the top.
                 </p>
             </div>
             <div scene = 2 force="cluster-rating">
-                <p>The last way we'll evaluate these action is by rating how effective they are at respondin to the climate hazards. We know that every action repond to at least one climate hazard, and so we've rated each action on the (expected) efficacy of their response to each cliamte hazard (and its associated climate events). This is a subjective 1 to 5 rating that accounts for the size and scope of the action, and so does take into consider how ambitious the action is, and how much it might achive. So to reiterate, these are subjective ratings that help us differentiate actions <em>within thier tier.</em>    
+                <p>Next, we'll differentiate actions by rating how effective they're expected to be at responding to climate hazards. We've rated each action on the (expected) efficacy of their response to each hazard that it addresses. This is a subjective (1 to 5) rating that accounts for the size and scope of the action: so it takes into consideration how ambitious the action is, and how much it might achieve against the hazards it addresses. We use this process to differentiate actions <em>within their priority tiers.</em> 
                 </p>
-                <p>***To add: screening for uintended consequnces and the role co-benefits in deciding if an action should be done. This might also link to other paradignms and movements (e.g. circular economy, doughnut economics, environmental economic, resilience etc.)
+                <p>What we're left with is a loosely prioritised a view of our adaptation actions!
                 </p>
             </div>
         </div>
@@ -315,11 +310,16 @@
         <div act = "outro" class = "act-narrative">
             <div scene = 0 force="ring-mid">
                 <hr>
-                <h2>What next?</h2>
-                <p>Placeholder outro section that would reinforce to the audience that the response to climate change adapation needs to be taken as a collection of actions, working together; and the importance of always revisiting this portfolio perspective of the actions, against the climate risks. This should raise questions about the usefulness of being too dogmatic around prioritisation; and might be.</p>
-                <p>
-                Coordination is critical however understanding this perspective should hopefully help everyone understand how they can support, contribuute to, and develop new actions that help the community adapt to climate change. Making link to taking a deeper dive into the actions would be good (to to logically lead into the postcard section)
+                <h2>Beyond the adaptation lens</h2>
+                <p>We've taken a look at our adaptation actions through various lenses and perspectives, and we've even tried to  assess and rank our actions.... 
+
+                <!-- *** Narrative to be drafted ***: need to question the usefulness of (fine grained) prioritisation and mention other considerations (timing, dependencies, competing actions, mutual exclusivity, synergies etc.). Discussion might also flow into understanding  unintended consequences and the role co-benefits in deciding if an action should be done. This might also link to other paradigms and movements (e.g. circular economy, doughnut economics, environmental economic, resilience etc.) -->
                 </p>
+
+                <!-- <p>Reinforce to the audience that the response to climate change adaptation needs to be taken as a collection of actions, working together; and the importance of always revisiting this portfolio perspective of the actions, against the climate risks.
+                <p>
+                Coordination is critical however understanding this perspective should hopefully help everyone understand how they can support, contribute to, and develop new actions that help the community adapt to climate change. Making link to taking a deeper dive into the actions would be good (to to logically lead into the postcard section)
+                </p> -->
             </div>
 
         </div>
@@ -422,33 +422,23 @@
     .hero-logo__wrapper{
         max-width:              100px;
     }
-
     .select {
-        grid-area: select;
-        color: var(--color-select);
-        font-size: 0.65rem;
+        grid-area:              select;
+        color:                  var(--color-select);
+        font-size:              0.65rem;
     }
-
-    .select__heading {
-        display: inline-block;
-        cursor: default;
-        font-size: 0.65rem;
-        font-weight: 700;
-    }
-
     .select__item {
-        margin: 0 0 0 0.5rem;
-        display: inline-block;
-        cursor: pointer;
-        font-size: 0.65rem;
-        font-weight: 300;
-        color: var(--foreground);
+        margin:                 0 0 0 0.5rem;
+        display:                inline-block;
+        cursor:                 pointer;
+        font-size:              0.65rem;
+        font-weight:            300;
+    }
+    .select__item:hover {
+        color:                  var(--foreground);
+        font-weight:            700;
     }
 
-    .select__item:hover {
-        color: var(--brightGreen);
-        font-weight: 700;
-    }
 
 
     /* Typography */
@@ -469,7 +459,6 @@
         right:              0;
         top:                0.125rem;
         opacity:            0.5;
-
     }
 
     .text-arcs::before{
@@ -483,7 +472,6 @@
         right:              0;
         bottom:             -4px;
 		width:              100%;
-
     }
 
 

@@ -7,45 +7,46 @@
     import { circleClockwise, circleAntiClockwise }      from "../../../../utils/icons.js"
 
 
-    export let criteria ={
-        flexible:       true,
-        robust:         true,
-        viable:        false
-    }
+    export let criteria = {}
     const dims     = {           // SVG dimensions
         width:          1600,
-        height:         1400
+        height:         1600
     }              
-
     const radius = dims.width * 0.25
-
 </script>
 
 
 <!-- HTML COMPONENT MARKUP-->
-<svg viewBox = "0 0 {dims.width} {dims.height}" width="75%">
+<svg viewBox = "0 0 {dims.width} {dims.height}" width="100%">
     <g id ="screening-vis-container" in:fade>
-        <g style = "transform: translate({dims.width * 0.5}px, {dims.height * 0.5}px)">
+        <g style = "transform: translate({dims.width * 0.5}px, {dims.height * 0.55}px)">
             {#each $data.schema.adaptationScreens.data as lens, i}
-            <circle class:selected="{criteria[slugify(lens.Screen)]}"  class = {slugify(lens.Screen)} r = {radius} style = "transform: translate({dims.width * lens.xPos}px, {dims.height * lens.yPos}px)" />
+            <circle class = "{criteria[slugify(lens.Screen)]} {slugify(lens.Screen)}" r = {radius} style = "transform: translate({dims.width * lens.xPos}px, {dims.height * lens.yPos}px)" />
             {/each}
 
             {#each $data.schema.adaptationScreens.data as lens, i}
                 {#if lens.lensPos === "top"}
-                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 70 )} />
+                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 20 )} />
                     <text>
-                        <textPath class:selected="{criteria.robust}" class = 'lens-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="75%">{@html lens.Screen}</textPath>
+                        <textPath class = "{criteria[slugify(lens.Screen)]} lens-label {slugify(lens.Screen)}" href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="75%">
+                            {@html criteria[slugify(lens.Screen)] === "Yes" ? lens.Screen : "Not "+lens.Screen }
+                        </textPath>
                     </text>
 
                 {:else if lens.lensPos === "left"}
-                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 80 )} />
+                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 110 )} />
                     <text>
-                        <textPath class:selected="{criteria.flexible}"class = 'lens-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="32.5%">{@html lens.Screen}</textPath>
+                        <textPath class = "{criteria[slugify(lens.Screen)]} lens-label {slugify(lens.Screen)}" href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="32.5%">
+                            {@html criteria[slugify(lens.Screen)] === "Yes" ? lens.Screen : "Not "+lens.Screen }
+                        </textPath>
                     </text>
+
                 {:else if lens.lensPos === "right"}
-                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 80 )} />
+                    <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 110 )} />
                     <text>
-                        <textPath class:selected="{criteria.viable}" class = 'lens-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="12.5%">{@html lens.Screen}</textPath>
+                        <textPath class = "{criteria[slugify(lens.Screen)]}  lens-label {slugify(lens.Screen)}" href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="12.5%">
+                            {@html criteria[slugify(lens.Screen)] === "Yes" ? lens.Screen : "Not "+lens.Screen }
+                        </textPath>
                     </text>
                 {/if}
             {/each}
@@ -58,12 +59,21 @@
 <style>
     circle{
         fill:               transparent;
-        stroke:             var(--lightGrey);
+        stroke:             var(--unsureCriteria);
         stroke-width:       15px;
         mix-blend-mode:     multiply; 
     }
-    circle.selected{
-        stroke:             var(--brightGreen);
+    circle.Yes{
+        stroke:             var(--yesCriteria);
+    }
+    circle.No{
+        stroke:             var(--noCriteria);
+    }
+    .lens-label.Yes{
+        fill:               var(--yesCriteria);
+    }
+    .lens-label.No{
+        fill:              var(--noCriteria);
     }
     .label-path{
         stroke:             none;
@@ -72,12 +82,8 @@
     .lens-label{
         font-size:          120px;
         font-weight:        700;
-        dominant-baseline:  middle;
         text-anchor:        middle;
         text-transform:     uppercase;  
-        fill:               var(--lightGrey)
-    }
-    .lens-label.selected{
-        fill:               var(--brightGreen);
+        fill:               var(--unsureCriteria)
     }
 </style>

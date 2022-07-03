@@ -211,6 +211,7 @@
     }
     .node-color{
         fill:                   var(--bg-color);
+        fill:                   rgba(255, 255, 255, 0.7);
     }
     .node-shadow{
         fill:                   var(--scale-shadow);
@@ -220,7 +221,7 @@
         cursor:                 pointer;
     }
     .label-bg{
-        fill:                   #fff;
+        fill:                   var(--bg-color);
     }
     .label-text{
         fill:                   var(--darkGreen);

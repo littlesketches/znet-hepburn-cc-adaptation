@@ -90,7 +90,6 @@ function initWithAirtableContent(initApp){
                 }
             }
 
-
             /// Call initApp
             if(tableName == dataTableNames[dataTableNames.length - 1]){
                 setTimeout(() => initApp(airtableData, schema, climateData), 1000)

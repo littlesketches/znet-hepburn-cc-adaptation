@@ -16,7 +16,7 @@
 
 
     // Store loaded action data and schema
-    $data.actions       = actionData["Adaptation actions"].filter(d => d["*** State ***"] === "Include" )
+    $data.actions       = actionData["Adaptation actions"]
     $data.stakeholders  = actionData["Stakeholders"]
     $data.references    = actionData["References"]
     $data.schema        = schemaData
@@ -174,11 +174,14 @@
         };
 
         // c. Animate back to home page menu
-        showMenu = () => {            
-            $ui.el.app.classList.remove('overflow')   
-            $ui.el.homeContainer.classList.remove('content--hidden');         // Pointer events related class
-            $ui.animation.pageToggleTimeline.reverse();   
-         
+        showMenu = () => {           
+            if($ui.state.postcards.view === 'postcard'){
+                $ui.state.postcards.view = 'table'
+            } else {
+                $ui.el.app.classList.remove('overflow')   
+                $ui.el.homeContainer.classList.remove('content--hidden');         // Pointer events related class
+                $ui.animation.pageToggleTimeline.reverse();   
+            }
         };
 
         // d. Hover animation on the hero "enter" element
@@ -214,6 +217,7 @@
 
         // Set page view if set via query param
         if(queryParams.get('page')) showPage(queryParams.get('page'))
+        if(queryParams.get('postcards')) $ui.state.postcards.view = queryParams.get('postcards')
 
     });
 

@@ -6,7 +6,6 @@
     import { schema }       from '../../../../data/schema.js';
     import { circleClockwise, circleAntiClockwise }      from "../../../../utils/icons.js"
 
-
     export let dims     = {}                // SVG dimensions
     export let ratingData = {}
     const markerWidth = 25
@@ -17,17 +16,26 @@
 <g id ="rating-vis-container" in:fade>
 
     <g class = "rating-scale-group">
-        <g class = "no-regrets scale-group" style="transform:translate({50}px , {ratingData.noRegrets.y}px)">
-            <path d = "M5, 0 h{markerWidth}" />
-            <text x = {markerWidth + 10} >{@html ratingData.noRegrets.name}</text>
-        </g>
-
-        <g class = "for-rating scale-group"  class:hidden="{$ui.state.actionVis.scene !==0}" style="transform:translate({50}px , {ratingData.forRating.y}px)">
-            <path d = "M5, 0 h{markerWidth}" />
-            <text x = {markerWidth + 10}  >{@html ratingData.forRating.name}</text>
+        <g class:hidden="{$ui.state.actionVis.scene !==0}">
+            <g class = "no-regrets scale-group" style="transform:translate({50}px , {ratingData.noRegrets.y}px)">
+                <path d = "M5, 0 h{markerWidth}" />
+                <text x = {markerWidth + 10} >{@html ratingData.noRegrets.name}</text>
+            </g>
+            <g class = "for-rating scale-group" style="transform:translate({50}px , {ratingData.forRating.y}px)">
+                <path d = "M5, 0 h{markerWidth}" />
+                <text x = {markerWidth + 10}  >{@html ratingData.forRating.name}</text>
+            </g>
+            <g class = "discard scale-group" style="transform:translate({50}px , {ratingData.discard.y}px)">
+                <path d = "M5, 0 h{markerWidth}" />
+                <text x = {markerWidth + 10}  >{@html ratingData.discard.name}</text>
+            </g>
         </g>
 
         <g class:hidden="{$ui.state.actionVis.scene ===0}">
+            <g class = "no-regrets scale-group" style="transform:translate({50}px , {ratingData.noRegrets.y}px)">
+                <path d = "M5, 0 h{markerWidth}" />
+                <text x = {markerWidth + 10} >{@html ratingData.noRegrets.name}</text>
+            </g>
             <g class = "two-criteria scale-group" style="transform:translate({50}px , {ratingData.twoCriteria.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
                 <text x = {markerWidth + 10}  >{@html ratingData.twoCriteria.name}</text>
@@ -39,6 +47,10 @@
             <g class = "zero-criteria scale-group" style="transform:translate({50}px , {ratingData.zeroCriteria.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
                 <text x = {markerWidth + 10}  >{@html ratingData.zeroCriteria.name}</text>
+            </g>
+            <g class = "exclude scale-group" style="transform:translate({50}px , {ratingData.discard.y}px)">
+                <path d = "M5, 0 h{markerWidth}" />
+                <text x = {markerWidth + 10}  >{@html ratingData.discard.name}</text>
             </g>
         </g>
     </g>
