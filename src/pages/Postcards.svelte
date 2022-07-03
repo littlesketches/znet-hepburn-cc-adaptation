@@ -6,7 +6,7 @@
 	import { data, ui }     from '../data/stores.js'	 
 
     const showTable = () => $ui.state.postcards.view = 'table'
-    const showPostcards = () => $ui.state.postcards.view = 'all-postcards'
+    const showPostcards = () => $ui.state.postcards.view = 'all'
 </script>
 
 
