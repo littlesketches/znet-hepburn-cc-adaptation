@@ -36369,46 +36369,46 @@ var app = (function (exports) {
     			t27 = space();
     			if_block.c();
     			attr_dev(div0, "class", "hero-logo__wrapper svelte-2cdr40");
-    			add_location(div0, file$j, 21, 16, 854);
+    			add_location(div0, file$j, 21, 16, 844);
     			attr_dev(div1, "class", "hero-logo svelte-2cdr40");
-    			add_location(div1, file$j, 20, 12, 814);
+    			add_location(div1, file$j, 20, 12, 804);
     			attr_dev(span0, "class", "title--mute svelte-2cdr40");
-    			add_location(span0, file$j, 24, 16, 980);
-    			add_location(br0, file$j, 24, 58, 1022);
-    			add_location(br1, file$j, 25, 33, 1061);
+    			add_location(span0, file$j, 24, 16, 970);
+    			add_location(br0, file$j, 24, 58, 1012);
+    			add_location(br1, file$j, 25, 33, 1051);
     			attr_dev(span1, "class", "title--highlight svelte-2cdr40");
-    			add_location(span1, file$j, 26, 16, 1083);
+    			add_location(span1, file$j, 26, 16, 1073);
     			attr_dev(h1, "class", "hero-content__title svelte-2cdr40");
-    			add_location(h1, file$j, 23, 12, 931);
-    			add_location(em, file$j, 29, 84, 1280);
-    			add_location(p, file$j, 29, 16, 1212);
+    			add_location(h1, file$j, 23, 12, 921);
+    			add_location(em, file$j, 29, 84, 1270);
+    			add_location(p, file$j, 29, 16, 1202);
     			attr_dev(div2, "class", "hero-content__text svelte-2cdr40");
-    			add_location(div2, file$j, 28, 12, 1163);
+    			add_location(div2, file$j, 28, 12, 1153);
     			attr_dev(li0, "class", "select__item svelte-2cdr40");
-    			add_location(li0, file$j, 34, 20, 1589);
+    			add_location(li0, file$j, 34, 20, 1579);
     			attr_dev(li1, "class", "select__item svelte-2cdr40");
-    			add_location(li1, file$j, 35, 20, 1674);
-    			add_location(ul, file$j, 33, 16, 1564);
+    			add_location(li1, file$j, 35, 20, 1664);
+    			add_location(ul, file$j, 33, 16, 1554);
     			attr_dev(div3, "class", "select svelte-2cdr40");
-    			add_location(div3, file$j, 32, 12, 1526);
+    			add_location(div3, file$j, 32, 12, 1516);
     			attr_dev(div4, "class", "hero-content svelte-2cdr40");
-    			add_location(div4, file$j, 18, 8, 736);
+    			add_location(div4, file$j, 18, 8, 726);
     			attr_dev(div5, "class", "hero-wrapper svelte-2cdr40");
-    			add_location(div5, file$j, 17, 4, 683);
-    			add_location(h2, file$j, 45, 16, 1988);
-    			add_location(div6, file$j, 47, 20, 2096);
-    			add_location(div7, file$j, 48, 20, 2156);
-    			add_location(div8, file$j, 49, 20, 2215);
-    			add_location(div9, file$j, 46, 16, 2070);
-    			add_location(h3, file$j, 52, 20, 2319);
-    			add_location(div10, file$j, 53, 20, 2373);
-    			add_location(div11, file$j, 54, 20, 2426);
-    			add_location(div12, file$j, 51, 16, 2293);
-    			add_location(div13, file$j, 44, 12, 1966);
+    			add_location(div5, file$j, 17, 4, 673);
+    			add_location(h2, file$j, 45, 16, 1978);
+    			add_location(div6, file$j, 47, 20, 2086);
+    			add_location(div7, file$j, 48, 20, 2146);
+    			add_location(div8, file$j, 49, 20, 2205);
+    			add_location(div9, file$j, 46, 16, 2060);
+    			add_location(h3, file$j, 52, 20, 2309);
+    			add_location(div10, file$j, 53, 20, 2363);
+    			add_location(div11, file$j, 54, 20, 2416);
+    			add_location(div12, file$j, 51, 16, 2283);
+    			add_location(div13, file$j, 44, 12, 1956);
     			attr_dev(section, "class", "option-container col-1-2 svelte-2cdr40");
-    			add_location(section, file$j, 43, 8, 1909);
+    			add_location(section, file$j, 43, 8, 1899);
     			attr_dev(div14, "class", "content-wrapper svelte-2cdr40");
-    			add_location(div14, file$j, 42, 4, 1853);
+    			add_location(div14, file$j, 42, 4, 1843);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -36620,11 +36620,11 @@ var app = (function (exports) {
     			em.textContent = "Tap on any action to open its summary postcard";
     			t3 = space();
     			create_component(actiontable.$$.fragment);
-    			add_location(h2, file$j, 67, 12, 2848);
-    			add_location(em, file$j, 68, 15, 2901);
-    			add_location(p, file$j, 68, 12, 2898);
+    			add_location(h2, file$j, 67, 12, 2838);
+    			add_location(em, file$j, 68, 15, 2891);
+    			add_location(p, file$j, 68, 12, 2888);
     			attr_dev(section, "class", "table-container svelte-2cdr40");
-    			add_location(section, file$j, 66, 8, 2784);
+    			add_location(section, file$j, 66, 8, 2774);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -36698,7 +36698,7 @@ var app = (function (exports) {
     			}
 
     			attr_dev(section, "class", "postcards-container");
-    			add_location(section, file$j, 60, 8, 2576);
+    			add_location(section, file$j, 60, 8, 2566);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -36921,7 +36921,7 @@ var app = (function (exports) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Postcards', slots, []);
     	const showTable = () => set_store_value(ui, $ui.state.postcards.view = 'table', $ui);
-    	const showPostcards = () => set_store_value(ui, $ui.state.postcards.view = 'all-postcards', $ui);
+    	const showPostcards = () => set_store_value(ui, $ui.state.postcards.view = 'all', $ui);
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
