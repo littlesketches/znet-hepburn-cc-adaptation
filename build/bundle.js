@@ -5,12 +5,6 @@ var app = (function (exports) {
 
     function noop$4() { }
     const identity$a = x => x;
-    function assign(tar, src) {
-        // @ts-ignore
-        for (const k in src)
-            tar[k] = src[k];
-        return tar;
-    }
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -280,75 +274,6 @@ var app = (function (exports) {
         });
     }
 
-    function create_animation(node, from, fn, params) {
-        if (!from)
-            return noop$4;
-        const to = node.getBoundingClientRect();
-        if (from.left === to.left && from.right === to.right && from.top === to.top && from.bottom === to.bottom)
-            return noop$4;
-        const { delay = 0, duration = 300, easing = identity$a, 
-        // @ts-ignore todo: should this be separated from destructuring? Or start/end added to public api and documentation?
-        start: start_time = now$1() + delay, 
-        // @ts-ignore todo:
-        end = start_time + duration, tick = noop$4, css } = fn(node, { from, to }, params);
-        let running = true;
-        let started = false;
-        let name;
-        function start() {
-            if (css) {
-                name = create_rule(node, 0, 1, duration, delay, easing, css);
-            }
-            if (!delay) {
-                started = true;
-            }
-        }
-        function stop() {
-            if (css)
-                delete_rule(node, name);
-            running = false;
-        }
-        loop(now => {
-            if (!started && now >= start_time) {
-                started = true;
-            }
-            if (started && now >= end) {
-                tick(1, 0);
-                stop();
-            }
-            if (!running) {
-                return false;
-            }
-            if (started) {
-                const p = now - start_time;
-                const t = 0 + 1 * easing(p / duration);
-                tick(t, 1 - t);
-            }
-            return true;
-        });
-        start();
-        tick(0, 1);
-        return stop;
-    }
-    function fix_position(node) {
-        const style = getComputedStyle(node);
-        if (style.position !== 'absolute' && style.position !== 'fixed') {
-            const { width, height } = style;
-            const a = node.getBoundingClientRect();
-            node.style.position = 'absolute';
-            node.style.width = width;
-            node.style.height = height;
-            add_transform(node, a);
-        }
-    }
-    function add_transform(node, a) {
-        const b = node.getBoundingClientRect();
-        if (a.left !== b.left || a.top !== b.top) {
-            const style = getComputedStyle(node);
-            const transform = style.transform === 'none' ? '' : style.transform;
-            node.style.transform = `${transform} translate(${a.left - b.left}px, ${a.top - b.top}px)`;
-        }
-    }
-
     let current_component;
     function set_current_component(component) {
         current_component = component;
@@ -561,62 +486,6 @@ var app = (function (exports) {
             }
         };
     }
-    function create_out_transition(node, fn, params) {
-        let config = fn(node, params);
-        let running = true;
-        let animation_name;
-        const group = outros;
-        group.r += 1;
-        function go() {
-            const { delay = 0, duration = 300, easing = identity$a, tick = noop$4, css } = config || null_transition;
-            if (css)
-                animation_name = create_rule(node, 1, 0, duration, delay, easing, css);
-            const start_time = now$1() + delay;
-            const end_time = start_time + duration;
-            add_render_callback(() => dispatch$1(node, false, 'start'));
-            loop(now => {
-                if (running) {
-                    if (now >= end_time) {
-                        tick(0, 1);
-                        dispatch$1(node, false, 'end');
-                        if (!--group.r) {
-                            // this will result in `end()` being called,
-                            // so we don't need to clean up here
-                            run_all(group.c);
-                        }
-                        return false;
-                    }
-                    if (now >= start_time) {
-                        const t = easing((now - start_time) / duration);
-                        tick(1 - t, t);
-                    }
-                }
-                return running;
-            });
-        }
-        if (is_function(config)) {
-            wait().then(() => {
-                // @ts-ignore
-                config = config();
-                go();
-            });
-        }
-        else {
-            go();
-        }
-        return {
-            end(reset) {
-                if (reset && config.tick) {
-                    config.tick(1, 0);
-                }
-                if (running) {
-                    if (animation_name)
-                        delete_rule(node, animation_name);
-                    running = false;
-                }
-            }
-        };
-    }
     function create_bidirectional_transition(node, fn, params, intro) {
         let config = fn(node, params);
         let t = intro ? 0 : 1;
@@ -728,100 +597,6 @@ var app = (function (exports) {
         : typeof globalThis !== 'undefined'
             ? globalThis
             : global);
-    function outro_and_destroy_block(block, lookup) {
-        transition_out(block, 1, 1, () => {
-            lookup.delete(block.key);
-        });
-    }
-    function fix_and_outro_and_destroy_block(block, lookup) {
-        block.f();
-        outro_and_destroy_block(block, lookup);
-    }
-    function update_keyed_each(old_blocks, dirty, get_key, dynamic, ctx, list, lookup, node, destroy, create_each_block, next, get_context) {
-        let o = old_blocks.length;
-        let n = list.length;
-        let i = o;
-        const old_indexes = {};
-        while (i--)
-            old_indexes[old_blocks[i].key] = i;
-        const new_blocks = [];
-        const new_lookup = new Map();
-        const deltas = new Map();
-        i = n;
-        while (i--) {
-            const child_ctx = get_context(ctx, list, i);
-            const key = get_key(child_ctx);
-            let block = lookup.get(key);
-            if (!block) {
-                block = create_each_block(key, child_ctx);
-                block.c();
-            }
-            else if (dynamic) {
-                block.p(child_ctx, dirty);
-            }
-            new_lookup.set(key, new_blocks[i] = block);
-            if (key in old_indexes)
-                deltas.set(key, Math.abs(i - old_indexes[key]));
-        }
-        const will_move = new Set();
-        const did_move = new Set();
-        function insert(block) {
-            transition_in(block, 1);
-            block.m(node, next);
-            lookup.set(block.key, block);
-            next = block.first;
-            n--;
-        }
-        while (o && n) {
-            const new_block = new_blocks[n - 1];
-            const old_block = old_blocks[o - 1];
-            const new_key = new_block.key;
-            const old_key = old_block.key;
-            if (new_block === old_block) {
-                // do nothing
-                next = new_block.first;
-                o--;
-                n--;
-            }
-            else if (!new_lookup.has(old_key)) {
-                // remove old block
-                destroy(old_block, lookup);
-                o--;
-            }
-            else if (!lookup.has(new_key) || will_move.has(new_key)) {
-                insert(new_block);
-            }
-            else if (did_move.has(old_key)) {
-                o--;
-            }
-            else if (deltas.get(new_key) > deltas.get(old_key)) {
-                did_move.add(new_key);
-                insert(new_block);
-            }
-            else {
-                will_move.add(old_key);
-                o--;
-            }
-        }
-        while (o--) {
-            const old_block = old_blocks[o];
-            if (!new_lookup.has(old_block.key))
-                destroy(old_block, lookup);
-        }
-        while (n)
-            insert(new_blocks[n - 1]);
-        return new_blocks;
-    }
-    function validate_each_keys(ctx, list, get_context, get_key) {
-        const keys = new Set();
-        for (let i = 0; i < list.length; i++) {
-            const key = get_key(get_context(ctx, list, i));
-            if (keys.has(key)) {
-                throw new Error('Cannot have duplicate keys in a keyed each');
-            }
-            keys.add(key);
-        }
-    }
 
     function bind(component, name, callback) {
         const index = component.$$.props[name];
@@ -1045,36 +820,7 @@ var app = (function (exports) {
         const f = t - 1.0;
         return f * f * f + 1.0;
     }
-    function quintOut(t) {
-        return --t * t * t * t * t + 1;
-    }
 
-    /*! *****************************************************************************
-    Copyright (c) Microsoft Corporation.
-
-    Permission to use, copy, modify, and/or distribute this software for any
-    purpose with or without fee is hereby granted.
-
-    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-    LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-    OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-    PERFORMANCE OF THIS SOFTWARE.
-    ***************************************************************************** */
-
-    function __rest(s, e) {
-        var t = {};
-        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-            t[p] = s[p];
-        if (s != null && typeof Object.getOwnPropertySymbols === "function")
-            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                    t[p[i]] = s[p[i]];
-            }
-        return t;
-    }
     function fade(node, { delay = 0, duration = 400, easing = identity$a } = {}) {
         const o = +getComputedStyle(node).opacity;
         return {
@@ -1099,56 +845,6 @@ var app = (function (exports) {
 			opacity: ${target_opacity - (od * u)}
 		`
         };
-    }
-    function crossfade(_a) {
-        var { fallback } = _a, defaults = __rest(_a, ["fallback"]);
-        const to_receive = new Map();
-        const to_send = new Map();
-        function crossfade(from, node, params) {
-            const { delay = 0, duration = d => Math.sqrt(d) * 30, easing = cubicOut$1 } = assign(assign({}, defaults), params);
-            const to = node.getBoundingClientRect();
-            const dx = from.left - to.left;
-            const dy = from.top - to.top;
-            const dw = from.width / to.width;
-            const dh = from.height / to.height;
-            const d = Math.sqrt(dx * dx + dy * dy);
-            const style = getComputedStyle(node);
-            const transform = style.transform === 'none' ? '' : style.transform;
-            const opacity = +style.opacity;
-            return {
-                delay,
-                duration: is_function(duration) ? duration(d) : duration,
-                easing,
-                css: (t, u) => `
-				opacity: ${t * opacity};
-				transform-origin: top left;
-				transform: ${transform} translate(${u * dx}px,${u * dy}px) scale(${t + (1 - t) * dw}, ${t + (1 - t) * dh});
-			`
-            };
-        }
-        function transition(items, counterparts, intro) {
-            return (node, params) => {
-                items.set(params.key, {
-                    rect: node.getBoundingClientRect()
-                });
-                return () => {
-                    if (counterparts.has(params.key)) {
-                        const { rect } = counterparts.get(params.key);
-                        counterparts.delete(params.key);
-                        return crossfade(rect, node, params);
-                    }
-                    // if the node is disappearing altogether
-                    // (i.e. wasn't claimed by the other list)
-                    // then we need to supply an outro
-                    items.delete(params.key);
-                    return fallback && fallback(node, params, intro);
-                };
-            };
-        }
-        return [
-            transition(to_send, to_receive, false),
-            transition(to_receive, to_send, true)
-        ];
     }
 
     const subscriber_queue = [];
@@ -1223,6 +919,11 @@ var app = (function (exports) {
                     scale:          false
 
                 }
+            },
+            postcards: {
+                view:           'table',
+                style:          'duotone',
+                selectedAction: null
             }
         }, 
         el:        {},
@@ -27142,9 +26843,9 @@ var app = (function (exports) {
 
     /* src/components/shared/Logo.svelte generated by Svelte v3.48.0 */
 
-    const file$u = "src/components/shared/Logo.svelte";
+    const file$v = "src/components/shared/Logo.svelte";
 
-    function create_fragment$u(ctx) {
+    function create_fragment$v(ctx) {
     	let svg;
     	let g0;
     	let path0;
@@ -27188,45 +26889,45 @@ var app = (function (exports) {
     			path15 = svg_element("path");
     			attr_dev(path0, "d", "M.25 18.65v3.96h22.3L.25 61.84h30.79v-3.96H7.02l22.34-39.23H.25z");
     			attr_dev(path0, "class", "z svelte-huk8x3");
-    			add_location(path0, file$u, 2, 8, 110);
+    			add_location(path0, file$v, 2, 8, 110);
     			attr_dev(path1, "d", "M41.43 28.28v33.56h-3.96V18.65h3.96v2.77c3.28-3.44 7.83-5.38 12.58-5.37 9.17-.41 16.94 6.69 17.36 15.86.02.35.02.69.01 1.04v28.9h-3.96V33.3c.05-3.55-1.39-6.96-3.98-9.39-5.21-5.16-13.6-5.19-18.85-.07a14.987 14.987 0 0 0-3.16 4.44");
-    			add_location(path1, file$u, 3, 8, 205);
+    			add_location(path1, file$v, 3, 8, 205);
     			attr_dev(path2, "d", "M111.29 22.92c-8.84-6.59-21.34-4.77-27.93 4.07a19.95 19.95 0 0 0 0 23.86l27.93-27.93zM86.05 53.75c3.6 3.35 8.36 5.18 13.28 5.1 5.31.08 10.42-2.03 14.12-5.85.5-.5.97-1.01 1.41-1.54l4.18 1.5c-.78 1.08-1.65 2.1-2.6 3.04-9.46 9.39-24.74 9.34-34.13-.11-9.39-9.46-9.34-24.74.11-34.13 8.64-8.58 22.32-9.38 31.91-1.87.7.59 1.41 1.23 2.11 1.93.27.26.51.53.75.79l-2.99 2.99-28.15 28.15z");
-    			add_location(path2, file$u, 4, 8, 454);
+    			add_location(path2, file$v, 4, 8, 454);
     			attr_dev(path3, "d", "M128.99.27v18.38h-8.8v3.96h8.8v39.23h3.96V22.61h8.8v-3.96h-8.8V.27h-3.96z");
-    			add_location(path3, file$u, 5, 8, 851);
+    			add_location(path3, file$v, 5, 8, 851);
     			attr_dev(g0, "class", "logo-title svelte-huk8x3");
-    			add_location(g0, file$u, 1, 4, 79);
+    			add_location(g0, file$v, 1, 4, 79);
     			attr_dev(path4, "d", "M6.33 67.82v3.4H2.02v-3.4H1.3v7.71h.72v-3.66h4.31v3.66h.72v-7.71h-.72z");
-    			add_location(path4, file$u, 8, 8, 984);
+    			add_location(path4, file$v, 8, 8, 984);
     			attr_dev(path5, "d", "M13.25 67.82v7.71h4.89v-.65h-4.17v-3h3.74v-.65h-3.74v-2.74h4v-.65l-4.72-.02z");
-    			add_location(path5, file$u, 9, 8, 1075);
+    			add_location(path5, file$v, 9, 8, 1075);
     			attr_dev(path6, "d", "M24.53 71.22h1.63c.2 0 .4-.02.6-.07.19-.04.36-.12.52-.23.16-.11.28-.25.37-.42.1-.2.15-.42.14-.64.01-.22-.04-.44-.15-.63-.09-.17-.22-.32-.38-.43-.16-.11-.34-.2-.54-.24-.2-.05-.4-.08-.61-.08h-1.59l.01 2.74zm-.72-3.4h2.22c.28 0 .57.03.84.09.29.06.56.17.81.32.25.16.45.37.6.63.17.31.25.65.23 1 .01.31-.06.62-.19.9-.12.25-.29.46-.51.63-.22.17-.47.29-.74.36-.29.08-.58.12-.88.12h-1.67v3.66h-.72l.01-7.71z");
-    			add_location(path6, file$u, 10, 8, 1172);
+    			add_location(path6, file$v, 10, 8, 1172);
     			attr_dev(path7, "d", "M34.86 74.88h1.64c.35.01.69-.04 1.02-.15.22-.08.43-.21.59-.38.13-.14.22-.3.28-.48.04-.15.07-.31.07-.46.01-.25-.05-.5-.17-.73-.1-.2-.25-.36-.42-.49-.18-.13-.38-.22-.59-.28-.22-.06-.44-.09-.67-.09h-1.75v3.06zm0-3.72h1.49c.31.01.61-.04.9-.14.2-.07.39-.19.55-.33.12-.12.21-.26.26-.42.04-.13.06-.27.07-.41.01-.23-.04-.46-.14-.67-.08-.17-.21-.32-.36-.42-.16-.11-.34-.19-.53-.22-.21-.04-.43-.07-.64-.07h-1.59l-.01 2.68zm-.72-3.34h2.22c.3 0 .59.02.88.07.28.04.56.14.8.29.24.15.44.37.58.62.16.32.24.69.22 1.05.01.37-.12.73-.35 1.02-.27.31-.63.51-1.03.58v.02c.24.02.48.08.7.18.2.09.39.23.54.39.16.17.28.37.35.58.09.24.13.49.13.74.02.38-.07.75-.26 1.08-.16.27-.38.49-.64.66-.26.16-.54.27-.84.33-.28.06-.56.09-.84.09h-2.46v-7.7z");
-    			add_location(path7, file$u, 11, 8, 1591);
+    			add_location(path7, file$v, 11, 8, 1591);
     			attr_dev(path8, "d", "M50.66 72.58c0 .4-.05.8-.14 1.19-.09.36-.25.7-.47 1-.23.3-.53.54-.87.7-.85.35-1.8.35-2.64 0-.34-.16-.64-.4-.87-.7-.23-.3-.39-.64-.47-1-.1-.39-.14-.79-.14-1.19v-4.76h.72v4.57c0 .3.03.59.08.88.05.31.15.6.3.87s.37.5.63.66c.68.35 1.49.35 2.17 0 .26-.16.48-.39.63-.66.15-.27.25-.57.3-.87.05-.29.07-.59.08-.88v-4.57h.72l-.03 4.76z");
-    			add_location(path8, file$u, 12, 8, 2328);
+    			add_location(path8, file$v, 12, 8, 2328);
     			attr_dev(path9, "d", "M57.54 71.22h1.52c.31.01.62-.04.92-.14.21-.07.39-.19.55-.35.12-.13.21-.28.27-.45.09-.28.09-.59 0-.87-.05-.17-.14-.32-.27-.45-.16-.15-.34-.27-.55-.35-.29-.11-.61-.15-.92-.14h-1.52v2.75zm-.72-3.4h2.02c.1 0 .24 0 .41.01.19.01.38.03.57.07.21.04.42.1.62.17.21.08.4.2.57.35a1.85 1.85 0 0 1 .57 1.43c.01.32-.05.63-.19.92-.12.23-.28.42-.48.58-.19.15-.41.26-.64.33-.22.07-.44.12-.66.15l2.24 3.7h-.82l-2.17-3.66h-1.34v3.67h-.71l.01-7.72z");
-    			add_location(path9, file$u, 13, 8, 2673);
+    			add_location(path9, file$v, 13, 8, 2673);
     			attr_dev(path10, "d", "M73.29 67.82v6.75h-.02l-4.69-6.75h-.92v7.71h.72v-6.75h.02l4.69 6.75h.92v-7.71h-.72z");
-    			add_location(path10, file$u, 14, 8, 3121);
+    			add_location(path10, file$v, 14, 8, 3121);
     			attr_dev(path11, "d", "M87.21 74.11c.17.31.43.56.73.73.32.16.67.25 1.03.24.23 0 .46-.03.67-.11.2-.07.39-.17.55-.3.15-.13.28-.29.37-.47.09-.2.14-.41.14-.63.01-.23-.05-.46-.17-.66-.11-.18-.27-.32-.45-.43-.2-.12-.42-.21-.64-.29-.23-.08-.48-.16-.73-.24s-.49-.17-.73-.27c-.23-.1-.45-.23-.64-.4s-.35-.38-.45-.61c-.12-.29-.18-.6-.17-.92-.01-.61.26-1.2.74-1.57.24-.18.5-.32.79-.4.3-.09.62-.14.93-.14.4 0 .8.07 1.17.22.37.16.69.42.93.75l-.62.45a1.76 1.76 0 0 0-.64-.57c-.27-.13-.57-.2-.86-.19-.22 0-.45.03-.66.09-.2.06-.38.15-.55.27a1.301 1.301 0 0 0-.52 1.09c-.02.32.08.64.29.89.21.21.46.38.73.49.31.13.63.23.96.32.33.09.65.21.96.36.29.15.54.37.73.64.21.34.32.73.29 1.13 0 .32-.06.64-.2.93-.13.26-.31.49-.53.68-.23.19-.49.33-.77.42-.29.09-.59.14-.9.14-.48 0-.96-.09-1.4-.27-.44-.19-.83-.5-1.1-.9l.72-.47z");
-    			add_location(path11, file$u, 15, 8, 3225);
+    			add_location(path11, file$v, 15, 8, 3225);
     			attr_dev(path12, "d", "M102.4 67.82v3.4h-4.31v-3.4h-.72v7.71h.72v-3.66h4.31v3.66h.72v-7.71h-.72z");
-    			add_location(path12, file$u, 16, 8, 4019);
+    			add_location(path12, file$v, 16, 8, 4019);
     			attr_dev(path13, "d", "M109.59 67.82h.72v7.71h-.72z");
-    			add_location(path13, file$u, 17, 8, 4113);
+    			add_location(path13, file$v, 17, 8, 4113);
     			attr_dev(path14, "d", "M117.5 71.22h1.52c.31.01.62-.04.92-.14.21-.07.39-.19.55-.35.12-.13.22-.28.27-.45.09-.28.09-.59 0-.87-.05-.17-.14-.32-.27-.45-.16-.15-.34-.27-.55-.35-.29-.11-.61-.15-.92-.14h-1.52v2.75zm-.72-3.4h2.02c.1 0 .24 0 .41.01.19.01.38.03.57.07.21.04.42.1.62.17.21.08.4.2.57.35a1.85 1.85 0 0 1 .57 1.43c.01.32-.05.63-.19.92-.12.23-.28.42-.48.58-.19.15-.41.26-.64.33-.22.07-.44.12-.66.15l2.24 3.7H121l-2.17-3.65h-1.34v3.66h-.72l.01-7.72z");
-    			add_location(path14, file$u, 18, 8, 4162);
+    			add_location(path14, file$v, 18, 8, 4162);
     			attr_dev(path15, "d", "M127.6 67.82v7.71h4.89v-.65h-4.17v-3h3.74v-.65h-3.74v-2.74h4v-.65l-4.72-.02z");
-    			add_location(path15, file$u, 19, 8, 4609);
+    			add_location(path15, file$v, 19, 8, 4609);
     			attr_dev(g1, "class", "logo-subtitle svelte-huk8x3");
-    			add_location(g1, file$u, 7, 4, 950);
+    			add_location(g1, file$v, 7, 4, 950);
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg, "width", "100%");
     			attr_dev(svg, "viewBox", "0 0 142 76");
-    			add_location(svg, file$u, 0, 0, 0);
+    			add_location(svg, file$v, 0, 0, 0);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -27262,7 +26963,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$u.name,
+    		id: create_fragment$v.name,
     		type: "component",
     		source: "",
     		ctx
@@ -27271,7 +26972,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$u($$self, $$props) {
+    function instance$v($$self, $$props) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Logo', slots, []);
     	const writable_props = [];
@@ -27286,29 +26987,29 @@ var app = (function (exports) {
     class Logo extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$u, create_fragment$u, safe_not_equal, {});
+    		init$1(this, options, instance$v, create_fragment$v, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Logo",
     			options,
-    			id: create_fragment$u.name
+    			id: create_fragment$v.name
     		});
     	}
     }
 
     /* src/components/byPage/postcards/postcard/Title.svelte generated by Svelte v3.48.0 */
-    const file$t = "src/components/byPage/postcards/postcard/Title.svelte";
+    const file$u = "src/components/byPage/postcards/postcard/Title.svelte";
 
-    function get_each_context$i(ctx, list, i) {
+    function get_each_context$h(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[3] = list[i];
     	child_ctx[5] = i;
     	return child_ctx;
     }
 
-    // (13:8) {#if actionData["Project leads"]}
-    function create_if_block$9(ctx) {
+    // (14:8) {#if actionData["Project leads"]}
+    function create_if_block$b(ctx) {
     	let h3;
     	let t;
     	let each_value = /*actionData*/ ctx[0]["Project leads"].map(/*func*/ ctx[2]);
@@ -27316,7 +27017,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$i(get_each_context$i(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$h(get_each_context$h(ctx, each_value, i));
     	}
 
     	const block = {
@@ -27328,8 +27029,8 @@ var app = (function (exports) {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(h3, "class", "svelte-1q0l1ap");
-    			add_location(h3, file$t, 13, 8, 409);
+    			attr_dev(h3, "class", "svelte-1hfatyh");
+    			add_location(h3, file$u, 14, 8, 410);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h3, anchor);
@@ -27346,12 +27047,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$i(ctx, each_value, i);
+    					const child_ctx = get_each_context$h(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$i(child_ctx);
+    						each_blocks[i] = create_each_block$h(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(h3, null);
     					}
@@ -27372,22 +27073,22 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$9.name,
+    		id: create_if_block$b.name,
     		type: "if",
-    		source: "(13:8) {#if actionData[\\\"Project leads\\\"]}",
+    		source: "(14:8) {#if actionData[\\\"Project leads\\\"]}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (16:16) {#if i  > 0}
-    function create_if_block_1$8(ctx) {
+    // (17:16) {#if i  > 0}
+    function create_if_block_1$9(ctx) {
     	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
     		if (/*i*/ ctx[5] === /*actionData*/ ctx[0]["Project leads"].length - 1) return create_if_block_2$7;
-    		return create_else_block$2;
+    		return create_else_block$3;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -27421,17 +27122,17 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$8.name,
+    		id: create_if_block_1$9.name,
     		type: "if",
-    		source: "(16:16) {#if i  > 0}",
+    		source: "(17:16) {#if i  > 0}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (17:80) {:else}
-    function create_else_block$2(ctx) {
+    // (18:80) {:else}
+    function create_else_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -27448,16 +27149,16 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$2.name,
+    		id: create_else_block$3.name,
     		type: "else",
-    		source: "(17:80) {:else}",
+    		source: "(18:80) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (17:20) {#if i === actionData["Project leads"].length - 1}
+    // (18:20) {#if i === actionData["Project leads"].length - 1}
     function create_if_block_2$7(ctx) {
     	let t;
 
@@ -27477,20 +27178,20 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2$7.name,
     		type: "if",
-    		source: "(17:20) {#if i === actionData[\\\"Project leads\\\"].length - 1}",
+    		source: "(18:20) {#if i === actionData[\\\"Project leads\\\"].length - 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (15:12) {#each actionData["Project leads"].map(d => $data.stakeholders.filter(e => e.recordID === d)[0].Name)  as lead, i}
-    function create_each_block$i(ctx) {
+    // (16:12) {#each actionData["Project leads"].map(d => $data.stakeholders.filter(e => e.recordID === d)[0].Name)  as lead, i}
+    function create_each_block$h(ctx) {
     	let t;
     	let html_tag;
     	let raw_value = /*lead*/ ctx[3] + "";
     	let html_anchor;
-    	let if_block = /*i*/ ctx[5] > 0 && create_if_block_1$8(ctx);
+    	let if_block = /*i*/ ctx[5] > 0 && create_if_block_1$9(ctx);
 
     	const block = {
     		c: function create() {
@@ -27520,65 +27221,51 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$i.name,
+    		id: create_each_block$h.name,
     		type: "each",
-    		source: "(15:12) {#each actionData[\\\"Project leads\\\"].map(d => $data.stakeholders.filter(e => e.recordID === d)[0].Name)  as lead, i}",
+    		source: "(16:12) {#each actionData[\\\"Project leads\\\"].map(d => $data.stakeholders.filter(e => e.recordID === d)[0].Name)  as lead, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$t(ctx) {
+    function create_fragment$u(ctx) {
     	let section;
-    	let div0;
+    	let div;
     	let h1;
     	let raw_value = /*actionData*/ ctx[0].Name + "";
-    	let t0;
-    	let t1;
-    	let div1;
-    	let logo;
-    	let current;
-    	let if_block = /*actionData*/ ctx[0]["Project leads"] && create_if_block$9(ctx);
-    	logo = new Logo({ $$inline: true });
+    	let t;
+    	let if_block = /*actionData*/ ctx[0]["Project leads"] && create_if_block$b(ctx);
 
     	const block = {
     		c: function create() {
     			section = element("section");
-    			div0 = element("div");
+    			div = element("div");
     			h1 = element("h1");
-    			t0 = space();
+    			t = space();
     			if (if_block) if_block.c();
-    			t1 = space();
-    			div1 = element("div");
-    			create_component(logo.$$.fragment);
-    			attr_dev(h1, "class", "svelte-1q0l1ap");
+    			attr_dev(h1, "class", "svelte-1hfatyh");
     			toggle_class(h1, "three-line", /*actionData*/ ctx[0].Name.length > 70);
-    			add_location(h1, file$t, 11, 8, 277);
-    			attr_dev(div0, "class", "main-title svelte-1q0l1ap");
-    			add_location(div0, file$t, 10, 4, 242);
-    			attr_dev(div1, "class", "icon svelte-1q0l1ap");
-    			add_location(div1, file$t, 23, 4, 799);
-    			attr_dev(section, "class", "title svelte-1q0l1ap");
-    			add_location(section, file$t, 9, 0, 213);
+    			add_location(h1, file$u, 12, 8, 278);
+    			attr_dev(div, "class", "main-title svelte-1hfatyh");
+    			add_location(div, file$u, 11, 4, 243);
+    			attr_dev(section, "class", "title svelte-1hfatyh");
+    			add_location(section, file$u, 10, 0, 214);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
-    			append_dev(section, div0);
-    			append_dev(div0, h1);
+    			append_dev(section, div);
+    			append_dev(div, h1);
     			h1.innerHTML = raw_value;
-    			append_dev(div0, t0);
-    			if (if_block) if_block.m(div0, null);
-    			append_dev(section, t1);
-    			append_dev(section, div1);
-    			mount_component(logo, div1, null);
-    			current = true;
+    			append_dev(div, t);
+    			if (if_block) if_block.m(div, null);
     		},
     		p: function update(ctx, [dirty]) {
-    			if ((!current || dirty & /*actionData*/ 1) && raw_value !== (raw_value = /*actionData*/ ctx[0].Name + "")) h1.innerHTML = raw_value;
+    			if (dirty & /*actionData*/ 1 && raw_value !== (raw_value = /*actionData*/ ctx[0].Name + "")) h1.innerHTML = raw_value;
     			if (dirty & /*actionData*/ 1) {
     				toggle_class(h1, "three-line", /*actionData*/ ctx[0].Name.length > 70);
     			}
@@ -27587,34 +27274,26 @@ var app = (function (exports) {
     				if (if_block) {
     					if_block.p(ctx, dirty);
     				} else {
-    					if_block = create_if_block$9(ctx);
+    					if_block = create_if_block$b(ctx);
     					if_block.c();
-    					if_block.m(div0, null);
+    					if_block.m(div, null);
     				}
     			} else if (if_block) {
     				if_block.d(1);
     				if_block = null;
     			}
     		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(logo.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(logo.$$.fragment, local);
-    			current = false;
-    		},
+    		i: noop$4,
+    		o: noop$4,
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section);
     			if (if_block) if_block.d();
-    			destroy_component(logo);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$t.name,
+    		id: create_fragment$u.name,
     		type: "component",
     		source: "",
     		ctx
@@ -27623,7 +27302,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$t($$self, $$props, $$invalidate) {
+    function instance$u($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
@@ -27658,13 +27337,13 @@ var app = (function (exports) {
     class Title extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$t, create_fragment$t, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$u, create_fragment$u, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Title",
     			options,
-    			id: create_fragment$t.name
+    			id: create_fragment$u.name
     		});
 
     		const { ctx } = this.$$;
@@ -32769,10 +32448,6 @@ var app = (function (exports) {
         },
         climateVariables: {
             data:           [],
-            fields:         ["Variable", "Australian Climate Futures tool full name", "Description", "Linked hazard events", "recordID"]
-        },
-        climateVariablesCH: {
-            data:           [],
             fields:         ["Variable", "Alias", "Data availability", "Unit", "Change unit", "Description", "order", "Linked hazards", "Linked hazard events", "recordID"]
         },
         ipccHazards: {
@@ -32814,187 +32489,41 @@ var app = (function (exports) {
         adaptationScreens: {
             data:           [],
             fields:         ["Screen", "Description", "fieldName", "xPos", "yPos", "lensPos"]
+        },
+        riskDeterminants: {
+            data:           [],
+            fields:         ["Name"]
         }
 
     };
 
     /* src/components/byPage/postcards/postcard/Main.svelte generated by Svelte v3.48.0 */
-    const file$s = "src/components/byPage/postcards/postcard/Main.svelte";
+    const file$t = "src/components/byPage/postcards/postcard/Main.svelte";
 
-    function get_each_context$h(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[4] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context_1$9(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[7] = list[i];
-    	return child_ctx;
-    }
-
-    // (28:16) {#each riskGroups as riskGroup }
-    function create_each_block_1$9(ctx) {
-    	let div;
-    	let raw_value = /*riskGroup*/ ctx[7] + "";
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			attr_dev(div, "class", "svelte-gqfk9");
-    			add_location(div, file$s, 28, 16, 1054);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			div.innerHTML = raw_value;
-    		},
-    		p: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_1$9.name,
-    		type: "each",
-    		source: "(28:16) {#each riskGroups as riskGroup }",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (37:20) {#each risks as risk }
-    function create_each_block$h(ctx) {
-    	let li;
-    	let raw_value = /*risk*/ ctx[4] + "";
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			attr_dev(li, "class", "svelte-gqfk9");
-    			add_location(li, file$s, 37, 20, 1365);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			li.innerHTML = raw_value;
-    		},
-    		p: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$h.name,
-    		type: "each",
-    		source: "(37:20) {#each risks as risk }",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$s(ctx) {
+    function create_fragment$t(ctx) {
     	let section;
     	let div1;
-    	let h30;
+    	let h3;
     	let t1;
     	let div0;
     	let raw_value = /*converter*/ ctx[1].makeHtml(/*actionData*/ ctx[0].Description) + "";
-    	let t2;
-    	let div8;
-    	let h31;
-    	let t4;
-    	let div4;
-    	let div2;
-    	let t6;
-    	let div3;
-    	let t7;
-    	let div7;
-    	let div5;
-    	let t9;
-    	let div6;
-    	let ul;
-    	let each_value_1 = /*riskGroups*/ ctx[3];
-    	validate_each_argument(each_value_1);
-    	let each_blocks_1 = [];
-
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks_1[i] = create_each_block_1$9(get_each_context_1$9(ctx, each_value_1, i));
-    	}
-
-    	let each_value = /*risks*/ ctx[2];
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$h(get_each_context$h(ctx, each_value, i));
-    	}
 
     	const block = {
     		c: function create() {
     			section = element("section");
     			div1 = element("div");
-    			h30 = element("h3");
-    			h30.textContent = "About the action";
+    			h3 = element("h3");
+    			h3.textContent = "About the action";
     			t1 = space();
     			div0 = element("div");
-    			t2 = space();
-    			div8 = element("div");
-    			h31 = element("h3");
-    			h31.textContent = "Community benefits";
-    			t4 = space();
-    			div4 = element("div");
-    			div2 = element("div");
-    			div2.textContent = "Risk groups";
-    			t6 = space();
-    			div3 = element("div");
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].c();
-    			}
-
-    			t7 = space();
-    			div7 = element("div");
-    			div5 = element("div");
-    			div5.textContent = "Risks";
-    			t9 = space();
-    			div6 = element("div");
-    			ul = element("ul");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(h30, "class", "svelte-gqfk9");
-    			add_location(h30, file$s, 17, 8, 600);
-    			attr_dev(div0, "class", "about-content svelte-gqfk9");
-    			add_location(div0, file$s, 18, 8, 634);
-    			attr_dev(div1, "class", "about-container svelte-gqfk9");
-    			add_location(div1, file$s, 16, 4, 560);
-    			attr_dev(h31, "class", "svelte-gqfk9");
-    			add_location(h31, file$s, 23, 8, 800);
-    			attr_dev(div2, "class", "risk-group-header svelte-gqfk9");
-    			add_location(div2, file$s, 25, 12, 885);
-    			attr_dev(div3, "class", "risk-group-tag-container svelte-gqfk9");
-    			add_location(div3, file$s, 26, 12, 948);
-    			attr_dev(div4, "class", "risk-group-container svelte-gqfk9");
-    			add_location(div4, file$s, 24, 8, 836);
-    			attr_dev(div5, "class", "risk-group-header svelte-gqfk9");
-    			add_location(div5, file$s, 33, 12, 1198);
-    			attr_dev(ul, "class", "svelte-gqfk9");
-    			add_location(ul, file$s, 35, 16, 1297);
-    			attr_dev(div6, "class", "risk-list svelte-gqfk9");
-    			add_location(div6, file$s, 34, 12, 1255);
-    			attr_dev(div7, "class", "risk-group-container svelte-gqfk9");
-    			add_location(div7, file$s, 32, 8, 1149);
-    			attr_dev(div8, "class", "risk-group-wrapper svelte-gqfk9");
-    			add_location(div8, file$s, 22, 4, 757);
-    			attr_dev(section, "class", "main svelte-gqfk9");
-    			add_location(section, file$s, 15, 0, 532);
+    			attr_dev(h3, "class", "svelte-1p55zj6");
+    			add_location(h3, file$t, 16, 8, 599);
+    			attr_dev(div0, "class", "about-content svelte-1p55zj6");
+    			add_location(div0, file$t, 17, 8, 633);
+    			attr_dev(div1, "class", "about-container svelte-1p55zj6");
+    			add_location(div1, file$t, 15, 4, 559);
+    			attr_dev(section, "class", "main svelte-1p55zj6");
+    			add_location(section, file$t, 14, 0, 531);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33002,96 +32531,23 @@ var app = (function (exports) {
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
     			append_dev(section, div1);
-    			append_dev(div1, h30);
+    			append_dev(div1, h3);
     			append_dev(div1, t1);
     			append_dev(div1, div0);
     			div0.innerHTML = raw_value;
-    			append_dev(section, t2);
-    			append_dev(section, div8);
-    			append_dev(div8, h31);
-    			append_dev(div8, t4);
-    			append_dev(div8, div4);
-    			append_dev(div4, div2);
-    			append_dev(div4, t6);
-    			append_dev(div4, div3);
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].m(div3, null);
-    			}
-
-    			append_dev(div8, t7);
-    			append_dev(div8, div7);
-    			append_dev(div7, div5);
-    			append_dev(div7, t9);
-    			append_dev(div7, div6);
-    			append_dev(div6, ul);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(ul, null);
-    			}
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*actionData*/ 1 && raw_value !== (raw_value = /*converter*/ ctx[1].makeHtml(/*actionData*/ ctx[0].Description) + "")) div0.innerHTML = raw_value;
-    			if (dirty & /*riskGroups*/ 8) {
-    				each_value_1 = /*riskGroups*/ ctx[3];
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$9(ctx, each_value_1, i);
-
-    					if (each_blocks_1[i]) {
-    						each_blocks_1[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_1[i] = create_each_block_1$9(child_ctx);
-    						each_blocks_1[i].c();
-    						each_blocks_1[i].m(div3, null);
-    					}
-    				}
-
-    				for (; i < each_blocks_1.length; i += 1) {
-    					each_blocks_1[i].d(1);
-    				}
-
-    				each_blocks_1.length = each_value_1.length;
-    			}
-
-    			if (dirty & /*risks*/ 4) {
-    				each_value = /*risks*/ ctx[2];
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$h(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$h(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(ul, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
+    			if (dirty & /*actionData*/ 1 && raw_value !== (raw_value = /*converter*/ ctx[1].makeHtml(/*actionData*/ ctx[0].Description) + "")) div0.innerHTML = raw_value;		},
     		i: noop$4,
     		o: noop$4,
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section);
-    			destroy_each(each_blocks_1, detaching);
-    			destroy_each(each_blocks, detaching);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$s.name,
+    		id: create_fragment$t.name,
     		type: "component",
     		source: "",
     		ctx
@@ -33100,7 +32556,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$s($$self, $$props, $$invalidate) {
+    function instance$t($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Main', slots, []);
     	let { actionData } = $$props;
@@ -33140,19 +32596,19 @@ var app = (function (exports) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [actionData, converter, risks, riskGroups];
+    	return [actionData, converter];
     }
 
     class Main extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$s, create_fragment$s, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$t, create_fragment$t, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Main",
     			options,
-    			id: create_fragment$s.name
+    			id: create_fragment$t.name
     		});
 
     		const { ctx } = this.$$;
@@ -33174,9 +32630,9 @@ var app = (function (exports) {
 
     /* src/components/byPage/postcards/postcard/Image.svelte generated by Svelte v3.48.0 */
 
-    const file$r = "src/components/byPage/postcards/postcard/Image.svelte";
+    const file$s = "src/components/byPage/postcards/postcard/Image.svelte";
 
-    function create_fragment$r(ctx) {
+    function create_fragment$s(ctx) {
     	let section;
     	let img;
     	let img_src_value;
@@ -33186,10 +32642,10 @@ var app = (function (exports) {
     			section = element("section");
     			img = element("img");
     			if (!src_url_equal(img.src, img_src_value = /*imgURL*/ ctx[0])) attr_dev(img, "src", img_src_value);
-    			attr_dev(img, "class", "svelte-6u0bo");
-    			add_location(img, file$r, 13, 4, 639);
-    			attr_dev(section, "class", "img-wrapper svelte-6u0bo");
-    			add_location(section, file$r, 7, 0, 103);
+    			attr_dev(img, "class", "svelte-qf01x5");
+    			add_location(img, file$s, 14, 4, 640);
+    			attr_dev(section, "class", "img-wrapper svelte-qf01x5");
+    			add_location(section, file$s, 8, 0, 104);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33212,7 +32668,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$r.name,
+    		id: create_fragment$s.name,
     		type: "component",
     		source: "",
     		ctx
@@ -33221,7 +32677,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$r($$self, $$props, $$invalidate) {
+    function instance$s($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Image', slots, []);
     	let { imgURL } = $$props;
@@ -33251,13 +32707,13 @@ var app = (function (exports) {
     class Image$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$r, create_fragment$r, safe_not_equal, { imgURL: 0 });
+    		init$1(this, options, instance$s, create_fragment$s, safe_not_equal, { imgURL: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Image",
     			options,
-    			id: create_fragment$r.name
+    			id: create_fragment$s.name
     		});
 
     		const { ctx } = this.$$;
@@ -33289,7 +32745,8 @@ var app = (function (exports) {
         biodiversity:           "M8.049 23.48h2.142v1.57h-47.055v-1.57h11.165v-1.679h1.57v1.68h13.872v-6.356c.063-.023.117-.047.172-.078.44.368.91.706 1.397.996v5.438H6.479v-2.276h-9.431l.306-1.546v-.007C4.8 19.54 10.036 12.334 8.041 5.324a11.4 11.4 0 0 0 2.401-7.61c-.23-4.013-2.572-7.81-6.653-9.691v-.008L7.28-17.54l8.804 13.958H11.21l5.469 13.41h-3.586l4.645 11.377H8.05ZM.449-30.07c-.348-3.538-3.336-6.315-6.969-6.315a7 7 0 0 0-6.927 5.987c-2.709-1.119-5.597.858-5.597 3.706H6.658c0-3.222-3.582-5.087-6.21-3.378zm25.904 52.965c-.282.209-1.139 2.41-5.269 2.41-2.02 0-3.849-.648-4.657-1.65l-1.222.983c1.11 1.38 3.364 2.236 5.88 2.236 2.116 0 4.046-.607 5.267-1.62 1.221 1.013 3.152 1.62 5.269 1.62 2.515 0 4.768-.856 5.879-2.236l-1.222-.984c-.808 1.003-2.636 1.652-4.657 1.652-4.156 0-4.945-2.17-5.269-2.411zM31.62 35.01c-4.155 0-4.945-2.17-5.268-2.41-.28.208-1.138 2.41-5.268 2.41-4.156 0-4.945-2.17-5.268-2.41-.276.206-1.15 2.41-5.268 2.41-4.156 0-4.946-2.17-5.269-2.41-.276.206-1.15 2.41-5.268 2.41-4.156 0-4.945-2.17-5.268-2.41-.276.206-1.15 2.41-5.268 2.41-4.156 0-4.944-2.17-5.268-2.41-.277.206-1.15 2.41-5.269 2.41-4.155 0-4.945-2.17-5.268-2.41-.276.206-1.15 2.41-5.268 2.41-2.022 0-3.85-.648-4.657-1.65l-1.224.983c1.11 1.38 3.364 2.236 5.88 2.236 2.116 0 4.047-.607 5.268-1.62 1.22 1.013 3.151 1.62 5.268 1.62s4.048-.607 5.268-1.62c1.22 1.013 3.151 1.62 5.268 1.62s4.048-.607 5.268-1.62c1.221 1.013 3.152 1.62 5.269 1.62 2.116 0 4.047-.607 5.268-1.62 1.22 1.013 3.152 1.62 5.268 1.62 2.117 0 4.048-.607 5.268-1.62 1.221 1.013 3.152 1.62 5.268 1.62 2.117 0 4.048-.607 5.268-1.62 1.221 1.013 3.152 1.62 5.269 1.62 2.516 0 4.769-.856 5.879-2.236l-1.222-.983c-.806 1.002-2.634 1.65-4.656 1.65zm0-4.81c-4.155 0-4.944-2.17-5.268-2.411-.281.209-1.138 2.41-5.268 2.41-4.156 0-4.944-2.17-5.268-2.41-.282.209-1.139 2.41-5.268 2.41-4.156 0-4.945-2.17-5.269-2.41C5 27.999 4.142 30.2.012 30.2c-4.156 0-4.944-2.17-5.268-2.41-.282.209-1.139 2.41-5.268 2.41-4.122 0-4.925-2.155-5.268-2.41-.282.209-1.139 2.41-5.269 2.41-4.155 0-4.944-2.17-5.268-2.41-.281.209-1.138 2.41-5.268 2.41-2.021 0-3.849-.648-4.657-1.65l-1.224.983c1.11 1.38 3.364 2.237 5.88 2.237 2.116 0 4.047-.607 5.268-1.62 1.22 1.013 3.151 1.62 5.268 1.62s4.047-.607 5.268-1.62c1.22 1.013 3.151 1.62 5.268 1.62s4.047-.607 5.268-1.62c1.221 1.013 3.152 1.62 5.269 1.62 2.116 0 4.047-.607 5.268-1.62 1.22 1.013 3.152 1.62 5.268 1.62 2.117 0 4.047-.607 5.268-1.62 1.221 1.013 3.152 1.62 5.268 1.62 2.117 0 4.047-.607 5.268-1.62 1.221 1.013 3.152 1.62 5.269 1.62 2.515 0 4.768-.857 5.879-2.237l-1.222-.983c-.807 1.002-2.635 1.65-4.656 1.65zM20.445-17.367l-1.365-.785-2.417 4.198 1.358.784zm-9.03-7.243h4.85v1.57h-4.85zm11.063 7.783h1.569v4.85h-1.57zm7.792-7.783h4.85v1.57h-4.85Zm3.652-4.467-4.198 2.424-.783-1.357 4.197-2.424zm-.004 10.493L29.72-21.01l-.785 1.366 4.198 2.416zm-5.404-15.9 1.358.784-2.423 4.191-1.358-.784zm0 21.317-2.424-4.197 1.357-.784 2.425 4.198zm-5.251-15.24a4.586 4.586 0 0 0-4.575 4.581 4.585 4.585 0 0 0 4.575 4.575 4.586 4.586 0 0 0 4.582-4.575 4.588 4.588 0 0 0-4.582-4.582zm-.785-7.274h1.57v4.85h-1.57zm-9.088 5.247 4.198 2.424-.784 1.357-4.198-2.424zm-.782 11.85.784 1.357 4.198-2.416-.784-1.366zm7.837-11.707-2.424-4.19-1.357.785 2.416 4.19zM6.283 4.97c.4 1.075.596 2.213.596 3.374a9.693 9.693 0 0 1-6.826 9.298 9.719 9.719 0 0 1-9.918-2.527 9.14 9.14 0 0 1-2.4 1.107l-3.437-8.427h4.41l-6.725-16.493h6.434l-4.394-6.967.243-.063A9.712 9.712 0 0 1-9.136-18.3a9.692 9.692 0 0 1 9.338 6.96 9.763 9.763 0 0 1 4.896 1.969A9.739 9.739 0 0 1 8.872-2.2a9.737 9.737 0 0 1-2.589 7.17zM10.6 15.312H9.524v-1.57h1.075Zm-22.927 4.92H-37.5l5.712-14.005h-4.417l6.732-16.493h-5.932l10.483-16.658 10.498 16.658h-5.931l6.724 16.493h-4.41zm-17.128-47.94c.34-.827.494-2.375 2.248-1.935l.383-1.522c-1.616-.405-2.669.262-3.249 1.002-1.762-.798-3.647.444-3.738.505l.874 1.303c2.208-1.454 3.079.57 3.482.648zM-.02-18.248c.417-.087 1.269-2.14 3.504-.676l.871-1.306c-.09-.06-1.978-1.301-3.738-.503-.58-.74-1.635-1.41-3.249-1.002l.383 1.522c1.776-.447 1.894 1.118 2.23 1.965zM20.113-1.34l.383 1.521c2.627-.66 3.054 1.49 3.447 2.555.397-.058 1.777-2.834 5.064-.655L29.88.778c-.128-.086-2.861-1.882-5.287-.574-.724-1.059-2.168-2.125-4.48-1.543Z",
         "health-and-wellbeing": "m36.328 3.59-3.955.001c-.456 0-.871.265-1.063.68l-4.375 9.459-4.711-9.84a1.172 1.172 0 0 0-1.859-.348l-4.422 4.15H8.616a4.103 4.103 0 0 0-6.314-2.166 4.102 4.102 0 1 0 6.314 4.51h7.79c.298 0 .585-.114.802-.318L20.8 6.346l5.095 10.64v.001c.195.407.606.666 1.057.666h.008a1.171 1.171 0 0 0 1.056-.68l5.106-11.039h3.205a1.172 1.172 0 0 0 0-2.343zm-31.64 7.032a1.758 1.758 0 1 1 0-3.516 1.758 1.758 0 0 1 0 3.516zM-26.902-4.08l2.56-5.35a3.52 3.52 0 0 1 5.579-1.043l3.75 3.516h4.929a6.445 6.445 0 1 1 0 7.031h-6.324c-.894 0-1.755-.34-2.408-.95l-1.254-1.183-3.715 7.752c-.147.311-.34.597-.574.85a54.465 54.465 0 0 0 10.77 11.912 61.45 61.45 0 0 0 13.09 8.46c.315.15.68.15.995 0A62.42 62.42 0 0 0 20.66 11.479l-.592-1.23-1.254 1.182a3.531 3.531 0 0 1-2.408.95H10.09a6.445 6.445 0 1 1 0-7.031h4.921l3.75-3.516a3.52 3.52 0 0 1 5.579 1.043l.99 2.074a29.948 29.948 0 0 0 3.504-8.754c1.283-6.1-.147-11.73-4.125-16.283-8.778-10.037-19.02-6.832-24.709-3.72-5.69-3.112-15.932-6.317-24.708 3.72a17.907 17.907 0 0 0-4.548 10.94c.026.042.05.085.071.128zm-9.427-2.292h3.205l5.106 11.04c.19.411.602.676 1.056.679h.008c.45 0 .862-.26 1.057-.666l5.095-10.641 3.593 3.372c.217.204.504.318.802.318h7.79A4.104 4.104 0 0 0-2.303-.103a4.102 4.102 0 1 0-6.315-4.51h-7.326l-4.423-4.15a1.172 1.172 0 0 0-1.858.348l-4.71 9.84-4.376-9.46a1.172 1.172 0 0 0-1.064-.679h-3.954a1.172 1.172 0 0 0 0 2.343zm31.64 1.172a1.757 1.757 0 1 1 .001 3.514 1.757 1.757 0 0 1 0-3.514z",
         water:                  "M.046-37.5a1.784 1.784 0 0 0-1.58.871c-5.26 8.778-10.521 14.638-14.6 19.94C-20.214-11.384-23.19-6.456-23.19 0c0 12.798 10.4 23.213 23.184 23.213 12.785 0 23.186-10.414 23.186-23.213 0-6.456-2.978-11.385-7.057-16.687-4.08-5.303-9.333-11.163-14.594-19.94A1.785 1.785 0 0 0 .047-37.5zm12.434 0a3.573 3.573 0 0 0 0 7.142 3.57 3.57 0 0 0 0-7.142zm10.701 5.357a7.132 7.132 0 0 0-5.044 2.092 7.148 7.148 0 0 0 0 10.1 7.13 7.13 0 0 0 10.089 0 7.144 7.144 0 0 0 0-10.1 7.13 7.13 0 0 0-5.045-2.092zM-17.212-1.812A1.781 1.781 0 0 1-15.402 0c0 8.6 6.807 15.417 15.396 15.417.97.021 1.744.814 1.744 1.785s-.775 1.765-1.744 1.786c-10.494 0-18.966-8.482-18.966-18.987a1.785 1.785 0 0 1 1.76-1.811zm-11.33 26.81c-1.658 0-3.46.503-5.002.97-1.542.466-2.766.934-2.766.934a1.786 1.786 0 1 0 1.271 3.336s1.116-.424 2.528-.85c1.412-.428 3.176-.819 3.969-.819.793 0 1.766.326 2.937.773 1.17.446 2.54 1.014 4.199 1.014 1.658 0 3.029-.568 4.2-1.014 1.17-.447 2.143-.773 2.936-.773.788 0 1.756.328 2.93.778 1.172.45 2.552 1.023 4.22 1.01 1.592-.014 2.887-.575 3.981-1.015 1.094-.44 1.988-.762 2.7-.773.871-.013 1.912.325 3.16.778 1.246.453 2.697 1.022 4.423 1.01 1.65-.012 3.018-.572 4.188-1.015 1.168-.444 2.137-.773 2.934-.773.793 0 1.76.326 2.93.773 1.17.446 2.54 1.014 4.199 1.014 1.658 0 3.037-.568 4.208-1.014 1.17-.447 2.135-.773 2.928-.773.793 0 2.56.391 3.97.818 1.413.427 2.528.851 2.528.851a1.78 1.78 0 0 0 2.354-1.012 1.786 1.786 0 0 0-1.084-2.324s-1.222-.468-2.765-.934c-1.542-.466-3.345-.97-5.003-.97s-3.029.562-4.2 1.008c-1.17.447-2.143.778-2.936.778-.793 0-1.757-.331-2.928-.778-1.17-.446-2.543-1.008-4.201-1.008-1.653 0-3.026.557-4.2 1.002-1.171.444-2.147.778-2.948.784-.876.007-1.929-.342-3.18-.797-1.252-.454-2.706-1.015-4.436-.989-1.59.025-2.88.59-3.97 1.03-1.09.438-1.978.75-2.686.756-.783.007-1.742-.322-2.91-.77-1.169-.45-2.544-1.016-4.206-1.016-1.658 0-3.036.562-4.206 1.008-1.171.447-2.137.778-2.93.778-.793 0-1.759-.331-2.93-.778-1.17-.446-2.548-1.008-4.206-1.008zm0 7.144c-1.658 0-3.46.504-5.002.97a48.29 48.29 0 0 0-2.766.927 1.79 1.79 0 0 0 1.271 3.343s1.116-.431 2.528-.857c1.412-.427 3.176-.817 3.969-.817.793 0 1.766.332 2.937.778 1.17.446 2.54 1.008 4.199 1.008 1.658 0 3.029-.562 4.2-1.008 1.17-.446 2.143-.778 2.936-.778.788 0 1.756.333 2.93.783 1.172.45 2.552 1.016 4.22 1.003 1.592-.013 2.887-.575 3.981-1.015 1.094-.44 1.988-.76 2.7-.77.871-.014 1.912.324 3.16.777 1.246.453 2.697 1.02 4.423 1.008 1.65-.012 3.018-.571 4.188-1.015 1.168-.444 2.137-.77 2.934-.77.793 0 1.76.33 2.93.777 1.17.446 2.54 1.008 4.199 1.008 1.658 0 3.037-.562 4.208-1.008 1.17-.446 2.135-.778 2.928-.778.793 0 2.56.39 3.97.816 1.413.427 2.528.858 2.528.858a1.786 1.786 0 0 0 2.304-1.036A1.79 1.79 0 0 0 36.3 34.04s-1.222-.461-2.765-.927c-1.542-.466-3.345-.97-5.003-.97s-3.029.562-4.2 1.008c-1.17.447-2.143.778-2.936.778-.793 0-1.757-.331-2.928-.778-1.17-.446-2.543-1.008-4.201-1.008-1.653 0-3.026.556-4.2 1.001-1.171.445-2.147.78-2.948.785-.876.006-1.929-.342-3.18-.797-1.252-.454-2.706-1.016-4.436-.989-1.59.025-2.88.59-3.97 1.03-1.09.438-1.978.75-2.686.756-.783.006-1.742-.323-2.91-.77-1.169-.449-2.543-1.016-4.206-1.016-1.658 0-3.036.562-4.206 1.008-1.171.447-2.137.778-2.93.778-.793 0-1.759-.331-2.93-.778-1.17-.446-2.548-1.008-4.206-1.008z",            
-        economy:                "M4.703 7.324a1.065 1.065 0 1 0-2.13 0v3.37a1.065 1.065 0 1 0 2.13 0zm-15.19-19.474a1.2 1.2 0 0 0-1.135 1.148v1.366C-11.622-3.772-6.782.981-.919.981H.447A1.049 1.049 0 0 0 1.51-.068v-1.366C1.51-7.297-3.258-12.15-9.12-12.15zm15.19.526a12.025 12.025 0 1 0-2.13 0V3.013a1.065 1.065 0 1 0 2.13 0zm-1.065-2.849a1.065 1.065 0 0 1-1.064-1.065v-.931a4.251 4.251 0 0 1-3.159-4.052 1.04 1.04 0 0 1 1.036-1.065 1.062 1.062 0 0 1 1.062 1.065 2.06 2.06 0 0 0 2.036 2.059l.022-.002a2.057 2.057 0 0 0 2.077-2.062 2.06 2.06 0 0 0-2.065-2.054 4.175 4.175 0 0 1-4.168-4.19 4.248 4.248 0 0 1 3.159-4.05v-.79a1.065 1.065 0 1 1 2.129 0v.79a4.19 4.19 0 0 1 3.091 4.05 1.09 1.09 0 0 1-1.093 1.065 1.062 1.062 0 0 1-1.066-1.064 2.057 2.057 0 1 0-2.05 2.06 4.195 4.195 0 0 1 1.118 8.24v.931c0 .588-.476 1.065-1.065 1.065zM17.63-12.15h-1.366C10.4-12.15 5.59-7.297 5.59-1.434v1.366c.02.593.512 1.06 1.105 1.05H8.06a10.651 10.651 0 0 0 10.66-10.617v-1.367c0-.588-.503-1.148-1.09-1.148zM-37.5 12.58l3.275 26.795h13.526l-8.188-26.795zm12.638 22.788a3.186 3.186 0 1 1-6.373-.001 3.186 3.186 0 0 1 6.373 0zm-.373-18.171 4.275 14.02 5.987-3.785a5.96 5.96 0 0 1 4.395-.62l13.203 2.432c3.138.56 6.372.111 9.24-1.283l21.91-15.043a4.24 4.24 0 0 0-5.034-.752l-10.881 5.87-.986.52c.008.142.012.285.012.43 0 .589-.476 1.065-1.064 1.065l-.048-.001-7.512-.34a36.177 36.177 0 0 0-6.572.303 1.067 1.067 0 0 1-.292-2.113 38.322 38.322 0 0 1 6.96-.326l6.285.275a5.509 5.509 0 0 0-5.368-4.382H.47a11.578 11.578 0 0 1-5.022-1.131l-.908-.421a13.535 13.535 0 0 0-14.054 1.35l-2.158 1.922a9.66 9.66 0 0 1-3.561 2.01zm42.093-1.04 8.585-4.631c-.947-.857-2.376-1.302-3.517-.73l-6.613 3.562v.001c.472.614.849 1.297 1.115 2.025zm-44.906 20.267a1.055 1.055 0 0 0 .747-1.803 1.056 1.056 0 1 0-.747 1.803zm41.097-25.887-.026.014-1.924 1.047a7.596 7.596 0 0 1 2.609 1.207l4.248-2.29a4.94 4.94 0 0 0-4.907.022Z"
+        economy:                "M4.703 7.324a1.065 1.065 0 1 0-2.13 0v3.37a1.065 1.065 0 1 0 2.13 0zm-15.19-19.474a1.2 1.2 0 0 0-1.135 1.148v1.366C-11.622-3.772-6.782.981-.919.981H.447A1.049 1.049 0 0 0 1.51-.068v-1.366C1.51-7.297-3.258-12.15-9.12-12.15zm15.19.526a12.025 12.025 0 1 0-2.13 0V3.013a1.065 1.065 0 1 0 2.13 0zm-1.065-2.849a1.065 1.065 0 0 1-1.064-1.065v-.931a4.251 4.251 0 0 1-3.159-4.052 1.04 1.04 0 0 1 1.036-1.065 1.062 1.062 0 0 1 1.062 1.065 2.06 2.06 0 0 0 2.036 2.059l.022-.002a2.057 2.057 0 0 0 2.077-2.062 2.06 2.06 0 0 0-2.065-2.054 4.175 4.175 0 0 1-4.168-4.19 4.248 4.248 0 0 1 3.159-4.05v-.79a1.065 1.065 0 1 1 2.129 0v.79a4.19 4.19 0 0 1 3.091 4.05 1.09 1.09 0 0 1-1.093 1.065 1.062 1.062 0 0 1-1.066-1.064 2.057 2.057 0 1 0-2.05 2.06 4.195 4.195 0 0 1 1.118 8.24v.931c0 .588-.476 1.065-1.065 1.065zM17.63-12.15h-1.366C10.4-12.15 5.59-7.297 5.59-1.434v1.366c.02.593.512 1.06 1.105 1.05H8.06a10.651 10.651 0 0 0 10.66-10.617v-1.367c0-.588-.503-1.148-1.09-1.148zM-37.5 12.58l3.275 26.795h13.526l-8.188-26.795zm12.638 22.788a3.186 3.186 0 1 1-6.373-.001 3.186 3.186 0 0 1 6.373 0zm-.373-18.171 4.275 14.02 5.987-3.785a5.96 5.96 0 0 1 4.395-.62l13.203 2.432c3.138.56 6.372.111 9.24-1.283l21.91-15.043a4.24 4.24 0 0 0-5.034-.752l-10.881 5.87-.986.52c.008.142.012.285.012.43 0 .589-.476 1.065-1.064 1.065l-.048-.001-7.512-.34a36.177 36.177 0 0 0-6.572.303 1.067 1.067 0 0 1-.292-2.113 38.322 38.322 0 0 1 6.96-.326l6.285.275a5.509 5.509 0 0 0-5.368-4.382H.47a11.578 11.578 0 0 1-5.022-1.131l-.908-.421a13.535 13.535 0 0 0-14.054 1.35l-2.158 1.922a9.66 9.66 0 0 1-3.561 2.01zm42.093-1.04 8.585-4.631c-.947-.857-2.376-1.302-3.517-.73l-6.613 3.562v.001c.472.614.849 1.297 1.115 2.025zm-44.906 20.267a1.055 1.055 0 0 0 .747-1.803 1.056 1.056 0 1 0-.747 1.803zm41.097-25.887-.026.014-1.924 1.047a7.596 7.596 0 0 1 2.609 1.207l4.248-2.29a4.94 4.94 0 0 0-4.907.022Z",
+        "healing-country":      "M37.5.15c-5.112-.14-.33 6.22-2.094 8.994-.672 4.433-1.764 8.828-3.186 13.07-3.562 7.53-11.68 11.268-19.313 13.313-4.458 1.666-9.48 1.802-13.95.12-7.369-1.572-14.992-3.93-20.313-9.575-3.998-3.92-7.94-7.928-11.652-12.111-3.84-4.997-5.294-11.597-4.143-17.766.648-8.805 4.993-16.788 9.287-24.303 5.29-7.438 15.216-9.689 23.849-8.541 5.874.435 11.827 1.483 16.929 4.605 8.279 5.157 17.402 10.411 21.976 19.44C36.977-8.689 37.184-4.183 37.5.148zm-68.695-8.837c-1.74 6.026-1.244 12.922 2.294 18.224-.564-3.675-2.385-7.219-2.266-11.103-.669-4.102-.322-8.344 1.614-12.068 1.055-1.814.385-4.375-.45-1.094-.72 1.929-1.234 3.968-1.192 6.04zM28.33-1.601c-.071-6.655-4.048-12.408-7.819-17.574-4.845-5.03-11.56-7.488-17.667-10.57-5.231-1.742-10.946-.154-15.827 1.95-3.593 1.965-7.061 4.57-9.34 7.992-3.683 6.682-4.022 14.689-2.678 22.044 2.494 9.582 10.635 16.331 18.938 20.982 4.115 2.264 7.777 5.892 12.773 5.914 4.41.378 9.436.282 12.685-3.208 3.293-2.426 4.444-6.586 4.447-10.509-.325-2.518 1.667-6.868-.216-8.23-1.781 6.473-8.275 9.557-12.555 14.143-4.52 3.214-10.34 1.48-15.292.46-9.503-2.691-15.69-11.563-18.885-20.444-1.485-3.77.298-7.523 1.38-11.08.927-4.374 2.666-9.01 6.751-11.361 5.928-4.014 13.26-6.087 20.4-5.758 5.167.277 8.013 4.88 11.04 8.398 4.39 5.27 8.855 10.644 11.865 16.85zM-8.602 14.905C-4.5 19.321 1.836 20.563 7.627 20.57c4.71-1.351 8.107-5.434 10.723-9.357 2.426-5.688-.17-11.783-1.607-17.399-1.13-3.704-2.686-7.508-6.1-9.664C6.24-19.377.302-20.494-5.149-19.212c-5.02.094-8.69 3.813-10.668 8.115-1.294 1.279-2.324 8.458.379 5.398.453-3.943 4.021-5.563 6.986-7.488 4.305-2.495 10.757-3.798 14.567.222a230.86 230.86 0 0 0 6.984 9.39C16.034.463 18.53 6.456 15.265 11.007c-2.833 4.008-8.166 5.576-12.842 4.507-3.674-.147-7.419.322-11.025-.609zM2.068-2.018C7.193-.06 4.95 8.578-.295 8.457c-5.771.813-8.241-5.603-12.395-7.49-1.944 2.751 3.726 5.07 5.664 6.818C-3.519 9.86.117 11.974 4.072 13.013c3.347.815 8.038-1.917 6.313-5.738C8.581 1.917 5.893-3.147 3.037-7.981c-3.106-3.087-9.07-4.548-12.228-.768-3.169 2.777-1.374 7.529 1.146 10.096 2.333 2.817 7.264 6.97 10.515 3.34C3.56 2.52 2.02.212 2.069-2.017Zm-19.507 24.01c5.662 7.502 15.284 10.09 24.096 11.697 5.188.107 9.927-2.446 14.583-4.392 2.431-.661 6.199-5.566 4.86-6.105-4.968 5.473-12.213 9.921-19.873 8.779-5.093.262-10.246-1.173-14.112-4.582-2.988-2.15-6.356-3.62-9.554-5.397Zm-9.67-42.851c5.178-3.53 9.791-7.963 15.537-10.607.235-2.801-5.344-.817-7.32-.669-4.35 1.696-6.15 6.495-7.971 10.43l-.133.42zM-13.856 5.4c-.984 4.164 3.366 6.82 6.826 7.66 1.679 1.072 6.33.265 2.665-1.387-3.398-1.7-6.415-4.06-9.49-6.273ZM2.652-23.11c-4.63-1.92-10.006-.689-14.085 1.964 1.064 2.186 5.058-1.494 7.35-.862 2.243-.38 4.512-.611 6.735-1.102zM29.33 12.238c2.182-1.154-.314-7.167.102-2.397l-.102 2.397z"
     };
 
     const mapIcons = {
@@ -33359,7 +32816,7 @@ var app = (function (exports) {
     } // end wrap()
 
     /* src/components/byPage/postcards/postcard/Hazards.svelte generated by Svelte v3.48.0 */
-    const file$q = "src/components/byPage/postcards/postcard/Hazards.svelte";
+    const file$r = "src/components/byPage/postcards/postcard/Hazards.svelte";
 
     function get_each_context$g(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -33381,8 +32838,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "event svelte-1keymbw");
-    			add_location(div, file$q, 38, 16, 1596);
+    			attr_dev(div, "class", "event svelte-x4fo05");
+    			add_location(div, file$r, 38, 16, 1622);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33413,8 +32870,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker svelte-1keymbw");
-    			add_location(div, file$q, 42, 86, 1809);
+    			attr_dev(div, "class", "marker svelte-x4fo05");
+    			add_location(div, file$r, 42, 86, 1835);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33442,8 +32899,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker filled svelte-1keymbw");
-    			add_location(div, file$q, 42, 44, 1767);
+    			attr_dev(div, "class", "marker filled svelte-x4fo05");
+    			add_location(div, file$r, 42, 44, 1793);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33471,8 +32928,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker svelte-1keymbw");
-    			add_location(div, file$q, 43, 86, 1929);
+    			attr_dev(div, "class", "marker svelte-x4fo05");
+    			add_location(div, file$r, 43, 86, 1955);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33500,8 +32957,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker filled svelte-1keymbw");
-    			add_location(div, file$q, 43, 44, 1887);
+    			attr_dev(div, "class", "marker filled svelte-x4fo05");
+    			add_location(div, file$r, 43, 44, 1913);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33529,8 +32986,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker svelte-1keymbw");
-    			add_location(div, file$q, 44, 86, 2049);
+    			attr_dev(div, "class", "marker svelte-x4fo05");
+    			add_location(div, file$r, 44, 86, 2075);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33558,8 +33015,8 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker filled svelte-1keymbw");
-    			add_location(div, file$q, 44, 44, 2007);
+    			attr_dev(div, "class", "marker filled svelte-x4fo05");
+    			add_location(div, file$r, 44, 44, 2033);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33581,14 +33038,14 @@ var app = (function (exports) {
     }
 
     // (46:79) {:else}
-    function create_else_block_1(ctx) {
+    function create_else_block_1$1(ctx) {
     	let div;
 
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker svelte-1keymbw");
-    			add_location(div, file$q, 45, 86, 2169);
+    			attr_dev(div, "class", "marker svelte-x4fo05");
+    			add_location(div, file$r, 45, 86, 2195);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33600,7 +33057,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block_1.name,
+    		id: create_else_block_1$1.name,
     		type: "else",
     		source: "(46:79) {:else}",
     		ctx
@@ -33610,14 +33067,14 @@ var app = (function (exports) {
     }
 
     // (46:16) {#if actionData[hazard] > 3}
-    function create_if_block_1$7(ctx) {
+    function create_if_block_1$8(ctx) {
     	let div;
 
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker filled svelte-1keymbw");
-    			add_location(div, file$q, 45, 44, 2127);
+    			attr_dev(div, "class", "marker filled svelte-x4fo05");
+    			add_location(div, file$r, 45, 44, 2153);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33629,7 +33086,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$7.name,
+    		id: create_if_block_1$8.name,
     		type: "if",
     		source: "(46:16) {#if actionData[hazard] > 3}",
     		ctx
@@ -33639,14 +33096,14 @@ var app = (function (exports) {
     }
 
     // (47:79) {:else}
-    function create_else_block$1(ctx) {
+    function create_else_block$2(ctx) {
     	let div;
 
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker svelte-1keymbw");
-    			add_location(div, file$q, 46, 86, 2289);
+    			attr_dev(div, "class", "marker svelte-x4fo05");
+    			add_location(div, file$r, 46, 86, 2315);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33658,7 +33115,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$1.name,
+    		id: create_else_block$2.name,
     		type: "else",
     		source: "(47:79) {:else}",
     		ctx
@@ -33668,14 +33125,14 @@ var app = (function (exports) {
     }
 
     // (47:16) {#if actionData[hazard] > 4}
-    function create_if_block$8(ctx) {
+    function create_if_block$a(ctx) {
     	let div;
 
     	const block = {
     		c: function create() {
     			div = element("div");
-    			attr_dev(div, "class", "marker filled svelte-1keymbw");
-    			add_location(div, file$q, 46, 44, 2247);
+    			attr_dev(div, "class", "marker filled svelte-x4fo05");
+    			add_location(div, file$r, 46, 44, 2273);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33687,7 +33144,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$8.name,
+    		id: create_if_block$a.name,
     		type: "if",
     		source: "(47:16) {#if actionData[hazard] > 4}",
     		ctx
@@ -33747,16 +33204,16 @@ var app = (function (exports) {
     	let if_block2 = current_block_type_2(ctx);
 
     	function select_block_type_3(ctx, dirty) {
-    		if (/*actionData*/ ctx[0][/*hazard*/ ctx[6]] > 3) return create_if_block_1$7;
-    		return create_else_block_1;
+    		if (/*actionData*/ ctx[0][/*hazard*/ ctx[6]] > 3) return create_if_block_1$8;
+    		return create_else_block_1$1;
     	}
 
     	let current_block_type_3 = select_block_type_3(ctx);
     	let if_block3 = current_block_type_3(ctx);
 
     	function select_block_type_4(ctx, dirty) {
-    		if (/*actionData*/ ctx[0][/*hazard*/ ctx[6]] > 4) return create_if_block$8;
-    		return create_else_block$1;
+    		if (/*actionData*/ ctx[0][/*hazard*/ ctx[6]] > 4) return create_if_block$a;
+    		return create_else_block$2;
     	}
 
     	let current_block_type_4 = select_block_type_4(ctx);
@@ -33789,22 +33246,22 @@ var app = (function (exports) {
     			t6 = space();
     			if_block4.c();
     			t7 = space();
-    			attr_dev(div0, "class", "hazard-label-wrapper svelte-1keymbw");
-    			add_location(div0, file$q, 30, 12, 1173);
-    			attr_dev(path, "class", "icon " + slugify(/*hazard*/ ctx[6]) + " svelte-1keymbw");
+    			attr_dev(div0, "class", "hazard-label-wrapper svelte-x4fo05");
+    			add_location(div0, file$r, 30, 12, 1199);
+    			attr_dev(path, "class", "icon " + slugify(/*hazard*/ ctx[6]) + " svelte-x4fo05");
     			attr_dev(path, "d", icons[slugify(/*hazard*/ ctx[6])]);
-    			add_location(path, file$q, 33, 20, 1370);
-    			attr_dev(svg, "class", "hazard-icon svelte-1keymbw");
+    			add_location(path, file$r, 33, 20, 1396);
+    			attr_dev(svg, "class", "hazard-icon svelte-x4fo05");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
-    			add_location(svg, file$q, 32, 16, 1294);
-    			attr_dev(div1, "class", "hazard-icon-wrapper svelte-1keymbw");
-    			add_location(div1, file$q, 31, 12, 1242);
+    			add_location(svg, file$r, 32, 16, 1320);
+    			attr_dev(div1, "class", "hazard-icon-wrapper svelte-x4fo05");
+    			add_location(div1, file$r, 31, 12, 1268);
     			attr_dev(div2, "class", "event-wrapper");
-    			add_location(div2, file$q, 36, 12, 1494);
-    			attr_dev(div3, "class", "marker-wrapper svelte-1keymbw");
-    			add_location(div3, file$q, 41, 12, 1692);
-    			attr_dev(div4, "class", "hazard-container " + slugify(/*hazard*/ ctx[6]) + " svelte-1keymbw");
-    			add_location(div4, file$q, 29, 8, 1110);
+    			add_location(div2, file$r, 36, 12, 1520);
+    			attr_dev(div3, "class", "marker-wrapper svelte-x4fo05");
+    			add_location(div3, file$r, 41, 12, 1718);
+    			attr_dev(div4, "class", "hazard-container " + slugify(/*hazard*/ ctx[6]) + " svelte-x4fo05");
+    			add_location(div4, file$r, 29, 8, 1136);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div4, anchor);
@@ -33931,11 +33388,13 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$q(ctx) {
+    function create_fragment$r(ctx) {
     	let section;
+    	let div0;
+    	let t0;
     	let h3;
-    	let t1;
-    	let div;
+    	let t2;
+    	let div1;
     	let each_value = /*hazardList*/ ctx[2];
     	validate_each_argument(each_value);
     	let each_blocks = [];
@@ -33947,33 +33406,39 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			section = element("section");
+    			div0 = element("div");
+    			t0 = space();
     			h3 = element("h3");
-    			h3.textContent = "Response to climate hazards and events";
-    			t1 = space();
-    			div = element("div");
+    			h3.textContent = "Action ratings vs climate hazards";
+    			t2 = space();
+    			div1 = element("div");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(h3, "class", "svelte-1keymbw");
-    			add_location(h3, file$q, 26, 4, 980);
-    			attr_dev(div, "class", "hazards-container svelte-1keymbw");
-    			add_location(div, file$q, 27, 4, 1032);
-    			attr_dev(section, "class", "hazards-wrapper svelte-1keymbw");
-    			add_location(section, file$q, 25, 0, 941);
+    			attr_dev(div0, "class", "wedge svelte-x4fo05");
+    			add_location(div0, file$r, 25, 4, 979);
+    			attr_dev(h3, "class", "svelte-x4fo05");
+    			add_location(h3, file$r, 26, 4, 1011);
+    			attr_dev(div1, "class", "hazards-container svelte-x4fo05");
+    			add_location(div1, file$r, 27, 4, 1058);
+    			attr_dev(section, "class", "hazards-wrapper svelte-x4fo05");
+    			add_location(section, file$r, 24, 0, 940);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
+    			append_dev(section, div0);
+    			append_dev(section, t0);
     			append_dev(section, h3);
-    			append_dev(section, t1);
-    			append_dev(section, div);
+    			append_dev(section, t2);
+    			append_dev(section, div1);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div, null);
+    				each_blocks[i].m(div1, null);
     			}
     		},
     		p: function update(ctx, [dirty]) {
@@ -33990,7 +33455,7 @@ var app = (function (exports) {
     					} else {
     						each_blocks[i] = create_each_block$g(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(div, null);
+    						each_blocks[i].m(div1, null);
     					}
     				}
 
@@ -34011,7 +33476,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$q.name,
+    		id: create_fragment$r.name,
     		type: "component",
     		source: "",
     		ctx
@@ -34020,7 +33485,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$q($$self, $$props, $$invalidate) {
+    function instance$r($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
@@ -34078,13 +33543,13 @@ var app = (function (exports) {
     class Hazards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$q, create_fragment$q, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$r, create_fragment$r, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Hazards",
     			options,
-    			id: create_fragment$q.name
+    			id: create_fragment$r.name
     		});
 
     		const { ctx } = this.$$;
@@ -34105,9 +33570,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/ImageHazards.svelte generated by Svelte v3.48.0 */
-    const file$p = "src/components/byPage/postcards/postcard/ImageHazards.svelte";
+    const file$q = "src/components/byPage/postcards/postcard/ImageHazards.svelte";
 
-    function create_fragment$p(ctx) {
+    function create_fragment$q(ctx) {
     	let section;
     	let image;
     	let t;
@@ -34130,8 +33595,8 @@ var app = (function (exports) {
     			create_component(image.$$.fragment);
     			t = space();
     			create_component(hazards.$$.fragment);
-    			attr_dev(section, "class", "imgHazard svelte-oalt5t");
-    			add_location(section, file$p, 12, 0, 264);
+    			attr_dev(section, "class", "imgHazard svelte-1bxb02c");
+    			add_location(section, file$q, 12, 0, 264);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -34171,7 +33636,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$p.name,
+    		id: create_fragment$q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -34180,7 +33645,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$p($$self, $$props, $$invalidate) {
+    function instance$q($$self, $$props, $$invalidate) {
     	let imgURL;
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('ImageHazards', slots, []);
@@ -34218,13 +33683,13 @@ var app = (function (exports) {
     class ImageHazards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$p, create_fragment$p, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$q, create_fragment$q, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ImageHazards",
     			options,
-    			id: create_fragment$p.name
+    			id: create_fragment$q.name
     		});
 
     		const { ctx } = this.$$;
@@ -34245,7 +33710,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/AdaptationCriteria.svelte generated by Svelte v3.48.0 */
-    const file$o = "src/components/byPage/postcards/postcard/AdaptationCriteria.svelte";
+    const file$p = "src/components/byPage/postcards/postcard/AdaptationCriteria.svelte";
 
     function get_each_context$f(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -34261,7 +33726,7 @@ var app = (function (exports) {
     	return child_ctx;
     }
 
-    // (29:12) {#each $data.schema.adaptationScreens.data as lens, i}
+    // (23:12) {#each $data.schema.adaptationScreens.data as lens, i}
     function create_each_block_1$7(ctx) {
     	let circle;
     	let circle_class_value;
@@ -34269,26 +33734,21 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			circle = svg_element("circle");
-    			attr_dev(circle, "class", circle_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[4].Screen)) + " svelte-1628ytb"));
+    			attr_dev(circle, "class", circle_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(circle, "r", /*radius*/ ctx[3]);
     			set_style(circle, "transform", "translate(" + /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos + "px)");
-    			toggle_class(circle, "selected", /*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)]);
-    			add_location(circle, file$o, 29, 12, 988);
+    			add_location(circle, file$p, 23, 12, 895);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && circle_class_value !== (circle_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[4].Screen)) + " svelte-1628ytb"))) {
+    			if (dirty & /*criteria, $data*/ 3 && circle_class_value !== (circle_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"))) {
     				attr_dev(circle, "class", circle_class_value);
     			}
 
     			if (dirty & /*$data*/ 2) {
     				set_style(circle, "transform", "translate(" + /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos + "px)");
-    			}
-
-    			if (dirty & /*$data, criteria, slugify, $data*/ 3) {
-    				toggle_class(circle, "selected", /*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)]);
     			}
     		},
     		d: function destroy(detaching) {
@@ -34300,21 +33760,25 @@ var app = (function (exports) {
     		block,
     		id: create_each_block_1$7.name,
     		type: "each",
-    		source: "(29:12) {#each $data.schema.adaptationScreens.data as lens, i}",
+    		source: "(23:12) {#each $data.schema.adaptationScreens.data as lens, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (45:51) 
+    // (44:51) 
     function create_if_block_2$5(ctx) {
     	let path;
     	let path_id_value;
     	let path_d_value;
     	let text_1;
     	let textPath;
-    	let raw_value = /*lens*/ ctx[4].Screen + "";
+
+    	let raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    	? /*lens*/ ctx[4].Screen
+    	: "Not " + /*lens*/ ctx[4].Screen) + "";
+
     	let textPath_class_value;
     	let textPath_href_value;
 
@@ -34324,23 +33788,22 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			textPath = svg_element("textPath");
     			attr_dev(path, "id", path_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
-    			attr_dev(path, "class", "label-path svelte-1628ytb");
+    			attr_dev(path, "class", "label-path svelte-royxzr");
 
     			attr_dev(path, "d", path_d_value = circleAntiClockwise(
     				{
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 80
+    				/*radius*/ ctx[3] + 110
     			));
 
-    			add_location(path, file$o, 45, 20, 2342);
-    			attr_dev(textPath, "class", textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb");
+    			add_location(path, file$p, 44, 20, 2468);
+    			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "12.5%");
-    			toggle_class(textPath, "selected", /*criteria*/ ctx[0].viable);
-    			add_location(textPath, file$o, 47, 24, 2562);
-    			add_location(text_1, file$o, 46, 20, 2531);
+    			add_location(textPath, file$p, 46, 24, 2689);
+    			add_location(text_1, file$p, 45, 20, 2658);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34358,22 +33821,20 @@ var app = (function (exports) {
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 80
+    				/*radius*/ ctx[3] + 110
     			))) {
     				attr_dev(path, "d", path_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw_value !== (raw_value = /*lens*/ ctx[4].Screen + "")) textPath.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 2 && textPath_class_value !== (textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb")) {
+    			if (dirty & /*criteria, $data*/ 3 && raw_value !== (raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    			? /*lens*/ ctx[4].Screen
+    			: "Not " + /*lens*/ ctx[4].Screen) + "")) textPath.innerHTML = raw_value;
+    			if (dirty & /*criteria, $data*/ 3 && textPath_class_value !== (textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"))) {
     				attr_dev(textPath, "class", textPath_class_value);
     			}
 
     			if (dirty & /*$data*/ 2 && textPath_href_value !== (textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath, "href", textPath_href_value);
-    			}
-
-    			if (dirty & /*$data, criteria*/ 3) {
-    				toggle_class(textPath, "selected", /*criteria*/ ctx[0].viable);
     			}
     		},
     		d: function destroy(detaching) {
@@ -34386,21 +33847,25 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2$5.name,
     		type: "if",
-    		source: "(45:51) ",
+    		source: "(44:51) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (40:50) 
-    function create_if_block_1$6(ctx) {
+    // (36:50) 
+    function create_if_block_1$7(ctx) {
     	let path;
     	let path_id_value;
     	let path_d_value;
     	let text_1;
     	let textPath;
-    	let raw_value = /*lens*/ ctx[4].Screen + "";
+
+    	let raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    	? /*lens*/ ctx[4].Screen
+    	: "Not " + /*lens*/ ctx[4].Screen) + "";
+
     	let textPath_class_value;
     	let textPath_href_value;
 
@@ -34410,23 +33875,22 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			textPath = svg_element("textPath");
     			attr_dev(path, "id", path_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
-    			attr_dev(path, "class", "label-path svelte-1628ytb");
+    			attr_dev(path, "class", "label-path svelte-royxzr");
 
     			attr_dev(path, "d", path_d_value = circleAntiClockwise(
     				{
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 80
+    				/*radius*/ ctx[3] + 110
     			));
 
-    			add_location(path, file$o, 40, 20, 1835);
-    			attr_dev(textPath, "class", textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb");
+    			add_location(path, file$p, 36, 20, 1843);
+    			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "32.5%");
-    			toggle_class(textPath, "selected", /*criteria*/ ctx[0].flexible);
-    			add_location(textPath, file$o, 42, 24, 2055);
-    			add_location(text_1, file$o, 41, 20, 2024);
+    			add_location(textPath, file$p, 38, 24, 2064);
+    			add_location(text_1, file$p, 37, 20, 2033);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34444,22 +33908,20 @@ var app = (function (exports) {
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 80
+    				/*radius*/ ctx[3] + 110
     			))) {
     				attr_dev(path, "d", path_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw_value !== (raw_value = /*lens*/ ctx[4].Screen + "")) textPath.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 2 && textPath_class_value !== (textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb")) {
+    			if (dirty & /*criteria, $data*/ 3 && raw_value !== (raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    			? /*lens*/ ctx[4].Screen
+    			: "Not " + /*lens*/ ctx[4].Screen) + "")) textPath.innerHTML = raw_value;
+    			if (dirty & /*criteria, $data*/ 3 && textPath_class_value !== (textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"))) {
     				attr_dev(textPath, "class", textPath_class_value);
     			}
 
     			if (dirty & /*$data*/ 2 && textPath_href_value !== (textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath, "href", textPath_href_value);
-    			}
-
-    			if (dirty & /*$data, criteria*/ 3) {
-    				toggle_class(textPath, "selected", /*criteria*/ ctx[0].flexible);
     			}
     		},
     		d: function destroy(detaching) {
@@ -34470,23 +33932,27 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$6.name,
+    		id: create_if_block_1$7.name,
     		type: "if",
-    		source: "(40:50) ",
+    		source: "(36:50) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (34:16) {#if lens.lensPos === "top"}
-    function create_if_block$7(ctx) {
+    // (28:16) {#if lens.lensPos === "top"}
+    function create_if_block$9(ctx) {
     	let path;
     	let path_id_value;
     	let path_d_value;
     	let text_1;
     	let textPath;
-    	let raw_value = /*lens*/ ctx[4].Screen + "";
+
+    	let raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    	? /*lens*/ ctx[4].Screen
+    	: "Not " + /*lens*/ ctx[4].Screen) + "";
+
     	let textPath_class_value;
     	let textPath_href_value;
 
@@ -34496,23 +33962,22 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			textPath = svg_element("textPath");
     			attr_dev(path, "id", path_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
-    			attr_dev(path, "class", "label-path svelte-1628ytb");
+    			attr_dev(path, "class", "label-path svelte-royxzr");
 
     			attr_dev(path, "d", path_d_value = circleClockwise(
     				{
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 70
+    				/*radius*/ ctx[3] + 20
     			));
 
-    			add_location(path, file$o, 34, 20, 1335);
-    			attr_dev(textPath, "class", textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb");
+    			add_location(path, file$p, 28, 20, 1226);
+    			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "75%");
-    			toggle_class(textPath, "selected", /*criteria*/ ctx[0].robust);
-    			add_location(textPath, file$o, 36, 24, 1551);
-    			add_location(text_1, file$o, 35, 20, 1520);
+    			add_location(textPath, file$p, 30, 24, 1442);
+    			add_location(text_1, file$p, 29, 20, 1411);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34530,22 +33995,20 @@ var app = (function (exports) {
     					x: /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos,
     					y: /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos
     				},
-    				/*radius*/ ctx[3] + 70
+    				/*radius*/ ctx[3] + 20
     			))) {
     				attr_dev(path, "d", path_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw_value !== (raw_value = /*lens*/ ctx[4].Screen + "")) textPath.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 2 && textPath_class_value !== (textPath_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1628ytb")) {
+    			if (dirty & /*criteria, $data*/ 3 && raw_value !== (raw_value = (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] === "Yes"
+    			? /*lens*/ ctx[4].Screen
+    			: "Not " + /*lens*/ ctx[4].Screen) + "")) textPath.innerHTML = raw_value;
+    			if (dirty & /*criteria, $data*/ 3 && textPath_class_value !== (textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"))) {
     				attr_dev(textPath, "class", textPath_class_value);
     			}
 
     			if (dirty & /*$data*/ 2 && textPath_href_value !== (textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath, "href", textPath_href_value);
-    			}
-
-    			if (dirty & /*$data, criteria*/ 3) {
-    				toggle_class(textPath, "selected", /*criteria*/ ctx[0].robust);
     			}
     		},
     		d: function destroy(detaching) {
@@ -34556,22 +34019,22 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$7.name,
+    		id: create_if_block$9.name,
     		type: "if",
-    		source: "(34:16) {#if lens.lensPos === \\\"top\\\"}",
+    		source: "(28:16) {#if lens.lensPos === \\\"top\\\"}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (33:12) {#each $data.schema.adaptationScreens.data as lens, i}
+    // (27:12) {#each $data.schema.adaptationScreens.data as lens, i}
     function create_each_block$f(ctx) {
     	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*lens*/ ctx[4].lensPos === "top") return create_if_block$7;
-    		if (/*lens*/ ctx[4].lensPos === "left") return create_if_block_1$6;
+    		if (/*lens*/ ctx[4].lensPos === "top") return create_if_block$9;
+    		if (/*lens*/ ctx[4].lensPos === "left") return create_if_block_1$7;
     		if (/*lens*/ ctx[4].lensPos === "right") return create_if_block_2$5;
     	}
 
@@ -34613,14 +34076,14 @@ var app = (function (exports) {
     		block,
     		id: create_each_block$f.name,
     		type: "each",
-    		source: "(33:12) {#each $data.schema.adaptationScreens.data as lens, i}",
+    		source: "(27:12) {#each $data.schema.adaptationScreens.data as lens, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$o(ctx) {
+    function create_fragment$p(ctx) {
     	let svg;
     	let g1;
     	let g0;
@@ -34658,13 +34121,13 @@ var app = (function (exports) {
     				each_blocks[i].c();
     			}
 
-    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[2].width * 0.5 + "px, " + /*dims*/ ctx[2].height * 0.5 + "px)");
-    			add_location(g0, file$o, 27, 8, 829);
+    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[2].width * 0.5 + "px, " + /*dims*/ ctx[2].height * 0.55 + "px)");
+    			add_location(g0, file$p, 21, 8, 735);
     			attr_dev(g1, "id", "screening-vis-container");
-    			add_location(g1, file$o, 26, 4, 779);
+    			add_location(g1, file$p, 20, 4, 685);
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[2].width + " " + /*dims*/ ctx[2].height);
-    			attr_dev(svg, "width", "75%");
-    			add_location(svg, file$o, 25, 0, 714);
+    			attr_dev(svg, "width", "100%");
+    			add_location(svg, file$p, 19, 0, 619);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -34685,7 +34148,7 @@ var app = (function (exports) {
     			}
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*slugify, $data, radius, dims, criteria*/ 15) {
+    			if (dirty & /*criteria, slugify, $data, radius, dims*/ 15) {
     				each_value_1 = /*$data*/ ctx[1].schema.adaptationScreens.data;
     				validate_each_argument(each_value_1);
     				let i;
@@ -34709,7 +34172,7 @@ var app = (function (exports) {
     				each_blocks_1.length = each_value_1.length;
     			}
 
-    			if (dirty & /*slugify, $data, criteria, circleClockwise, dims, radius, circleAntiClockwise*/ 15) {
+    			if (dirty & /*criteria, slugify, $data, circleClockwise, dims, radius, circleAntiClockwise*/ 15) {
     				each_value = /*$data*/ ctx[1].schema.adaptationScreens.data;
     				validate_each_argument(each_value);
     				let i;
@@ -34751,7 +34214,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$o.name,
+    		id: create_fragment$p.name,
     		type: "component",
     		source: "",
     		ctx
@@ -34760,23 +34223,18 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$o($$self, $$props, $$invalidate) {
+    function instance$p($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('AdaptationCriteria', slots, []);
-
-    	let { criteria = {
-    		flexible: true,
-    		robust: true,
-    		viable: false
-    	} } = $$props;
+    	let { criteria = {} } = $$props;
 
     	const dims = {
     		// SVG dimensions
     		width: 1600,
-    		height: 1400
+    		height: 1600
     	};
 
     	const radius = dims.width * 0.25;
@@ -34819,13 +34277,13 @@ var app = (function (exports) {
     class AdaptationCriteria extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$o, create_fragment$o, safe_not_equal, { criteria: 0 });
+    		init$1(this, options, instance$p, create_fragment$p, safe_not_equal, { criteria: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "AdaptationCriteria",
     			options,
-    			id: create_fragment$o.name
+    			id: create_fragment$p.name
     		});
     	}
 
@@ -34839,7 +34297,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/ActionTypeVis.svelte generated by Svelte v3.48.0 */
-    const file$n = "src/components/byPage/postcards/postcard/ActionTypeVis.svelte";
+    const file$o = "src/components/byPage/postcards/postcard/ActionTypeVis.svelte";
 
     function get_each_context$e(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -34875,7 +34333,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "class", "flow svelte-pbat5r");
     			attr_dev(path, "d", /*path*/ ctx[10]);
-    			add_location(path, file$n, 35, 16, 1651);
+    			add_location(path, file$o, 35, 16, 1652);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34907,7 +34365,7 @@ var app = (function (exports) {
     			attr_dev(circle, "class", "node " + slugify(/*node*/ ctx[4].Class) + " svelte-pbat5r");
     			set_style(circle, "transform", "translate( " + /*node*/ ctx[4].xPos * 0.5 * /*dims*/ ctx[1].width + "px, " + /*node*/ ctx[4].yPos * /*dims*/ ctx[1].height + "px)");
     			toggle_class(circle, "selected", /*node*/ ctx[4].Name === /*actionType*/ ctx[0]);
-    			add_location(circle, file$n, 40, 12, 1822);
+    			add_location(circle, file$o, 40, 12, 1823);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -34933,7 +34391,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$n(ctx) {
+    function create_fragment$o(ctx) {
     	let svg;
     	let g2;
     	let g0;
@@ -34972,15 +34430,15 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g0, "class", "connector-container");
-    			add_location(g0, file$n, 24, 8, 795);
+    			add_location(g0, file$o, 24, 8, 796);
     			attr_dev(g1, "class", "action-type-node-container");
-    			add_location(g1, file$n, 38, 8, 1726);
+    			add_location(g1, file$o, 38, 8, 1727);
     			attr_dev(g2, "class", "flow-diagram");
     			set_style(g2, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g2, file$n, 23, 4, 704);
+    			add_location(g2, file$o, 23, 4, 705);
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
-    			attr_dev(svg, "width", "75%");
-    			add_location(svg, file$n, 22, 0, 632);
+    			attr_dev(svg, "width", "100%");
+    			add_location(svg, file$o, 22, 0, 632);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35067,7 +34525,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$n.name,
+    		id: create_fragment$o.name,
     		type: "component",
     		source: "",
     		ctx
@@ -35076,7 +34534,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$n($$self, $$props, $$invalidate) {
+    function instance$o($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
@@ -35129,13 +34587,13 @@ var app = (function (exports) {
     class ActionTypeVis extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$n, create_fragment$n, safe_not_equal, { actionType: 0 });
+    		init$1(this, options, instance$o, create_fragment$o, safe_not_equal, { actionType: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ActionTypeVis",
     			options,
-    			id: create_fragment$n.name
+    			id: create_fragment$o.name
     		});
 
     		const { ctx } = this.$$;
@@ -35156,16 +34614,12 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/Info.svelte generated by Svelte v3.48.0 */
-    const file$m = "src/components/byPage/postcards/postcard/Info.svelte";
 
-    function get_each_context$d(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[9] = list[i];
-    	return child_ctx;
-    }
+    const { Object: Object_1$1 } = globals;
+    const file$n = "src/components/byPage/postcards/postcard/Info.svelte";
 
-    // (54:20) {#if actionApproachThemeArray.includes('Increase resilience')}
-    function create_if_block_1$5(ctx) {
+    // (77:20) {#if actionApproachThemeArray.includes('Increase resilience')}
+    function create_if_block_1$6(ctx) {
     	let path;
 
     	const block = {
@@ -35173,7 +34627,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "d", triangle(50));
     			set_style(path, "transform", "translate( 50px, 50px)");
-    			add_location(path, file$m, 54, 20, 2864);
+    			add_location(path, file$n, 77, 20, 3597);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -35186,17 +34640,17 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$5.name,
+    		id: create_if_block_1$6.name,
     		type: "if",
-    		source: "(54:20) {#if actionApproachThemeArray.includes('Increase resilience')}",
+    		source: "(77:20) {#if actionApproachThemeArray.includes('Increase resilience')}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (57:20) {#if actionApproachThemeArray.includes('Reduce risk')}
-    function create_if_block$6(ctx) {
+    // (80:20) {#if actionApproachThemeArray.includes('Reduce risk')}
+    function create_if_block$8(ctx) {
     	let path;
 
     	const block = {
@@ -35204,7 +34658,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "d", triangle(50, 'down'));
     			set_style(path, "transform", "translate( 50px, 50px)");
-    			add_location(path, file$m, 57, 20, 3053);
+    			add_location(path, file$n, 80, 20, 3786);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -35217,77 +34671,16 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$6.name,
+    		id: create_if_block$8.name,
     		type: "if",
-    		source: "(57:20) {#if actionApproachThemeArray.includes('Reduce risk')}",
+    		source: "(80:20) {#if actionApproachThemeArray.includes('Reduce risk')}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (95:12) {#each focusAreas as focusArea}
-    function create_each_block$d(ctx) {
-    	let div2;
-    	let div0;
-    	let svg;
-    	let path;
-    	let t0;
-    	let div1;
-    	let raw_value = /*focusArea*/ ctx[9] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			div2 = element("div");
-    			div0 = element("div");
-    			svg = svg_element("svg");
-    			path = svg_element("path");
-    			t0 = space();
-    			div1 = element("div");
-    			t1 = space();
-    			attr_dev(path, "d", icons[slugify(/*focusArea*/ ctx[9])]);
-    			add_location(path, file$m, 98, 24, 4488);
-    			attr_dev(svg, "class", "focusArea-icon svelte-tvdnkr");
-    			attr_dev(svg, "viewBox", "-50 -50 100 100");
-    			attr_dev(svg, "width", "100%");
-    			attr_dev(svg, "height", "4rem");
-    			add_location(svg, file$m, 97, 20, 4376);
-    			attr_dev(div0, "class", "focusArea-icon-wrapper svelte-tvdnkr");
-    			add_location(div0, file$m, 96, 16, 4316);
-    			attr_dev(div1, "class", "focusArea-response response svelte-tvdnkr");
-    			add_location(div1, file$m, 101, 16, 4594);
-    			attr_dev(div2, "class", "focusArea-wrapper svelte-tvdnkr");
-    			add_location(div2, file$m, 95, 12, 4266);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div2, anchor);
-    			append_dev(div2, div0);
-    			append_dev(div0, svg);
-    			append_dev(svg, path);
-    			append_dev(div2, t0);
-    			append_dev(div2, div1);
-    			div1.innerHTML = raw_value;
-    			append_dev(div2, t1);
-    		},
-    		p: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div2);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$d.name,
-    		type: "each",
-    		source: "(95:12) {#each focusAreas as focusArea}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$m(ctx) {
+    function create_fragment$n(ctx) {
     	let section;
     	let div5;
     	let div0;
@@ -35307,9 +34700,9 @@ var app = (function (exports) {
     	let div10;
     	let div7;
     	let svg0;
-    	let show_if_1 = /*actionApproachThemeArray*/ ctx[1].includes('Increase resilience');
+    	let show_if_1 = /*actionApproachThemeArray*/ ctx[2].includes('Increase resilience');
     	let if_block0_anchor;
-    	let show_if = /*actionApproachThemeArray*/ ctx[1].includes('Reduce risk');
+    	let show_if = /*actionApproachThemeArray*/ ctx[2].includes('Reduce risk');
     	let t6;
     	let div9;
     	let div8;
@@ -35326,38 +34719,25 @@ var app = (function (exports) {
     	let div15;
     	let div14;
     	let t11;
-    	let div20;
+    	let div23;
     	let div18;
     	let h43;
     	let t13;
-    	let div19;
-    	let t14;
-    	let div26;
-    	let div21;
-    	let h44;
-    	let t16;
-    	let div25;
     	let div22;
+    	let div19;
     	let adaptationcriteria;
-    	let t17;
-    	let div24;
-    	let div23;
+    	let t14;
+    	let div21;
+    	let div20;
     	let current;
 
     	actiontypevis = new ActionTypeVis({
-    			props: { actionType: /*actionType*/ ctx[0] },
+    			props: { actionType: /*actionType*/ ctx[1] },
     			$$inline: true
     		});
 
-    	let if_block0 = show_if_1 && create_if_block_1$5(ctx);
-    	let if_block1 = show_if && create_if_block$6(ctx);
-    	let each_value = /*focusAreas*/ ctx[4];
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$d(get_each_context$d(ctx, each_value, i));
-    	}
+    	let if_block0 = show_if_1 && create_if_block_1$6(ctx);
+    	let if_block1 = show_if && create_if_block$8(ctx);
 
     	adaptationcriteria = new AdaptationCriteria({
     			props: { criteria: /*criteria*/ ctx[5] },
@@ -35382,7 +34762,7 @@ var app = (function (exports) {
     			div11 = element("div");
     			div6 = element("div");
     			h41 = element("h4");
-    			h41.textContent = "Adapation approach";
+    			h41.textContent = "Adaptation approach";
     			t5 = space();
     			div10 = element("div");
     			div7 = element("div");
@@ -35407,106 +34787,85 @@ var app = (function (exports) {
     			div15 = element("div");
     			div14 = element("div");
     			t11 = space();
-    			div20 = element("div");
+    			div23 = element("div");
     			div18 = element("div");
     			h43 = element("h4");
-    			h43.textContent = "Focus areas";
+    			h43.textContent = "Adaptation criteria";
     			t13 = space();
-    			div19 = element("div");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			t14 = space();
-    			div26 = element("div");
-    			div21 = element("div");
-    			h44 = element("h4");
-    			h44.textContent = "Adaptation criteria";
-    			t16 = space();
-    			div25 = element("div");
     			div22 = element("div");
+    			div19 = element("div");
     			create_component(adaptationcriteria.$$.fragment);
-    			t17 = space();
-    			div24 = element("div");
-    			div23 = element("div");
-    			div23.textContent = "No regrets";
-    			attr_dev(h40, "class", "svelte-tvdnkr");
-    			add_location(h40, file$m, 31, 12, 2070);
-    			attr_dev(div0, "class", "header svelte-tvdnkr");
-    			add_location(div0, file$m, 30, 8, 2035);
-    			attr_dev(div1, "class", "icon-wrapper svelte-tvdnkr");
-    			add_location(div1, file$m, 34, 13, 2160);
-    			attr_dev(div2, "class", "response svelte-tvdnkr");
-    			add_location(div2, file$m, 38, 16, 2312);
-    			attr_dev(div3, "class", "label-wrapper svelte-tvdnkr");
-    			add_location(div3, file$m, 37, 12, 2266);
-    			attr_dev(div4, "class", "response-wrapper svelte-tvdnkr");
-    			add_location(div4, file$m, 33, 8, 2114);
-    			attr_dev(div5, "class", "info-container svelte-tvdnkr");
-    			add_location(div5, file$m, 29, 4, 1997);
-    			attr_dev(h41, "class", "svelte-tvdnkr");
-    			add_location(h41, file$m, 48, 12, 2556);
-    			attr_dev(div6, "class", "header svelte-tvdnkr");
-    			add_location(div6, file$m, 47, 8, 2521);
-    			attr_dev(svg0, "class", "scale-icon svelte-tvdnkr");
+    			t14 = space();
+    			div21 = element("div");
+    			div20 = element("div");
+    			attr_dev(h40, "class", "svelte-1nulwtn");
+    			add_location(h40, file$n, 54, 12, 2801);
+    			attr_dev(div0, "class", "header svelte-1nulwtn");
+    			add_location(div0, file$n, 53, 8, 2766);
+    			attr_dev(div1, "class", "icon-wrapper svelte-1nulwtn");
+    			add_location(div1, file$n, 57, 13, 2891);
+    			attr_dev(div2, "class", "response svelte-1nulwtn");
+    			add_location(div2, file$n, 61, 16, 3043);
+    			attr_dev(div3, "class", "label-wrapper svelte-1nulwtn");
+    			add_location(div3, file$n, 60, 12, 2997);
+    			attr_dev(div4, "class", "response-wrapper svelte-1nulwtn");
+    			add_location(div4, file$n, 56, 8, 2845);
+    			attr_dev(div5, "class", "info-container svelte-1nulwtn");
+    			add_location(div5, file$n, 52, 4, 2728);
+    			attr_dev(h41, "class", "svelte-1nulwtn");
+    			add_location(h41, file$n, 71, 12, 3287);
+    			attr_dev(div6, "class", "header svelte-1nulwtn");
+    			add_location(div6, file$n, 70, 8, 3252);
+    			attr_dev(svg0, "class", "scale-icon svelte-1nulwtn");
     			attr_dev(svg0, "viewBox", "0 0 100 100");
-    			attr_dev(svg0, "width", "75%");
-    			add_location(svg0, file$m, 52, 16, 2698);
-    			attr_dev(div7, "class", "icon-wrapper svelte-tvdnkr");
-    			add_location(div7, file$m, 51, 13, 2653);
-    			attr_dev(div8, "class", "response icon-label svelte-tvdnkr");
-    			add_location(div8, file$m, 62, 16, 3255);
-    			attr_dev(div9, "class", "label-wrapper svelte-tvdnkr");
-    			add_location(div9, file$m, 61, 12, 3209);
-    			attr_dev(div10, "class", "response-wrapper svelte-tvdnkr");
-    			add_location(div10, file$m, 50, 8, 2607);
-    			attr_dev(div11, "class", "info-container svelte-tvdnkr");
-    			add_location(div11, file$m, 46, 4, 2483);
-    			attr_dev(h42, "class", "svelte-tvdnkr");
-    			add_location(h42, file$m, 72, 12, 3513);
-    			attr_dev(div12, "class", "header svelte-tvdnkr");
-    			add_location(div12, file$m, 71, 8, 3478);
-    			attr_dev(path, "d", mapIcons[/*actionScale*/ ctx[3]]);
-    			add_location(path, file$m, 77, 20, 3748);
-    			attr_dev(svg1, "class", "scale-icon svelte-tvdnkr");
+    			attr_dev(svg0, "width", "100%");
+    			add_location(svg0, file$n, 75, 16, 3430);
+    			attr_dev(div7, "class", "icon-wrapper svelte-1nulwtn");
+    			add_location(div7, file$n, 74, 13, 3385);
+    			attr_dev(div8, "class", "response icon-label svelte-1nulwtn");
+    			add_location(div8, file$n, 85, 16, 3988);
+    			attr_dev(div9, "class", "label-wrapper svelte-1nulwtn");
+    			add_location(div9, file$n, 84, 12, 3942);
+    			attr_dev(div10, "class", "response-wrapper svelte-1nulwtn");
+    			add_location(div10, file$n, 73, 8, 3339);
+    			attr_dev(div11, "class", "info-container svelte-1nulwtn");
+    			add_location(div11, file$n, 69, 4, 3214);
+    			attr_dev(h42, "class", "svelte-1nulwtn");
+    			add_location(h42, file$n, 95, 12, 4246);
+    			attr_dev(div12, "class", "header svelte-1nulwtn");
+    			add_location(div12, file$n, 94, 8, 4211);
+    			attr_dev(path, "d", mapIcons[/*actionScale*/ ctx[4]]);
+    			add_location(path, file$n, 100, 20, 4482);
+    			attr_dev(svg1, "class", "scale-icon svelte-1nulwtn");
     			attr_dev(svg1, "viewBox", "-50 -50 100 100");
-    			attr_dev(svg1, "width", "75%");
-    			add_location(svg1, file$m, 76, 16, 3661);
-    			attr_dev(div13, "class", "icon-wrapper svelte-tvdnkr");
-    			add_location(div13, file$m, 75, 13, 3616);
-    			attr_dev(div14, "class", "response icon-label svelte-tvdnkr");
-    			add_location(div14, file$m, 81, 16, 3884);
-    			attr_dev(div15, "class", "label-wrapper svelte-tvdnkr");
-    			add_location(div15, file$m, 80, 12, 3838);
-    			attr_dev(div16, "class", "response-wrapper icon-label svelte-tvdnkr");
-    			add_location(div16, file$m, 74, 8, 3559);
-    			attr_dev(div17, "class", "info-container svelte-tvdnkr");
-    			add_location(div17, file$m, 70, 4, 3440);
-    			attr_dev(h43, "class", "svelte-tvdnkr");
-    			add_location(h43, file$m, 91, 12, 4128);
-    			attr_dev(div18, "class", "header svelte-tvdnkr");
-    			add_location(div18, file$m, 90, 8, 4093);
-    			attr_dev(div19, "class", "response-wrapper list svelte-tvdnkr");
-    			add_location(div19, file$m, 93, 8, 4172);
-    			attr_dev(div20, "class", "info-container svelte-tvdnkr");
-    			add_location(div20, file$m, 89, 4, 4055);
-    			attr_dev(h44, "class", "svelte-tvdnkr");
-    			add_location(h44, file$m, 110, 12, 4847);
-    			attr_dev(div21, "class", "header svelte-tvdnkr");
-    			add_location(div21, file$m, 109, 8, 4812);
-    			attr_dev(div22, "class", "icon-wrapper svelte-tvdnkr");
-    			add_location(div22, file$m, 113, 12, 4955);
-    			attr_dev(div23, "class", "response svelte-tvdnkr");
-    			add_location(div23, file$m, 117, 16, 5112);
-    			attr_dev(div24, "class", "label-wrapper svelte-tvdnkr");
-    			add_location(div24, file$m, 116, 12, 5065);
-    			attr_dev(div25, "class", "response-wrapper icon-label svelte-tvdnkr");
-    			add_location(div25, file$m, 112, 8, 4899);
-    			attr_dev(div26, "class", "info-container svelte-tvdnkr");
-    			add_location(div26, file$m, 108, 4, 4774);
-    			attr_dev(section, "class", "svelte-tvdnkr");
-    			add_location(section, file$m, 27, 0, 1959);
+    			attr_dev(svg1, "width", "100%");
+    			add_location(svg1, file$n, 99, 16, 4394);
+    			attr_dev(div13, "class", "icon-wrapper svelte-1nulwtn");
+    			add_location(div13, file$n, 98, 13, 4349);
+    			attr_dev(div14, "class", "response icon-label svelte-1nulwtn");
+    			add_location(div14, file$n, 104, 16, 4618);
+    			attr_dev(div15, "class", "label-wrapper svelte-1nulwtn");
+    			add_location(div15, file$n, 103, 12, 4572);
+    			attr_dev(div16, "class", "response-wrapper icon-label svelte-1nulwtn");
+    			add_location(div16, file$n, 97, 8, 4292);
+    			attr_dev(div17, "class", "info-container svelte-1nulwtn");
+    			add_location(div17, file$n, 93, 4, 4173);
+    			attr_dev(h43, "class", "svelte-1nulwtn");
+    			add_location(h43, file$n, 114, 12, 4882);
+    			attr_dev(div18, "class", "header svelte-1nulwtn");
+    			add_location(div18, file$n, 113, 8, 4847);
+    			attr_dev(div19, "class", "icon-wrapper svelte-1nulwtn");
+    			add_location(div19, file$n, 117, 12, 4990);
+    			attr_dev(div20, "class", "response svelte-1nulwtn");
+    			add_location(div20, file$n, 121, 16, 5147);
+    			attr_dev(div21, "class", "label-wrapper svelte-1nulwtn");
+    			add_location(div21, file$n, 120, 12, 5100);
+    			attr_dev(div22, "class", "response-wrapper icon-label svelte-1nulwtn");
+    			add_location(div22, file$n, 116, 8, 4934);
+    			attr_dev(div23, "class", "info-container svelte-1nulwtn");
+    			add_location(div23, file$n, 112, 4, 4809);
+    			attr_dev(section, "class", "svelte-1nulwtn");
+    			add_location(section, file$n, 50, 0, 2690);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35523,7 +34882,7 @@ var app = (function (exports) {
     			append_dev(div4, t2);
     			append_dev(div4, div3);
     			append_dev(div3, div2);
-    			div2.innerHTML = /*actionType*/ ctx[0];
+    			div2.innerHTML = /*actionType*/ ctx[1];
     			append_dev(section, t3);
     			append_dev(section, div11);
     			append_dev(div11, div6);
@@ -35538,7 +34897,7 @@ var app = (function (exports) {
     			append_dev(div10, t6);
     			append_dev(div10, div9);
     			append_dev(div9, div8);
-    			div8.innerHTML = /*actionApproachTheme*/ ctx[2];
+    			div8.innerHTML = /*actionApproachTheme*/ ctx[3];
     			append_dev(section, t7);
     			append_dev(section, div17);
     			append_dev(div17, div12);
@@ -35551,59 +34910,25 @@ var app = (function (exports) {
     			append_dev(div16, t10);
     			append_dev(div16, div15);
     			append_dev(div15, div14);
-    			div14.innerHTML = /*actionScale*/ ctx[3];
+    			div14.innerHTML = /*actionScale*/ ctx[4];
     			append_dev(section, t11);
-    			append_dev(section, div20);
-    			append_dev(div20, div18);
+    			append_dev(section, div23);
+    			append_dev(div23, div18);
     			append_dev(div18, h43);
-    			append_dev(div20, t13);
-    			append_dev(div20, div19);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div19, null);
-    			}
-
-    			append_dev(section, t14);
-    			append_dev(section, div26);
-    			append_dev(div26, div21);
-    			append_dev(div21, h44);
-    			append_dev(div26, t16);
-    			append_dev(div26, div25);
-    			append_dev(div25, div22);
-    			mount_component(adaptationcriteria, div22, null);
-    			append_dev(div25, t17);
-    			append_dev(div25, div24);
-    			append_dev(div24, div23);
+    			append_dev(div23, t13);
+    			append_dev(div23, div22);
+    			append_dev(div22, div19);
+    			mount_component(adaptationcriteria, div19, null);
+    			append_dev(div22, t14);
+    			append_dev(div22, div21);
+    			append_dev(div21, div20);
+    			div20.innerHTML = /*assessment*/ ctx[0];
     			current = true;
     		},
     		p: function update(ctx, [dirty]) {
     			if (show_if_1) if_block0.p(ctx, dirty);
     			if (show_if) if_block1.p(ctx, dirty);
-
-    			if (dirty & /*focusAreas, icons, slugify*/ 16) {
-    				each_value = /*focusAreas*/ ctx[4];
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$d(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$d(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(div19, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
+    			if (!current || dirty & /*assessment*/ 1) div20.innerHTML = /*assessment*/ ctx[0];		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(actiontypevis.$$.fragment, local);
@@ -35620,14 +34945,13 @@ var app = (function (exports) {
     			destroy_component(actiontypevis);
     			if (if_block0) if_block0.d();
     			if (if_block1) if_block1.d();
-    			destroy_each(each_blocks, detaching);
     			destroy_component(adaptationcriteria);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$m.name,
+    		id: create_fragment$n.name,
     		type: "component",
     		source: "",
     		ctx
@@ -35636,9 +34960,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    const assessment = "";
-
-    function instance$m($$self, $$props, $$invalidate) {
+    function instance$n($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(7, $data = $$value));
@@ -35668,20 +34990,40 @@ var app = (function (exports) {
     	const focusAreas = [...new Set(actionData['Focus areas'])].map(d => schema.adaptationFocus.data.filter(e => e.recordID === d)[0]["Alias"]);
 
     	const criteria = {
-    		flexible: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Flexible")[0].fieldName] === "Yes"
-    		? true
-    		: false,
-    		robust: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Robust")[0].fieldName] === "Yes"
-    		? true
-    		: false,
-    		viable: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Viable")[0].fieldName] === "Yes"
-    		? true
-    		: false
+    		flexible: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Flexible")[0].fieldName],
+    		robust: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Robust")[0].fieldName],
+    		viable: actionData[$data.schema.adaptationScreens.data.filter(d => d.Screen === "Viable")[0].fieldName]
     	};
+
+    	let assessment = '';
+
+    	switch (actionData["Screening outcome"]) {
+    		case "=> No regrets":
+    			assessment = "No regrets: highest priority";
+    			break;
+    		case "=> Discard":
+    			assessment = "No adaptation benefit";
+    			break;
+    		default:
+    			switch (Object.values(criteria).filter(d => d === "Yes").length) {
+    				case 3:
+    					assessment = "No regrets";
+    					break;
+    				case 2:
+    					assessment = "High priority";
+    					break;
+    				case 1:
+    					assessment = "Low priority";
+    					break;
+    				case 0:
+    					assessment = "Uncertain adaptation benefit";
+    					break;
+    			}
+    	}
 
     	const writable_props = ['actionData'];
 
-    	Object.keys($$props).forEach(key => {
+    	Object_1$1.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Info> was created with unknown prop '${key}'`);
     	});
 
@@ -35712,6 +35054,7 @@ var app = (function (exports) {
 
     	$$self.$inject_state = $$props => {
     		if ('actionData' in $$props) $$invalidate(6, actionData = $$props.actionData);
+    		if ('assessment' in $$props) $$invalidate(0, assessment = $$props.assessment);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -35719,11 +35062,11 @@ var app = (function (exports) {
     	}
 
     	return [
+    		assessment,
     		actionType,
     		actionApproachThemeArray,
     		actionApproachTheme,
     		actionScale,
-    		focusAreas,
     		criteria,
     		actionData
     	];
@@ -35732,13 +35075,13 @@ var app = (function (exports) {
     class Info extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$m, create_fragment$m, safe_not_equal, { actionData: 6 });
+    		init$1(this, options, instance$n, create_fragment$n, safe_not_equal, { actionData: 6 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Info",
     			options,
-    			id: create_fragment$m.name
+    			id: create_fragment$n.name
     		});
 
     		const { ctx } = this.$$;
@@ -35758,19 +35101,320 @@ var app = (function (exports) {
     	}
     }
 
+    /* src/components/byPage/postcards/postcard/Strip.svelte generated by Svelte v3.48.0 */
+    const file$m = "src/components/byPage/postcards/postcard/Strip.svelte";
+
+    function get_each_context$d(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[3] = list[i];
+    	return child_ctx;
+    }
+
+    // (28:12) {#each $data.schema.adaptationFocus.data as d}
+    function create_each_block$d(ctx) {
+    	let div2;
+    	let div0;
+    	let svg;
+    	let path;
+    	let path_d_value;
+    	let t0;
+    	let div1;
+    	let raw_value = /*d*/ ctx[3].Alias + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			div2 = element("div");
+    			div0 = element("div");
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			t0 = space();
+    			div1 = element("div");
+    			t1 = space();
+    			attr_dev(path, "d", path_d_value = icons[slugify(/*d*/ ctx[3].Alias)]);
+    			add_location(path, file$m, 31, 24, 1288);
+    			attr_dev(svg, "class", "focusArea-icon svelte-1xyanja");
+    			attr_dev(svg, "viewBox", "-50 -50 100 100");
+    			attr_dev(svg, "width", "80%");
+    			add_location(svg, file$m, 30, 20, 1190);
+    			attr_dev(div0, "class", "focusArea-icon-wrapper svelte-1xyanja");
+    			add_location(div0, file$m, 29, 16, 1130);
+    			attr_dev(div1, "class", "focusArea-icon-label svelte-1xyanja");
+    			add_location(div1, file$m, 34, 16, 1393);
+    			attr_dev(div2, "class", "focusArea-wrapper svelte-1xyanja");
+    			toggle_class(div2, "selected", /*focusAreas*/ ctx[1].indexOf(/*d*/ ctx[3].Alias) > -1);
+    			add_location(div2, file$m, 28, 12, 1030);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, div0);
+    			append_dev(div0, svg);
+    			append_dev(svg, path);
+    			append_dev(div2, t0);
+    			append_dev(div2, div1);
+    			div1.innerHTML = raw_value;
+    			append_dev(div2, t1);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*d*/ ctx[3].Alias)])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*d*/ ctx[3].Alias + "")) div1.innerHTML = raw_value;
+    			if (dirty & /*focusAreas, $data*/ 3) {
+    				toggle_class(div2, "selected", /*focusAreas*/ ctx[1].indexOf(/*d*/ ctx[3].Alias) > -1);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$d.name,
+    		type: "each",
+    		source: "(28:12) {#each $data.schema.adaptationFocus.data as d}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$m(ctx) {
+    	let section;
+    	let div0;
+    	let logo;
+    	let t0;
+    	let div1;
+    	let t1;
+    	let div2;
+    	let t2;
+    	let div5;
+    	let div4;
+    	let div3;
+    	let t4;
+    	let div7;
+    	let div6;
+    	let current;
+    	logo = new Logo({ $$inline: true });
+    	let each_value = /*$data*/ ctx[0].schema.adaptationFocus.data;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$d(get_each_context$d(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			section = element("section");
+    			div0 = element("div");
+    			create_component(logo.$$.fragment);
+    			t0 = space();
+    			div1 = element("div");
+    			t1 = space();
+    			div2 = element("div");
+    			t2 = space();
+    			div5 = element("div");
+    			div4 = element("div");
+    			div3 = element("div");
+    			div3.textContent = "Hepburn climate change adaptation focus areas";
+    			t4 = space();
+    			div7 = element("div");
+    			div6 = element("div");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(div0, "class", "logo-container svelte-1xyanja");
+    			add_location(div0, file$m, 15, 4, 563);
+    			attr_dev(div1, "class", "strip-1a svelte-1xyanja");
+    			add_location(div1, file$m, 18, 4, 625);
+    			attr_dev(div2, "class", "strip-2a svelte-1xyanja");
+    			add_location(div2, file$m, 19, 4, 659);
+    			attr_dev(div3, "class", "vertical-label svelte-1xyanja");
+    			add_location(div3, file$m, 22, 12, 778);
+    			attr_dev(div4, "class", "vertical-label-container svelte-1xyanja");
+    			add_location(div4, file$m, 21, 8, 725);
+    			attr_dev(div5, "class", "strip-1b svelte-1xyanja");
+    			add_location(div5, file$m, 20, 4, 693);
+    			attr_dev(div6, "class", "focus-area-container svelte-1xyanja");
+    			add_location(div6, file$m, 26, 8, 922);
+    			attr_dev(div7, "class", "strip-2b svelte-1xyanja");
+    			add_location(div7, file$m, 25, 4, 890);
+    			attr_dev(section, "class", "svelte-1xyanja");
+    			add_location(section, file$m, 14, 0, 549);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, section, anchor);
+    			append_dev(section, div0);
+    			mount_component(logo, div0, null);
+    			append_dev(section, t0);
+    			append_dev(section, div1);
+    			append_dev(section, t1);
+    			append_dev(section, div2);
+    			append_dev(section, t2);
+    			append_dev(section, div5);
+    			append_dev(div5, div4);
+    			append_dev(div4, div3);
+    			append_dev(section, t4);
+    			append_dev(section, div7);
+    			append_dev(div7, div6);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(div6, null);
+    			}
+
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*focusAreas, $data, icons, slugify*/ 3) {
+    				each_value = /*$data*/ ctx[0].schema.adaptationFocus.data;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$d(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$d(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(div6, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(logo.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(logo.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(section);
+    			destroy_component(logo);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$m.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$m($$self, $$props, $$invalidate) {
+    	let $data;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Strip', slots, []);
+    	let { actionData } = $$props;
+    	const focusAreas = [...new Set(actionData['Focus areas'])].map(d => schema.adaptationFocus.data.filter(e => e.recordID === d)[0]["Alias"]);
+    	const writable_props = ['actionData'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Strip> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$$set = $$props => {
+    		if ('actionData' in $$props) $$invalidate(2, actionData = $$props.actionData);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		Logo,
+    		schema,
+    		icons,
+    		slugify,
+    		ui,
+    		data,
+    		actionData,
+    		focusAreas,
+    		$data
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('actionData' in $$props) $$invalidate(2, actionData = $$props.actionData);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [$data, focusAreas, actionData];
+    }
+
+    class Strip extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$m, create_fragment$m, safe_not_equal, { actionData: 2 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Strip",
+    			options,
+    			id: create_fragment$m.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*actionData*/ ctx[2] === undefined && !('actionData' in props)) {
+    			console.warn("<Strip> was created without expected prop 'actionData'");
+    		}
+    	}
+
+    	get actionData() {
+    		throw new Error("<Strip>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set actionData(value) {
+    		throw new Error("<Strip>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
     /* src/components/byPage/postcards/Postcard.svelte generated by Svelte v3.48.0 */
     const file$l = "src/components/byPage/postcards/Postcard.svelte";
 
     function create_fragment$l(ctx) {
     	let main1;
-    	let title;
+    	let strip;
     	let t0;
-    	let main0;
+    	let title;
     	let t1;
-    	let imagehazards;
+    	let main0;
     	let t2;
+    	let imagehazards;
+    	let t3;
     	let info;
+    	let main1_transition;
     	let current;
+
+    	strip = new Strip({
+    			props: { actionData: /*actionData*/ ctx[0] },
+    			$$inline: true
+    		});
 
     	title = new Title({
     			props: { actionData: /*actionData*/ ctx[0] },
@@ -35795,31 +35439,38 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			main1 = element("main");
-    			create_component(title.$$.fragment);
+    			create_component(strip.$$.fragment);
     			t0 = space();
-    			create_component(main0.$$.fragment);
+    			create_component(title.$$.fragment);
     			t1 = space();
-    			create_component(imagehazards.$$.fragment);
+    			create_component(main0.$$.fragment);
     			t2 = space();
+    			create_component(imagehazards.$$.fragment);
+    			t3 = space();
     			create_component(info.$$.fragment);
-    			attr_dev(main1, "class", "postcard svelte-zlkjiy");
-    			add_location(main1, file$l, 10, 0, 303);
+    			attr_dev(main1, "class", "postcard svelte-6pifco");
+    			add_location(main1, file$l, 12, 0, 407);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, main1, anchor);
-    			mount_component(title, main1, null);
+    			mount_component(strip, main1, null);
     			append_dev(main1, t0);
-    			mount_component(main0, main1, null);
+    			mount_component(title, main1, null);
     			append_dev(main1, t1);
-    			mount_component(imagehazards, main1, null);
+    			mount_component(main0, main1, null);
     			append_dev(main1, t2);
+    			mount_component(imagehazards, main1, null);
+    			append_dev(main1, t3);
     			mount_component(info, main1, null);
     			current = true;
     		},
     		p: function update(ctx, [dirty]) {
+    			const strip_changes = {};
+    			if (dirty & /*actionData*/ 1) strip_changes.actionData = /*actionData*/ ctx[0];
+    			strip.$set(strip_changes);
     			const title_changes = {};
     			if (dirty & /*actionData*/ 1) title_changes.actionData = /*actionData*/ ctx[0];
     			title.$set(title_changes);
@@ -35835,25 +35486,37 @@ var app = (function (exports) {
     		},
     		i: function intro(local) {
     			if (current) return;
+    			transition_in(strip.$$.fragment, local);
     			transition_in(title.$$.fragment, local);
     			transition_in(main0.$$.fragment, local);
     			transition_in(imagehazards.$$.fragment, local);
     			transition_in(info.$$.fragment, local);
+
+    			add_render_callback(() => {
+    				if (!main1_transition) main1_transition = create_bidirectional_transition(main1, fade, {}, true);
+    				main1_transition.run(1);
+    			});
+
     			current = true;
     		},
     		o: function outro(local) {
+    			transition_out(strip.$$.fragment, local);
     			transition_out(title.$$.fragment, local);
     			transition_out(main0.$$.fragment, local);
     			transition_out(imagehazards.$$.fragment, local);
     			transition_out(info.$$.fragment, local);
+    			if (!main1_transition) main1_transition = create_bidirectional_transition(main1, fade, {}, false);
+    			main1_transition.run(0);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(main1);
+    			destroy_component(strip);
     			destroy_component(title);
     			destroy_component(main0);
     			destroy_component(imagehazards);
     			destroy_component(info);
+    			if (detaching && main1_transition) main1_transition.end();
     		}
     	};
 
@@ -35883,10 +35546,12 @@ var app = (function (exports) {
     	};
 
     	$$self.$capture_state = () => ({
+    		fade,
     		Title,
     		Main,
     		ImageHazards,
     		Info,
+    		Strip,
     		actionData
     	});
 
@@ -35930,22 +35595,966 @@ var app = (function (exports) {
     	}
     }
 
-    /* src/pages/Postcards.svelte generated by Svelte v3.48.0 */
-    const file$k = "src/pages/Postcards.svelte";
+    /* src/components/byPage/postcards/ActionTable.svelte generated by Svelte v3.48.0 */
+    const file$k = "src/components/byPage/postcards/ActionTable.svelte";
 
     function get_each_context$c(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[1] = list[i];
+    	child_ctx[4] = list[i];
+    	child_ctx[12] = i;
+    	const constants_0 = /*d*/ child_ctx[4]["Project leads"].map(id => /*$data*/ child_ctx[0].stakeholders.filter(e => e.recordID === id)[0].Name);
+    	child_ctx[5] = constants_0;
+    	const constants_1 = /*d*/ child_ctx[4]["Action type"].map(id => /*$data*/ child_ctx[0].schema.actionTypes.data.filter(e => e.recordID === id)[0].Type)[0];
+    	child_ctx[6] = constants_1;
+    	const constants_2 = /*d*/ child_ctx[4]["Scale"].map(id => /*$data*/ child_ctx[0].schema.actionScale.data.filter(e => e.recordID === id)[0].Scale)[0];
+    	child_ctx[7] = constants_2;
+    	const constants_3 = /*d*/ child_ctx[4]["Focus areas"].map(id => /*$data*/ child_ctx[0].schema.adaptationFocus.data.filter(e => e.recordID === id)[0]);
+    	child_ctx[8] = constants_3;
+    	const constants_4 = /*d*/ child_ctx[4]["Hazard"].map(id => /*$data*/ child_ctx[0].schema.hazards.data.filter(e => e.recordID === id)[0]);
+    	child_ctx[9] = constants_4;
+
+    	const constants_5 = /*d*/ child_ctx[4]["Screening outcome"] === "=> No regrets"
+    	? "No regrets"
+    	: /*d*/ child_ctx[4]["Screening outcome"] === "=> Discard"
+    		? "No adaptation benefit"
+    		: /*d*/ child_ctx[4]["# Criteria met"] === 2
+    			? "High priority"
+    			: /*d*/ child_ctx[4]["# Criteria met"] === 1
+    				? "Low priority"
+    				: "Adaptation benefit uncertain";
+
+    	child_ctx[10] = constants_5;
     	return child_ctx;
     }
 
-    // (55:8) {#each $data.actions as action }
+    function get_each_context_1$5(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[13] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_2$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[13] = list[i];
+    	return child_ctx;
+    }
+
+    // (55:16) {#each focusAreas as obj}
+    function create_each_block_2$1(ctx) {
+    	let div1;
+    	let svg;
+    	let path;
+    	let path_d_value;
+    	let t0;
+    	let div0;
+    	let raw_value = /*obj*/ ctx[13].Alias + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			t0 = space();
+    			div0 = element("div");
+    			t1 = space();
+    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[13].Alias)]);
+    			add_location(path, file$k, 57, 28, 2733);
+    			attr_dev(svg, "class", "icon");
+    			attr_dev(svg, "viewBox", "-50 -50 100 100");
+    			attr_dev(svg, "width", "80%");
+    			add_location(svg, file$k, 56, 24, 2647);
+    			attr_dev(div0, "class", "icon-label svelte-1y7uedn");
+    			add_location(div0, file$k, 59, 24, 2828);
+    			attr_dev(div1, "class", "icon-container svelte-1y7uedn");
+    			add_location(div1, file$k, 55, 20, 2593);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, svg);
+    			append_dev(svg, path);
+    			append_dev(div1, t0);
+    			append_dev(div1, div0);
+    			div0.innerHTML = raw_value;
+    			append_dev(div1, t1);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[13].Alias)])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*obj*/ ctx[13].Alias + "")) div0.innerHTML = raw_value;		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2$1.name,
+    		type: "each",
+    		source: "(55:16) {#each focusAreas as obj}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (67:16) {#each hazards as obj}
+    function create_each_block_1$5(ctx) {
+    	let div1;
+    	let svg;
+    	let path;
+    	let path_d_value;
+    	let t0;
+    	let div0;
+    	let raw_value = /*obj*/ ctx[13].Hazard + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			t0 = space();
+    			div0 = element("div");
+    			t1 = space();
+    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[13].Hazard)]);
+    			add_location(path, file$k, 69, 28, 3254);
+    			attr_dev(svg, "class", "icon");
+    			attr_dev(svg, "viewBox", "-50 -50 100 100");
+    			attr_dev(svg, "width", "80%");
+    			add_location(svg, file$k, 68, 24, 3168);
+    			attr_dev(div0, "class", "icon-label svelte-1y7uedn");
+    			add_location(div0, file$k, 71, 24, 3350);
+    			attr_dev(div1, "class", "icon-container svelte-1y7uedn");
+    			add_location(div1, file$k, 67, 20, 3114);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, svg);
+    			append_dev(svg, path);
+    			append_dev(div1, t0);
+    			append_dev(div1, div0);
+    			div0.innerHTML = raw_value;
+    			append_dev(div1, t1);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[13].Hazard)])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*obj*/ ctx[13].Hazard + "")) div0.innerHTML = raw_value;		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$5.name,
+    		type: "each",
+    		source: "(67:16) {#each hazards as obj}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (29:4) {#each $data.actions as d, i}
     function create_each_block$c(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*d*/ ctx[4].Name + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*leads*/ ctx[5].join(', ') + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = /*d*/ ctx[4].Status + "";
+    	let t4;
+    	let t5;
+    	let td3;
+    	let div1;
+    	let svg;
+    	let path;
+    	let path_d_value;
+    	let t6;
+    	let div0;
+    	let raw_value = /*scale*/ ctx[7] + "";
+    	let t7;
+    	let td4;
+    	let t8_value = /*type*/ ctx[6] + "";
+    	let t8;
+    	let t9;
+    	let td5;
+    	let div2;
+    	let t10;
+    	let td6;
+    	let div3;
+    	let t11;
+    	let td7;
+    	let t12_value = /*tier*/ ctx[10] + "";
+    	let t12;
+    	let t13;
+    	let mounted;
+    	let dispose;
+    	let each_value_2 = /*focusAreas*/ ctx[8];
+    	validate_each_argument(each_value_2);
+    	let each_blocks_1 = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks_1[i] = create_each_block_2$1(get_each_context_2$1(ctx, each_value_2, i));
+    	}
+
+    	let each_value_1 = /*hazards*/ ctx[9];
+    	validate_each_argument(each_value_1);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$5(get_each_context_1$5(ctx, each_value_1, i));
+    	}
+
+    	function click_handler() {
+    		return /*click_handler*/ ctx[2](/*d*/ ctx[4]);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text$1(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text$1(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text$1(t4_value);
+    			t5 = space();
+    			td3 = element("td");
+    			div1 = element("div");
+    			svg = svg_element("svg");
+    			path = svg_element("path");
+    			t6 = space();
+    			div0 = element("div");
+    			t7 = space();
+    			td4 = element("td");
+    			t8 = text$1(t8_value);
+    			t9 = space();
+    			td5 = element("td");
+    			div2 = element("div");
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].c();
+    			}
+
+    			t10 = space();
+    			td6 = element("td");
+    			div3 = element("div");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t11 = space();
+    			td7 = element("td");
+    			t12 = text$1(t12_value);
+    			t13 = space();
+    			attr_dev(td0, "class", "name svelte-1y7uedn");
+    			add_location(td0, file$k, 40, 12, 1917);
+    			attr_dev(td1, "class", "leads svelte-1y7uedn");
+    			add_location(td1, file$k, 41, 12, 1962);
+    			attr_dev(td2, "class", "status svelte-1y7uedn");
+    			add_location(td2, file$k, 42, 12, 2018);
+    			attr_dev(path, "d", path_d_value = mapIcons[/*scale*/ ctx[7]]);
+    			add_location(path, file$k, 46, 24, 2236);
+    			attr_dev(svg, "class", "icon");
+    			attr_dev(svg, "viewBox", "-50 -50 100 100");
+    			attr_dev(svg, "width", "80%");
+    			add_location(svg, file$k, 45, 20, 2154);
+    			attr_dev(div0, "class", "icon-label svelte-1y7uedn");
+    			add_location(div0, file$k, 48, 20, 2313);
+    			attr_dev(div1, "class", "icon-container svelte-1y7uedn");
+    			add_location(div1, file$k, 44, 16, 2104);
+    			attr_dev(td3, "class", "scale svelte-1y7uedn");
+    			add_location(td3, file$k, 43, 12, 2067);
+    			attr_dev(td4, "class", "type svelte-1y7uedn");
+    			add_location(td4, file$k, 51, 12, 2411);
+    			attr_dev(div2, "class", "icon-cell-container svelte-1y7uedn");
+    			add_location(div2, file$k, 53, 16, 2496);
+    			attr_dev(td5, "class", "focusAreas svelte-1y7uedn");
+    			add_location(td5, file$k, 52, 12, 2454);
+    			attr_dev(div3, "class", "icon-cell-container svelte-1y7uedn");
+    			add_location(div3, file$k, 65, 16, 3020);
+    			attr_dev(td6, "class", "hazards svelte-1y7uedn");
+    			add_location(td6, file$k, 64, 12, 2981);
+    			attr_dev(td7, "class", "assessment svelte-1y7uedn");
+    			add_location(td7, file$k, 76, 12, 3504);
+    			attr_dev(tr, "class", "action-row svelte-1y7uedn");
+    			add_location(tr, file$k, 39, 8, 1847);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    			append_dev(td3, div1);
+    			append_dev(div1, svg);
+    			append_dev(svg, path);
+    			append_dev(div1, t6);
+    			append_dev(div1, div0);
+    			div0.innerHTML = raw_value;
+    			append_dev(tr, t7);
+    			append_dev(tr, td4);
+    			append_dev(td4, t8);
+    			append_dev(tr, t9);
+    			append_dev(tr, td5);
+    			append_dev(td5, div2);
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].m(div2, null);
+    			}
+
+    			append_dev(tr, t10);
+    			append_dev(tr, td6);
+    			append_dev(td6, div3);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(div3, null);
+    			}
+
+    			append_dev(tr, t11);
+    			append_dev(tr, td7);
+    			append_dev(td7, t12);
+    			append_dev(tr, t13);
+
+    			if (!mounted) {
+    				dispose = listen_dev(tr, "click", click_handler, false, false, false);
+    				mounted = true;
+    			}
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*$data*/ 1 && t0_value !== (t0_value = /*d*/ ctx[4].Name + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$data*/ 1 && t2_value !== (t2_value = /*leads*/ ctx[5].join(', ') + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$data*/ 1 && t4_value !== (t4_value = /*d*/ ctx[4].Status + "")) set_data_dev(t4, t4_value);
+
+    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = mapIcons[/*scale*/ ctx[7]])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*scale*/ ctx[7] + "")) div0.innerHTML = raw_value;			if (dirty & /*$data*/ 1 && t8_value !== (t8_value = /*type*/ ctx[6] + "")) set_data_dev(t8, t8_value);
+
+    			if (dirty & /*$data, icons, slugify*/ 1) {
+    				each_value_2 = /*focusAreas*/ ctx[8];
+    				validate_each_argument(each_value_2);
+    				let i;
+
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2$1(ctx, each_value_2, i);
+
+    					if (each_blocks_1[i]) {
+    						each_blocks_1[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_1[i] = create_each_block_2$1(child_ctx);
+    						each_blocks_1[i].c();
+    						each_blocks_1[i].m(div2, null);
+    					}
+    				}
+
+    				for (; i < each_blocks_1.length; i += 1) {
+    					each_blocks_1[i].d(1);
+    				}
+
+    				each_blocks_1.length = each_value_2.length;
+    			}
+
+    			if (dirty & /*$data, icons, slugify*/ 1) {
+    				each_value_1 = /*hazards*/ ctx[9];
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$5(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1$5(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(div3, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+
+    			if (dirty & /*$data*/ 1 && t12_value !== (t12_value = /*tier*/ ctx[10] + "")) set_data_dev(t12, t12_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    			destroy_each(each_blocks_1, detaching);
+    			destroy_each(each_blocks, detaching);
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$c.name,
+    		type: "each",
+    		source: "(29:4) {#each $data.actions as d, i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$k(ctx) {
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t1;
+    	let th1;
+    	let t3;
+    	let th2;
+    	let t5;
+    	let th3;
+    	let t7;
+    	let th4;
+    	let t9;
+    	let th5;
+    	let t11;
+    	let th6;
+    	let t13;
+    	let th7;
+    	let t15;
+    	let each_value = /*$data*/ ctx[0].actions;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$c(get_each_context$c(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Action name";
+    			t1 = space();
+    			th1 = element("th");
+    			th1.textContent = "Lead(s)";
+    			t3 = space();
+    			th2 = element("th");
+    			th2.textContent = "Status";
+    			t5 = space();
+    			th3 = element("th");
+    			th3.textContent = "Scale";
+    			t7 = space();
+    			th4 = element("th");
+    			th4.textContent = "Type";
+    			t9 = space();
+    			th5 = element("th");
+    			th5.textContent = "Focus areas";
+    			t11 = space();
+    			th6 = element("th");
+    			th6.textContent = "Hazards";
+    			t13 = space();
+    			th7 = element("th");
+    			th7.textContent = "Assessment";
+    			t15 = space();
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(th0, "class", "name svelte-1y7uedn");
+    			add_location(th0, file$k, 17, 12, 485);
+    			attr_dev(th1, "class", "leads svelte-1y7uedn");
+    			add_location(th1, file$k, 18, 12, 533);
+    			attr_dev(th2, "class", "status svelte-1y7uedn");
+    			add_location(th2, file$k, 19, 12, 578);
+    			attr_dev(th3, "class", "scale svelte-1y7uedn");
+    			add_location(th3, file$k, 20, 12, 623);
+    			attr_dev(th4, "class", "type svelte-1y7uedn");
+    			add_location(th4, file$k, 21, 12, 666);
+    			attr_dev(th5, "class", "focusAreas svelte-1y7uedn");
+    			add_location(th5, file$k, 22, 12, 707);
+    			attr_dev(th6, "class", "hazards svelte-1y7uedn");
+    			add_location(th6, file$k, 23, 12, 761);
+    			attr_dev(th7, "class", "assessment svelte-1y7uedn");
+    			add_location(th7, file$k, 24, 12, 808);
+    			attr_dev(tr, "class", "svelte-1y7uedn");
+    			add_location(tr, file$k, 16, 8, 468);
+    			attr_dev(thead, "class", "svelte-1y7uedn");
+    			add_location(thead, file$k, 15, 4, 452);
+    			attr_dev(table, "class", "svelte-1y7uedn");
+    			add_location(table, file$k, 14, 0, 440);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t1);
+    			append_dev(tr, th1);
+    			append_dev(tr, t3);
+    			append_dev(tr, th2);
+    			append_dev(tr, t5);
+    			append_dev(tr, th3);
+    			append_dev(tr, t7);
+    			append_dev(tr, th4);
+    			append_dev(tr, t9);
+    			append_dev(tr, th5);
+    			append_dev(tr, t11);
+    			append_dev(tr, th6);
+    			append_dev(tr, t13);
+    			append_dev(tr, th7);
+    			append_dev(table, t15);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(table, null);
+    			}
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*openPostcard, $data, icons, slugify, mapIcons*/ 3) {
+    				each_value = /*$data*/ ctx[0].actions;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$c(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$c(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(table, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(table);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$k.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$k($$self, $$props, $$invalidate) {
+    	let $ui;
+    	let $data;
+    	validate_store(ui, 'ui');
+    	component_subscribe($$self, ui, $$value => $$invalidate(3, $ui = $$value));
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('ActionTable', slots, []);
+
+    	function openPostcard(actionData) {
+    		set_store_value(ui, $ui.state.postcards.view = 'postcard', $ui);
+    		set_store_value(ui, $ui.state.postcards.selectedAction = actionData, $ui);
+    	}
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ActionTable> was created with unknown prop '${key}'`);
+    	});
+
+    	const click_handler = d => openPostcard(d);
+
+    	$$self.$capture_state = () => ({
+    		ui,
+    		data,
+    		icons,
+    		mapIcons,
+    		slugify,
+    		fade,
+    		openPostcard,
+    		$ui,
+    		$data
+    	});
+
+    	return [$data, openPostcard, click_handler];
+    }
+
+    class ActionTable extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$k, create_fragment$k, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "ActionTable",
+    			options,
+    			id: create_fragment$k.name
+    		});
+    	}
+    }
+
+    /* src/pages/Postcards.svelte generated by Svelte v3.48.0 */
+    const file$j = "src/pages/Postcards.svelte";
+
+    function get_each_context$b(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[4] = list[i];
+    	return child_ctx;
+    }
+
+    // (16:0) {:else}
+    function create_else_block$1(ctx) {
+    	let div5;
+    	let div4;
+    	let div1;
+    	let div0;
+    	let logo;
+    	let t0;
+    	let h1;
+    	let span0;
+    	let br0;
+    	let t2;
+    	let br1;
+    	let t3;
+    	let span1;
+    	let t5;
+    	let div2;
+    	let p;
+    	let t6;
+    	let em;
+    	let t8;
+    	let t9;
+    	let div3;
+    	let ul;
+    	let li0;
+    	let t11;
+    	let li1;
+    	let div5_transition;
+    	let t13;
+    	let div14;
+    	let section;
+    	let div13;
+    	let h2;
+    	let t15;
+    	let div9;
+    	let div6;
+    	let t17;
+    	let div7;
+    	let t19;
+    	let div8;
+    	let t21;
+    	let div12;
+    	let h3;
+    	let t23;
+    	let div10;
+    	let t25;
+    	let div11;
+    	let t27;
+    	let current_block_type_index;
+    	let if_block;
+    	let div14_transition;
+    	let current;
+    	let mounted;
+    	let dispose;
+    	logo = new Logo({ $$inline: true });
+    	const if_block_creators = [create_if_block_1$5, create_else_block_1];
+    	const if_blocks = [];
+
+    	function select_block_type_1(ctx, dirty) {
+    		if (/*$ui*/ ctx[0].state.postcards.view === 'all') return 0;
+    		return 1;
+    	}
+
+    	current_block_type_index = select_block_type_1(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+    	const block = {
+    		c: function create() {
+    			div5 = element("div");
+    			div4 = element("div");
+    			div1 = element("div");
+    			div0 = element("div");
+    			create_component(logo.$$.fragment);
+    			t0 = space();
+    			h1 = element("h1");
+    			span0 = element("span");
+    			span0.textContent = "hepburn";
+    			br0 = element("br");
+    			t2 = text$1("\n                adaptation action");
+    			br1 = element("br");
+    			t3 = space();
+    			span1 = element("span");
+    			span1.textContent = "postcards";
+    			t5 = space();
+    			div2 = element("div");
+    			p = element("p");
+    			t6 = text$1("This section provides access to a set of summary 'postcards' for ");
+    			em = element("em");
+    			em.textContent = "every";
+    			t8 = text$1(" adaptation considered in this research. These postcards provide descriptions and details about each action; and can be added to via the Hepburn Z-NET adaptation action database.");
+    			t9 = space();
+    			div3 = element("div");
+    			ul = element("ul");
+    			li0 = element("li");
+    			li0.textContent = "Action menu";
+    			t11 = space();
+    			li1 = element("li");
+    			li1.textContent = "Postcard gallery";
+    			t13 = space();
+    			div14 = element("div");
+    			section = element("section");
+    			div13 = element("div");
+    			h2 = element("h2");
+    			h2.textContent = "Options for viewing creating adaptation action postcards";
+    			t15 = space();
+    			div9 = element("div");
+    			div6 = element("div");
+    			div6.textContent = "Select an action from a list";
+    			t17 = space();
+    			div7 = element("div");
+    			div7.textContent = "Select an action from table";
+    			t19 = space();
+    			div8 = element("div");
+    			div8.textContent = "Select an action from table";
+    			t21 = space();
+    			div12 = element("div");
+    			h3 = element("h3");
+    			h3.textContent = "Postcard styling options";
+    			t23 = space();
+    			div10 = element("div");
+    			div10.textContent = "Color palette options";
+    			t25 = space();
+    			div11 = element("div");
+    			div11.textContent = "Image style options";
+    			t27 = space();
+    			if_block.c();
+    			attr_dev(div0, "class", "hero-logo__wrapper svelte-2cdr40");
+    			add_location(div0, file$j, 21, 16, 854);
+    			attr_dev(div1, "class", "hero-logo svelte-2cdr40");
+    			add_location(div1, file$j, 20, 12, 814);
+    			attr_dev(span0, "class", "title--mute svelte-2cdr40");
+    			add_location(span0, file$j, 24, 16, 980);
+    			add_location(br0, file$j, 24, 58, 1022);
+    			add_location(br1, file$j, 25, 33, 1061);
+    			attr_dev(span1, "class", "title--highlight svelte-2cdr40");
+    			add_location(span1, file$j, 26, 16, 1083);
+    			attr_dev(h1, "class", "hero-content__title svelte-2cdr40");
+    			add_location(h1, file$j, 23, 12, 931);
+    			add_location(em, file$j, 29, 84, 1280);
+    			add_location(p, file$j, 29, 16, 1212);
+    			attr_dev(div2, "class", "hero-content__text svelte-2cdr40");
+    			add_location(div2, file$j, 28, 12, 1163);
+    			attr_dev(li0, "class", "select__item svelte-2cdr40");
+    			add_location(li0, file$j, 34, 20, 1589);
+    			attr_dev(li1, "class", "select__item svelte-2cdr40");
+    			add_location(li1, file$j, 35, 20, 1674);
+    			add_location(ul, file$j, 33, 16, 1564);
+    			attr_dev(div3, "class", "select svelte-2cdr40");
+    			add_location(div3, file$j, 32, 12, 1526);
+    			attr_dev(div4, "class", "hero-content svelte-2cdr40");
+    			add_location(div4, file$j, 18, 8, 736);
+    			attr_dev(div5, "class", "hero-wrapper svelte-2cdr40");
+    			add_location(div5, file$j, 17, 4, 683);
+    			add_location(h2, file$j, 45, 16, 1988);
+    			add_location(div6, file$j, 47, 20, 2096);
+    			add_location(div7, file$j, 48, 20, 2156);
+    			add_location(div8, file$j, 49, 20, 2215);
+    			add_location(div9, file$j, 46, 16, 2070);
+    			add_location(h3, file$j, 52, 20, 2319);
+    			add_location(div10, file$j, 53, 20, 2373);
+    			add_location(div11, file$j, 54, 20, 2426);
+    			add_location(div12, file$j, 51, 16, 2293);
+    			add_location(div13, file$j, 44, 12, 1966);
+    			attr_dev(section, "class", "option-container col-1-2 svelte-2cdr40");
+    			add_location(section, file$j, 43, 8, 1909);
+    			attr_dev(div14, "class", "content-wrapper svelte-2cdr40");
+    			add_location(div14, file$j, 42, 4, 1853);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div5, anchor);
+    			append_dev(div5, div4);
+    			append_dev(div4, div1);
+    			append_dev(div1, div0);
+    			mount_component(logo, div0, null);
+    			append_dev(div4, t0);
+    			append_dev(div4, h1);
+    			append_dev(h1, span0);
+    			append_dev(h1, br0);
+    			append_dev(h1, t2);
+    			append_dev(h1, br1);
+    			append_dev(h1, t3);
+    			append_dev(h1, span1);
+    			append_dev(div4, t5);
+    			append_dev(div4, div2);
+    			append_dev(div2, p);
+    			append_dev(p, t6);
+    			append_dev(p, em);
+    			append_dev(p, t8);
+    			append_dev(div4, t9);
+    			append_dev(div4, div3);
+    			append_dev(div3, ul);
+    			append_dev(ul, li0);
+    			append_dev(ul, t11);
+    			append_dev(ul, li1);
+    			insert_dev(target, t13, anchor);
+    			insert_dev(target, div14, anchor);
+    			append_dev(div14, section);
+    			append_dev(section, div13);
+    			append_dev(div13, h2);
+    			append_dev(div13, t15);
+    			append_dev(div13, div9);
+    			append_dev(div9, div6);
+    			append_dev(div9, t17);
+    			append_dev(div9, div7);
+    			append_dev(div9, t19);
+    			append_dev(div9, div8);
+    			append_dev(div13, t21);
+    			append_dev(div13, div12);
+    			append_dev(div12, h3);
+    			append_dev(div12, t23);
+    			append_dev(div12, div10);
+    			append_dev(div12, t25);
+    			append_dev(div12, div11);
+    			append_dev(div14, t27);
+    			if_blocks[current_block_type_index].m(div14, null);
+    			current = true;
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(li0, "click", /*showTable*/ ctx[2], false, false, false),
+    					listen_dev(li1, "click", /*showPostcards*/ ctx[3], false, false, false)
+    				];
+
+    				mounted = true;
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			let previous_block_index = current_block_type_index;
+    			current_block_type_index = select_block_type_1(ctx);
+
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
+    				group_outros();
+
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+
+    				check_outros();
+    				if_block = if_blocks[current_block_type_index];
+
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
+    				} else {
+    					if_block.p(ctx, dirty);
+    				}
+
+    				transition_in(if_block, 1);
+    				if_block.m(div14, null);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(logo.$$.fragment, local);
+
+    			add_render_callback(() => {
+    				if (!div5_transition) div5_transition = create_bidirectional_transition(div5, fade, {}, true);
+    				div5_transition.run(1);
+    			});
+
+    			transition_in(if_block);
+
+    			add_render_callback(() => {
+    				if (!div14_transition) div14_transition = create_bidirectional_transition(div14, fade, {}, true);
+    				div14_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(logo.$$.fragment, local);
+    			if (!div5_transition) div5_transition = create_bidirectional_transition(div5, fade, {}, false);
+    			div5_transition.run(0);
+    			transition_out(if_block);
+    			if (!div14_transition) div14_transition = create_bidirectional_transition(div14, fade, {}, false);
+    			div14_transition.run(0);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div5);
+    			destroy_component(logo);
+    			if (detaching && div5_transition) div5_transition.end();
+    			if (detaching) detach_dev(t13);
+    			if (detaching) detach_dev(div14);
+    			if_blocks[current_block_type_index].d();
+    			if (detaching && div14_transition) div14_transition.end();
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$1.name,
+    		type: "else",
+    		source: "(16:0) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (14:0) {#if $ui.state.postcards.view === 'postcard'}
+    function create_if_block$7(ctx) {
     	let postcard;
     	let current;
 
     	postcard = new Postcard({
-    			props: { actionData: /*action*/ ctx[1] },
+    			props: {
+    				actionData: /*$ui*/ ctx[0].state.postcards.selectedAction
+    			},
     			$$inline: true
     		});
 
@@ -35959,7 +36568,7 @@ var app = (function (exports) {
     		},
     		p: function update(ctx, dirty) {
     			const postcard_changes = {};
-    			if (dirty & /*$data*/ 1) postcard_changes.actionData = /*action*/ ctx[1];
+    			if (dirty & /*$ui*/ 1) postcard_changes.actionData = /*$ui*/ ctx[0].state.postcards.selectedAction;
     			postcard.$set(postcard_changes);
     		},
     		i: function intro(local) {
@@ -35978,16 +36587,2947 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$c.name,
-    		type: "each",
-    		source: "(55:8) {#each $data.actions as action }",
+    		id: create_if_block$7.name,
+    		type: "if",
+    		source: "(14:0) {#if $ui.state.postcards.view === 'postcard'}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$k(ctx) {
+    // (66:8) {:else}
+    function create_else_block_1(ctx) {
+    	let section;
+    	let h2;
+    	let t1;
+    	let p;
+    	let em;
+    	let t3;
+    	let actiontable;
+    	let section_transition;
+    	let current;
+    	actiontable = new ActionTable({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			section = element("section");
+    			h2 = element("h2");
+    			h2.textContent = "Table of adaptation actions";
+    			t1 = space();
+    			p = element("p");
+    			em = element("em");
+    			em.textContent = "Tap on any action to open its summary postcard";
+    			t3 = space();
+    			create_component(actiontable.$$.fragment);
+    			add_location(h2, file$j, 67, 12, 2848);
+    			add_location(em, file$j, 68, 15, 2901);
+    			add_location(p, file$j, 68, 12, 2898);
+    			attr_dev(section, "class", "table-container svelte-2cdr40");
+    			add_location(section, file$j, 66, 8, 2784);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, section, anchor);
+    			append_dev(section, h2);
+    			append_dev(section, t1);
+    			append_dev(section, p);
+    			append_dev(p, em);
+    			append_dev(section, t3);
+    			mount_component(actiontable, section, null);
+    			current = true;
+    		},
+    		p: noop$4,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(actiontable.$$.fragment, local);
+
+    			add_render_callback(() => {
+    				if (!section_transition) section_transition = create_bidirectional_transition(section, fade, {}, true);
+    				section_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(actiontable.$$.fragment, local);
+    			if (!section_transition) section_transition = create_bidirectional_transition(section, fade, {}, false);
+    			section_transition.run(0);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(section);
+    			destroy_component(actiontable);
+    			if (detaching && section_transition) section_transition.end();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block_1.name,
+    		type: "else",
+    		source: "(66:8) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (60:8) {#if $ui.state.postcards.view === 'all'}
+    function create_if_block_1$5(ctx) {
+    	let section;
+    	let section_transition;
+    	let current;
+    	let each_value = /*$data*/ ctx[1].actions;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$b(get_each_context$b(ctx, each_value, i));
+    	}
+
+    	const out = i => transition_out(each_blocks[i], 1, 1, () => {
+    		each_blocks[i] = null;
+    	});
+
+    	const block = {
+    		c: function create() {
+    			section = element("section");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(section, "class", "postcards-container");
+    			add_location(section, file$j, 60, 8, 2576);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, section, anchor);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(section, null);
+    			}
+
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 2) {
+    				each_value = /*$data*/ ctx[1].actions;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$b(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    						transition_in(each_blocks[i], 1);
+    					} else {
+    						each_blocks[i] = create_each_block$b(child_ctx);
+    						each_blocks[i].c();
+    						transition_in(each_blocks[i], 1);
+    						each_blocks[i].m(section, null);
+    					}
+    				}
+
+    				group_outros();
+
+    				for (i = each_value.length; i < each_blocks.length; i += 1) {
+    					out(i);
+    				}
+
+    				check_outros();
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+
+    			for (let i = 0; i < each_value.length; i += 1) {
+    				transition_in(each_blocks[i]);
+    			}
+
+    			add_render_callback(() => {
+    				if (!section_transition) section_transition = create_bidirectional_transition(section, fade, {}, true);
+    				section_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			each_blocks = each_blocks.filter(Boolean);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				transition_out(each_blocks[i]);
+    			}
+
+    			if (!section_transition) section_transition = create_bidirectional_transition(section, fade, {}, false);
+    			section_transition.run(0);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(section);
+    			destroy_each(each_blocks, detaching);
+    			if (detaching && section_transition) section_transition.end();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$5.name,
+    		type: "if",
+    		source: "(60:8) {#if $ui.state.postcards.view === 'all'}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (62:12) {#each $data.actions as action }
+    function create_each_block$b(ctx) {
+    	let postcard;
+    	let current;
+
+    	postcard = new Postcard({
+    			props: { actionData: /*action*/ ctx[4] },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			create_component(postcard.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(postcard, target, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const postcard_changes = {};
+    			if (dirty & /*$data*/ 2) postcard_changes.actionData = /*action*/ ctx[4];
+    			postcard.$set(postcard_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(postcard.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(postcard.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(postcard, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$b.name,
+    		type: "each",
+    		source: "(62:12) {#each $data.actions as action }",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$j(ctx) {
+    	let current_block_type_index;
+    	let if_block;
+    	let if_block_anchor;
+    	let current;
+    	const if_block_creators = [create_if_block$7, create_else_block$1];
+    	const if_blocks = [];
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*$ui*/ ctx[0].state.postcards.view === 'postcard') return 0;
+    		return 1;
+    	}
+
+    	current_block_type_index = select_block_type(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+    	const block = {
+    		c: function create() {
+    			if_block.c();
+    			if_block_anchor = empty$3();
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			if_blocks[current_block_type_index].m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			let previous_block_index = current_block_type_index;
+    			current_block_type_index = select_block_type(ctx);
+
+    			if (current_block_type_index === previous_block_index) {
+    				if_blocks[current_block_type_index].p(ctx, dirty);
+    			} else {
+    				group_outros();
+
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+
+    				check_outros();
+    				if_block = if_blocks[current_block_type_index];
+
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
+    				} else {
+    					if_block.p(ctx, dirty);
+    				}
+
+    				transition_in(if_block, 1);
+    				if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(if_block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(if_block);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if_blocks[current_block_type_index].d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$j.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$j($$self, $$props, $$invalidate) {
+    	let $ui;
+    	let $data;
+    	validate_store(ui, 'ui');
+    	component_subscribe($$self, ui, $$value => $$invalidate(0, $ui = $$value));
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Postcards', slots, []);
+    	const showTable = () => set_store_value(ui, $ui.state.postcards.view = 'table', $ui);
+    	const showPostcards = () => set_store_value(ui, $ui.state.postcards.view = 'all-postcards', $ui);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Postcards> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		Logo,
+    		Postcard,
+    		ActionTable,
+    		data,
+    		ui,
+    		showTable,
+    		showPostcards,
+    		$ui,
+    		$data
+    	});
+
+    	return [$ui, $data, showTable, showPostcards];
+    }
+
+    class Postcards extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$j, create_fragment$j, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Postcards",
+    			options,
+    			id: create_fragment$j.name
+    		});
+    	}
+    }
+
+    /* src/components/byPage/actions/vis/Type.svelte generated by Svelte v3.48.0 */
+    const file$i = "src/components/byPage/actions/vis/Type.svelte";
+
+    function create_fragment$i(ctx) {
+    	let g7;
+    	let g2;
+    	let g0;
+    	let text0;
+    	let tspan0;
+    	let t0;
+    	let t1;
+    	let text1;
+    	let t2;
+    	let g1;
+    	let text2;
+    	let tspan1;
+    	let t3;
+    	let t4;
+    	let text3;
+    	let t5;
+    	let g6;
+    	let g3;
+    	let g4;
+    	let g5;
+    	let g7_intro;
+
+    	const block = {
+    		c: function create() {
+    			g7 = svg_element("g");
+    			g2 = svg_element("g");
+    			g0 = svg_element("g");
+    			text0 = svg_element("text");
+    			tspan0 = svg_element("tspan");
+    			t0 = text$1("More");
+    			t1 = text$1(" Abstract");
+    			text1 = svg_element("text");
+    			t2 = text$1("Builds capacity");
+    			g1 = svg_element("g");
+    			text2 = svg_element("text");
+    			tspan1 = svg_element("tspan");
+    			t3 = text$1("More");
+    			t4 = text$1(" Concrete");
+    			text3 = svg_element("text");
+    			t5 = text$1("Responds to risk");
+    			g6 = svg_element("g");
+    			g3 = svg_element("g");
+    			g4 = svg_element("g");
+    			g5 = svg_element("g");
+    			attr_dev(tspan0, "class", "svelte-1c3fmty");
+    			toggle_class(tspan0, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
+    			add_location(tspan0, file$i, 83, 98, 4216);
+    			attr_dev(text0, "class", "spectrum-label svelte-1c3fmty");
+    			toggle_class(text0, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			add_location(text0, file$i, 83, 16, 4134);
+    			attr_dev(text1, "class", "spectrum-sub-label svelte-1c3fmty");
+    			attr_dev(text1, "dy", "35");
+    			toggle_class(text1, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			add_location(text1, file$i, 84, 16, 4316);
+
+    			set_style(g0, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    			? 0
+    			: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    			? /*dims*/ ctx[0].height * 0.05
+    			: /*dims*/ ctx[0].height * 0.025) + "px)");
+
+    			add_location(g0, file$i, 82, 12, 3948);
+    			attr_dev(tspan1, "class", "svelte-1c3fmty");
+    			toggle_class(tspan1, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
+    			add_location(tspan1, file$i, 87, 98, 4730);
+    			attr_dev(text2, "class", "spectrum-label svelte-1c3fmty");
+    			toggle_class(text2, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			add_location(text2, file$i, 87, 16, 4648);
+    			attr_dev(text3, "class", "spectrum-sub-label svelte-1c3fmty");
+    			attr_dev(text3, "dy", "35");
+    			toggle_class(text3, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			add_location(text3, file$i, 88, 16, 4830);
+
+    			set_style(g1, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    			? 0
+    			: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    			? /*dims*/ ctx[0].height * 0.65
+    			: /*dims*/ ctx[0].height * 0.85) + "px)");
+
+    			add_location(g1, file$i, 86, 12, 4463);
+    			attr_dev(g2, "class", "spectrum-group svelte-1c3fmty");
+    			add_location(g2, file$i, 81, 8, 3907);
+    			attr_dev(g3, "class", "connector-container");
+    			add_location(g3, file$i, 92, 12, 5130);
+    			attr_dev(g4, "class", "action-type-node-container");
+    			add_location(g4, file$i, 93, 12, 5180);
+    			attr_dev(g5, "class", "outcomes-label-container");
+    			add_location(g5, file$i, 94, 12, 5237);
+    			attr_dev(g6, "class", "flow-diagram svelte-1c3fmty");
+    			set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, 0px)");
+    			toggle_class(g6, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			add_location(g6, file$i, 91, 8, 4987);
+    			attr_dev(g7, "id", "type-vis-container");
+    			add_location(g7, file$i, 79, 0, 3774);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g7, anchor);
+    			append_dev(g7, g2);
+    			append_dev(g2, g0);
+    			append_dev(g0, text0);
+    			append_dev(text0, tspan0);
+    			append_dev(tspan0, t0);
+    			append_dev(text0, t1);
+    			append_dev(g0, text1);
+    			append_dev(text1, t2);
+    			append_dev(g2, g1);
+    			append_dev(g1, text2);
+    			append_dev(text2, tspan1);
+    			append_dev(tspan1, t3);
+    			append_dev(text2, t4);
+    			append_dev(g1, text3);
+    			append_dev(text3, t5);
+    			append_dev(g7, g6);
+    			append_dev(g6, g3);
+    			append_dev(g6, g4);
+    			append_dev(g6, g5);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(tspan0, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(text0, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(text1, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			}
+
+    			if (dirty & /*$ui, dims*/ 3) {
+    				set_style(g0, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    				? 0
+    				: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    				? /*dims*/ ctx[0].height * 0.05
+    				: /*dims*/ ctx[0].height * 0.025) + "px)");
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(tspan1, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(text2, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(text3, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			}
+
+    			if (dirty & /*$ui, dims*/ 3) {
+    				set_style(g1, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    				? 0
+    				: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
+    				? /*dims*/ ctx[0].height * 0.65
+    				: /*dims*/ ctx[0].height * 0.85) + "px)");
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, 0px)");
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(g6, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 3);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (!g7_intro) {
+    				add_render_callback(() => {
+    					g7_intro = create_in_transition(g7, fade, {});
+    					g7_intro.start();
+    				});
+    			}
+    		},
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g7);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$i.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$i($$self, $$props, $$invalidate) {
+    	let $data;
+    	let $ui;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
+    	validate_store(ui, 'ui');
+    	component_subscribe($$self, ui, $$value => $$invalidate(1, $ui = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Type', slots, []);
+    	let { dims = { width: 1600, height: 1600 } } = $$props;
+
+    	let { typeData = {
+    		nodes: $data.schema.actionTypeNodes.data,
+    		links: $data.schema.actionTypeLinks.data
+    	} } = $$props;
+
+    	// Drawn on mount to allow for calling of text wrapping
+    	onMount(() => {
+    		const connectors = select('.connector-container'),
+    			actionTypeNodes = select('.action-type-node-container');
+    			select('.outcomes-label-container');
+
+    		// Action type nodes
+    		actionTypeNodes.selectAll('.action-type-node').data(typeData.nodes).join(enter => {
+    			const group = enter.append('g').attr("class", d => slugify(d.Class)).style('transform', d => `translate( ${d.xPos * 0.5 * dims.width}px, ${d.yPos * dims.height}px`);
+    			const bg = group.append('rect').style('fill', 'var(--bg-color)').style('stroke', d => d.Class === 'foundation' ? '#000' : 'none').style('stroke-width', '3px').style('border-radius', '3px').style('rx', '5px').style('ry', '5px');
+
+    			group.append('path').classed('flow', true).style('transform', d => d.nodeCurve !== "invert"
+    			? `translate(0px, ${d.curveYoffset}px)`
+    			: `translate(0px, ${d.curveYoffset - 20}px) scaleY(-1)`).attr('d', d => d.Class === 'type'
+    			? "M -100 10 C -30 50, 30 50, 100 10"
+    			: null).classed('remove', d => d.Class !== 'type').style('fill', 'var(--bg-color');
+
+    			let text;
+    			text = group.append('text').classed(`action-node-label `, true).attr('x', 0).attr('y', 0).attr('dy', 0).text(d => d.Name).classed(d => d.Class, true).call(textWrap, dims.width * 0.2, 1.1, true);
+    			let box = text.node().getBBox();
+    			bg.attr('width', d => d.Class === 'foundation' ? box.width + 80 : 180);
+
+    			bg.attr('height', d => d.Class === 'foundation' || d.Class === 'response'
+    			? box.height + 50
+    			: 70);
+
+    			bg.attr('x', d => d.Class === 'foundation' ? -box.width * 0.5 - 40 : -90);
+
+    			bg.attr('y', d => d.Class === 'foundation' || d.Class === 'response'
+    			? -box.height * 0.5 - 30
+    			: -35);
+    		});
+
+    		// Links 
+    		for (const link of typeData.links) {
+    			const source = typeData.nodes.filter(e => e.Name === link._source.replaceAll('\"', ''))[0];
+    			const target = typeData.nodes.filter(e => e.Name === link._target.replaceAll('\"', ''))[0];
+
+    			connectors.append('path').classed('flow', true).attr('d', typeof link.midX !== 'undefined'
+    			? `M${source.xPos * 0.5 * dims.width}, ${source.yPos * dims.height} 
+                    L${link.midX * 0.5 * dims.width}, ${link.midY * dims.height} 
+                    L${target.xPos * 0.5 * dims.width}, ${target.yPos * dims.height}`
+    			: `M${source.xPos * 0.5 * dims.width}, ${source.yPos * dims.height} 
+                        L${target.xPos * 0.5 * dims.width}, ${target.yPos * dims.height}`);
+    		}
+    	});
+
+    	const writable_props = ['dims', 'typeData'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Type> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$$set = $$props => {
+    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
+    		if ('typeData' in $$props) $$invalidate(2, typeData = $$props.typeData);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		scale,
+    		onMount,
+    		d3,
+    		textWrap,
+    		slugify,
+    		ui,
+    		data,
+    		dims,
+    		typeData,
+    		$data,
+    		$ui
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
+    		if ('typeData' in $$props) $$invalidate(2, typeData = $$props.typeData);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [dims, $ui, typeData];
+    }
+
+    class Type extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$i, create_fragment$i, safe_not_equal, { dims: 0, typeData: 2 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Type",
+    			options,
+    			id: create_fragment$i.name
+    		});
+    	}
+
+    	get dims() {
+    		throw new Error("<Type>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set dims(value) {
+    		throw new Error("<Type>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get typeData() {
+    		throw new Error("<Type>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set typeData(value) {
+    		throw new Error("<Type>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/byPage/adaptation/vis/ClimateVariables.svelte generated by Svelte v3.48.0 */
+
+    const { Object: Object_1 } = globals;
+    const file$h = "src/components/byPage/adaptation/vis/ClimateVariables.svelte";
+
+    function get_each_context$a(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[6] = list[i];
+    	child_ctx[8] = i;
+    	return child_ctx;
+    }
+
+    function get_each_context_1$4(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[9] = list[i];
+    	child_ctx[8] = i;
+    	const constants_0 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable];
+    	child_ctx[10] = constants_0;
+    	const constants_1 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable];
+    	child_ctx[11] = constants_1;
+    	const constants_2 = /*$data*/ child_ctx[1].schema.climateVariables.data.filter(e => e.Variable === /*d*/ child_ctx[9].Variable)[0]["Change unit"];
+    	child_ctx[12] = constants_2;
+
+    	const constants_3 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable]
+    	? max$3([
+    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable].Upper["2090"],
+    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable].Upper["2090"]
+    		])
+    	: 0;
+
+    	child_ctx[13] = constants_3;
+
+    	const constants_4 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable]
+    	? min$2([
+    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable].Lower["2090"],
+    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable].Lower["2090"]
+    		])
+    	: 0;
+
+    	child_ctx[14] = constants_4;
+    	const constants_5 = /*getScaleY*/ child_ctx[4](/*d*/ child_ctx[9].Variable);
+    	child_ctx[15] = constants_5;
+    	return child_ctx;
+    }
+
+    function get_each_context_2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[17] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_3(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[20] = list[i];
+    	child_ctx[8] = i;
+    	return child_ctx;
+    }
+
+    function get_each_context_4(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[22] = list[i];
+    	const constants_0 = /*$data*/ child_ctx[1].schema.hazards.data.filter(d => d.recordID === /*recordID*/ child_ctx[22])[0].Hazard;
+    	child_ctx[23] = constants_0;
+
+    	const constants_1 = {
+    		x: /*dims*/ child_ctx[0].width * 0.67 - 50,
+    		y: /*dims*/ child_ctx[0].variableSpacing * /*i*/ child_ctx[8] + /*dims*/ child_ctx[0].height * 0.25
+    	};
+
+    	child_ctx[24] = constants_1;
+
+    	const constants_2 = {
+    		x: /*dims*/ child_ctx[0].width * 0.85,
+    		y: /*$data*/ child_ctx[1].schema.hazards.data.map(d => d.Hazard).indexOf(/*hazard*/ child_ctx[23]) / /*$data*/ child_ctx[1].schema.hazards.data.length * /*dims*/ child_ctx[0].height * 0.7 + /*dims*/ child_ctx[0].height * 0.3
+    	};
+
+    	child_ctx[25] = constants_2;
+    	return child_ctx;
+    }
+
+    // (129:16) {#if nodeObj["Linked hazards"] }
+    function create_if_block_2$4(ctx) {
+    	let each_1_anchor;
+    	let each_value_4 = /*nodeObj*/ ctx[20]["Linked hazards"];
+    	validate_each_argument(each_value_4);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_4.length; i += 1) {
+    		each_blocks[i] = create_each_block_4(get_each_context_4(ctx, each_value_4, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty$3();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*d3, dims, $data*/ 3) {
+    				each_value_4 = /*nodeObj*/ ctx[20]["Linked hazards"];
+    				validate_each_argument(each_value_4);
+    				let i;
+
+    				for (i = 0; i < each_value_4.length; i += 1) {
+    					const child_ctx = get_each_context_4(ctx, each_value_4, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_4(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_4.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_2$4.name,
+    		type: "if",
+    		source: "(129:16) {#if nodeObj[\\\"Linked hazards\\\"] }",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (130:20) {#each nodeObj["Linked hazards"] as recordID}
+    function create_each_block_4(ctx) {
+    	let path;
+    	let path_d_value;
+
+    	const block = {
+    		c: function create() {
+    			path = svg_element("path");
+    			attr_dev(path, "class", "gridline svelte-1joxjo2");
+
+    			attr_dev(path, "d", path_d_value = linkHorizontal()({
+    				source: [/*sourcePos*/ ctx[24].x, /*sourcePos*/ ctx[24].y],
+    				target: [/*targetPos*/ ctx[25].x, /*targetPos*/ ctx[25].y]
+    			}));
+
+    			add_location(path, file$h, 141, 24, 6804);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, path, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*dims, $data*/ 3 && path_d_value !== (path_d_value = linkHorizontal()({
+    				source: [/*sourcePos*/ ctx[24].x, /*sourcePos*/ ctx[24].y],
+    				target: [/*targetPos*/ ctx[25].x, /*targetPos*/ ctx[25].y]
+    			}))) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(path);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_4.name,
+    		type: "each",
+    		source: "(130:20) {#each nodeObj[\\\"Linked hazards\\\"] as recordID}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (128:12) {#each $data.schema.climateVariables.data as nodeObj, i }
+    function create_each_block_3(ctx) {
+    	let if_block_anchor;
+    	let if_block = /*nodeObj*/ ctx[20]["Linked hazards"] && create_if_block_2$4(ctx);
+
+    	const block = {
+    		c: function create() {
+    			if (if_block) if_block.c();
+    			if_block_anchor = empty$3();
+    		},
+    		m: function mount(target, anchor) {
+    			if (if_block) if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (/*nodeObj*/ ctx[20]["Linked hazards"]) {
+    				if (if_block) {
+    					if_block.p(ctx, dirty);
+    				} else {
+    					if_block = create_if_block_2$4(ctx);
+    					if_block.c();
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    				}
+    			} else if (if_block) {
+    				if_block.d(1);
+    				if_block = null;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (if_block) if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_3.name,
+    		type: "each",
+    		source: "(128:12) {#each $data.schema.climateVariables.data as nodeObj, i }",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (152:12) {#each [2019, 2030, 2050, 2070, 2090] as year}
+    function create_each_block_2(ctx) {
+    	let g;
+    	let path;
+    	let path_d_value;
+    	let text0;
+    	let text1;
+    	let text1_y_value;
+
+    	const block = {
+    		c: function create() {
+    			g = svg_element("g");
+    			path = svg_element("path");
+    			text0 = svg_element("text");
+    			text1 = svg_element("text");
+    			attr_dev(path, "class", "gridline time svelte-1joxjo2");
+    			attr_dev(path, "d", path_d_value = "M" + /*scaleX*/ ctx[3](/*year*/ ctx[17]) + ", " + (-/*chartDims*/ ctx[2].height - 10) + " V" + /*dims*/ ctx[0].height * 0.715);
+    			add_location(path, file$h, 153, 20, 7374);
+    			attr_dev(text0, "class", "label-year svelte-1joxjo2");
+    			attr_dev(text0, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
+    			attr_dev(text0, "y", -/*chartDims*/ ctx[2].height - 20);
+    			add_location(text0, file$h, 154, 20, 7498);
+    			attr_dev(text1, "class", "label-year svelte-1joxjo2");
+    			attr_dev(text1, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
+    			attr_dev(text1, "y", text1_y_value = /*dims*/ ctx[0].height * 0.715 + 15);
+    			add_location(text1, file$h, 155, 20, 7611);
+    			set_style(g, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
+    			add_location(g, file$h, 152, 16, 7266);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g, anchor);
+    			append_dev(g, path);
+    			append_dev(g, text0);
+    			text0.innerHTML = /*year*/ ctx[17];
+    			append_dev(g, text1);
+    			text1.innerHTML = /*year*/ ctx[17];
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*dims*/ 1 && path_d_value !== (path_d_value = "M" + /*scaleX*/ ctx[3](/*year*/ ctx[17]) + ", " + (-/*chartDims*/ ctx[2].height - 10) + " V" + /*dims*/ ctx[0].height * 0.715)) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*dims*/ 1 && text1_y_value !== (text1_y_value = /*dims*/ ctx[0].height * 0.715 + 15)) {
+    				attr_dev(text1, "y", text1_y_value);
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2.name,
+    		type: "each",
+    		source: "(152:12) {#each [2019, 2030, 2050, 2070, 2090] as year}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (179:32) {#if max > 0}
+    function create_if_block_1$4(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text$1("+");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$4.name,
+    		type: "if",
+    		source: "(179:32) {#if max > 0}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (182:32) {#if min > 0}
+    function create_if_block$6(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text$1("+");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$6.name,
+    		type: "if",
+    		source: "(182:32) {#if min > 0}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (161:12) {#each $data.schema.climateVariables.data as d, i}
+    function create_each_block_1$4(ctx) {
+    	let g2;
+    	let path0;
+    	let path0_d_value;
+    	let text0;
+    	let raw_value = /*d*/ ctx[9].Variable + "";
+    	let g1;
+    	let g0;
+    	let path1;
+    	let path1_d_value;
+    	let path2;
+    	let path2_d_value;
+    	let text1;
+    	let t0_value = /*max*/ ctx[13] + "";
+    	let t0;
+    	let t1_value = /*chartUnit*/ ctx[12] + "";
+    	let t1;
+    	let text2;
+    	let t2_value = /*min*/ ctx[14] + "";
+    	let t2;
+    	let t3_value = /*chartUnit*/ ctx[12] + "";
+    	let t3;
+    	let if_block0 = /*max*/ ctx[13] > 0 && create_if_block_1$4(ctx);
+    	let if_block1 = /*min*/ ctx[14] > 0 && create_if_block$6(ctx);
+
+    	const block = {
+    		c: function create() {
+    			g2 = svg_element("g");
+    			path0 = svg_element("path");
+    			text0 = svg_element("text");
+    			g1 = svg_element("g");
+    			g0 = svg_element("g");
+    			path1 = svg_element("path");
+    			path2 = svg_element("path");
+    			text1 = svg_element("text");
+    			if (if_block0) if_block0.c();
+    			t0 = text$1(t0_value);
+    			t1 = text$1(t1_value);
+    			text2 = svg_element("text");
+    			if (if_block1) if_block1.c();
+    			t2 = text$1(t2_value);
+    			t3 = text$1(t3_value);
+    			attr_dev(path0, "class", "gridline svelte-1joxjo2");
+    			attr_dev(path0, "d", path0_d_value = "M" + 50 + ", 0 H" + (/*dims*/ ctx[0].width * 0.67 - 50));
+    			add_location(path0, file$h, 169, 20, 8947);
+    			attr_dev(text0, "class", "variable-label svelte-1joxjo2");
+    			set_style(text0, "transform", "translate(" + 50 + "px, " + -10 + "px)");
+    			add_location(text0, file$h, 170, 20, 9036);
+    			attr_dev(path1, "class", "area-chart rcp-45 svelte-1joxjo2");
+    			attr_dev(path1, "d", path1_d_value = /*chartPath*/ ctx[5](/*chartData45*/ ctx[10], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
+    			add_location(path1, file$h, 175, 28, 9404);
+    			attr_dev(path2, "class", "area-chart rcp-85 svelte-1joxjo2");
+    			attr_dev(path2, "d", path2_d_value = /*chartPath*/ ctx[5](/*chartData85*/ ctx[11], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
+    			add_location(path2, file$h, 176, 28, 9519);
+    			attr_dev(text1, "class", "unit-label svelte-1joxjo2");
+    			set_style(text1, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*max*/ ctx[13]) + 6) + "px)");
+    			add_location(text1, file$h, 177, 28, 9634);
+    			attr_dev(text2, "class", "unit-label svelte-1joxjo2");
+    			set_style(text2, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*min*/ ctx[14]) + 6) + "px)");
+    			add_location(text2, file$h, 180, 28, 9871);
+    			set_style(g0, "transform", "translate(0px, " + -/*scaleY*/ ctx[15](0) + "px)");
+    			add_location(g0, file$h, 174, 24, 9320);
+    			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
+    			add_location(g1, file$h, 173, 20, 9207);
+    			set_style(g2, "transform", "translate(" + 0 + "px, " + /*dims*/ ctx[0].variableSpacing * /*i*/ ctx[8] + "px)");
+    			add_location(g2, file$h, 168, 16, 8855);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g2, anchor);
+    			append_dev(g2, path0);
+    			append_dev(g2, text0);
+    			text0.innerHTML = raw_value;
+    			append_dev(g2, g1);
+    			append_dev(g1, g0);
+    			append_dev(g0, path1);
+    			append_dev(g0, path2);
+    			append_dev(g0, text1);
+    			if (if_block0) if_block0.m(text1, null);
+    			append_dev(text1, t0);
+    			append_dev(text1, t1);
+    			append_dev(g0, text2);
+    			if (if_block1) if_block1.m(text2, null);
+    			append_dev(text2, t2);
+    			append_dev(text2, t3);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*dims*/ 1 && path0_d_value !== (path0_d_value = "M" + 50 + ", 0 H" + (/*dims*/ ctx[0].width * 0.67 - 50))) {
+    				attr_dev(path0, "d", path0_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 2 && raw_value !== (raw_value = /*d*/ ctx[9].Variable + "")) text0.innerHTML = raw_value;
+    			if (dirty & /*$data*/ 2 && path1_d_value !== (path1_d_value = /*chartPath*/ ctx[5](/*chartData45*/ ctx[10], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable))) {
+    				attr_dev(path1, "d", path1_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 2 && path2_d_value !== (path2_d_value = /*chartPath*/ ctx[5](/*chartData85*/ ctx[11], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable))) {
+    				attr_dev(path2, "d", path2_d_value);
+    			}
+
+    			if (/*max*/ ctx[13] > 0) {
+    				if (if_block0) ; else {
+    					if_block0 = create_if_block_1$4(ctx);
+    					if_block0.c();
+    					if_block0.m(text1, t0);
+    				}
+    			} else if (if_block0) {
+    				if_block0.d(1);
+    				if_block0 = null;
+    			}
+
+    			if (dirty & /*$data*/ 2 && t0_value !== (t0_value = /*max*/ ctx[13] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$data*/ 2 && t1_value !== (t1_value = /*chartUnit*/ ctx[12] + "")) set_data_dev(t1, t1_value);
+
+    			if (dirty & /*$data*/ 2) {
+    				set_style(text1, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*max*/ ctx[13]) + 6) + "px)");
+    			}
+
+    			if (/*min*/ ctx[14] > 0) {
+    				if (if_block1) ; else {
+    					if_block1 = create_if_block$6(ctx);
+    					if_block1.c();
+    					if_block1.m(text2, t2);
+    				}
+    			} else if (if_block1) {
+    				if_block1.d(1);
+    				if_block1 = null;
+    			}
+
+    			if (dirty & /*$data*/ 2 && t2_value !== (t2_value = /*min*/ ctx[14] + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$data*/ 2 && t3_value !== (t3_value = /*chartUnit*/ ctx[12] + "")) set_data_dev(t3, t3_value);
+
+    			if (dirty & /*$data*/ 2) {
+    				set_style(text2, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*min*/ ctx[14]) + 6) + "px)");
+    			}
+
+    			if (dirty & /*$data*/ 2) {
+    				set_style(g0, "transform", "translate(0px, " + -/*scaleY*/ ctx[15](0) + "px)");
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g2, "transform", "translate(" + 0 + "px, " + /*dims*/ ctx[0].variableSpacing * /*i*/ ctx[8] + "px)");
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g2);
+    			if (if_block0) if_block0.d();
+    			if (if_block1) if_block1.d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$4.name,
+    		type: "each",
+    		source: "(161:12) {#each $data.schema.climateVariables.data as d, i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (191:12) {#each $data.schema.hazards.data as obj , i}
+    function create_each_block$a(ctx) {
+    	let g;
+    	let path;
+    	let path_d_value;
+    	let text0;
+    	let raw0_value = /*obj*/ ctx[6].Hazard + "";
+    	let text1;
+    	let raw1_value = /*obj*/ ctx[6].Trend + "";
+
+    	const block = {
+    		c: function create() {
+    			g = svg_element("g");
+    			path = svg_element("path");
+    			text0 = svg_element("text");
+    			text1 = svg_element("text");
+    			attr_dev(path, "class", "hazard-icon svelte-1joxjo2");
+    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[6].Hazard)]);
+    			set_style(path, "transform", "translate(0px, -100px) scale(2)");
+    			add_location(path, file$h, 193, 16, 10488);
+    			attr_dev(text0, "class", "hazard-label svelte-1joxjo2");
+    			add_location(text0, file$h, 194, 16, 10618);
+    			attr_dev(text1, "class", "hazard-trend projection svelte-1joxjo2");
+    			attr_dev(text1, "y", "35");
+    			add_location(text1, file$h, 195, 16, 10689);
+    			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * 0.825 + "px, " + (/*i*/ ctx[8] / /*$data*/ ctx[1].schema.hazards.data.length * /*dims*/ ctx[0].height * 0.7 + /*dims*/ ctx[0].height * 0.3 + 20) + "px)");
+    			add_location(g, file$h, 192, 12, 10326);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g, anchor);
+    			append_dev(g, path);
+    			append_dev(g, text0);
+    			text0.innerHTML = raw0_value;
+    			append_dev(g, text1);
+    			text1.innerHTML = raw1_value;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 2 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[6].Hazard)])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*obj*/ ctx[6].Hazard + "")) text0.innerHTML = raw0_value;			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*obj*/ ctx[6].Trend + "")) text1.innerHTML = raw1_value;
+    			if (dirty & /*dims, $data*/ 3) {
+    				set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * 0.825 + "px, " + (/*i*/ ctx[8] / /*$data*/ ctx[1].schema.hazards.data.length * /*dims*/ ctx[0].height * 0.7 + /*dims*/ ctx[0].height * 0.3 + 20) + "px)");
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$a.name,
+    		type: "each",
+    		source: "(191:12) {#each $data.schema.hazards.data as obj , i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$h(ctx) {
+    	let figure;
+    	let svg;
+    	let defs;
+    	let linearGradient;
+    	let stop0;
+    	let stop1;
+    	let rect;
+    	let rect_width_value;
+    	let rect_height_value;
+    	let text0;
+    	let t0;
+    	let text0_x_value;
+    	let text0_y_value;
+    	let g3;
+    	let g0;
+    	let text1;
+    	let t1;
+    	let text2;
+    	let t2;
+    	let text3;
+    	let t3;
+    	let text4;
+    	let t4;
+    	let g1;
+    	let text5;
+    	let t5;
+    	let text6;
+    	let t6;
+    	let text7;
+    	let tspan0;
+    	let t7;
+    	let t8;
+    	let tspan1;
+    	let t9;
+    	let t10;
+    	let text8;
+    	let t11;
+    	let g2;
+    	let text9;
+    	let t12;
+    	let text10;
+    	let t13;
+    	let text11;
+    	let t14;
+    	let text12;
+    	let t15;
+    	let g4;
+    	let g6;
+    	let g5;
+    	let g7;
+    	let svg_viewBox_value;
+    	let each_value_3 = /*$data*/ ctx[1].schema.climateVariables.data;
+    	validate_each_argument(each_value_3);
+    	let each_blocks_3 = [];
+
+    	for (let i = 0; i < each_value_3.length; i += 1) {
+    		each_blocks_3[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
+    	}
+
+    	let each_value_2 = [2019, 2030, 2050, 2070, 2090];
+    	validate_each_argument(each_value_2);
+    	let each_blocks_2 = [];
+
+    	for (let i = 0; i < 5; i += 1) {
+    		each_blocks_2[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
+    	let each_value_1 = /*$data*/ ctx[1].schema.climateVariables.data;
+    	validate_each_argument(each_value_1);
+    	let each_blocks_1 = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks_1[i] = create_each_block_1$4(get_each_context_1$4(ctx, each_value_1, i));
+    	}
+
+    	let each_value = /*$data*/ ctx[1].schema.hazards.data;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$a(get_each_context$a(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			figure = element("figure");
+    			svg = svg_element("svg");
+    			defs = svg_element("defs");
+    			linearGradient = svg_element("linearGradient");
+    			stop0 = svg_element("stop");
+    			stop1 = svg_element("stop");
+    			rect = svg_element("rect");
+    			text0 = svg_element("text");
+    			t0 = text$1("Source: All projection data and variable definitions from CSIRO and the Victorian Government, 2019");
+    			g3 = svg_element("g");
+    			g0 = svg_element("g");
+    			text1 = svg_element("text");
+    			t1 = text$1("Climate variables");
+    			text2 = svg_element("text");
+    			t2 = text$1("Measures of the climate models used in");
+    			text3 = svg_element("text");
+    			t3 = text$1("the Victorian Climate Projections 2019");
+    			text4 = svg_element("text");
+    			t4 = text$1("for the Central Highlands region");
+    			g1 = svg_element("g");
+    			text5 = svg_element("text");
+    			t5 = text$1("Projections");
+    			text6 = svg_element("text");
+    			t6 = text$1("Range of projected change for the ");
+    			text7 = svg_element("text");
+    			tspan0 = svg_element("tspan");
+    			t7 = text$1("RCP 4.5");
+    			t8 = text$1(" and ");
+    			tspan1 = svg_element("tspan");
+    			t9 = text$1("RCP 8.5");
+    			t10 = text$1(" scenarios ");
+    			text8 = svg_element("text");
+    			t11 = text$1("from 2019 (baseline) to 2090 ");
+    			g2 = svg_element("g");
+    			text9 = svg_element("text");
+    			t12 = text$1("Hazards");
+    			text10 = svg_element("text");
+    			t13 = text$1("How climate variables and trends");
+    			text11 = svg_element("text");
+    			t14 = text$1("are linked to the climate hazards");
+    			text12 = svg_element("text");
+    			t15 = text$1("facing Hepburn Shire");
+    			g4 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks_3.length; i += 1) {
+    				each_blocks_3[i].c();
+    			}
+
+    			g6 = svg_element("g");
+
+    			for (let i = 0; i < 5; i += 1) {
+    				each_blocks_2[i].c();
+    			}
+
+    			g5 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].c();
+    			}
+
+    			g7 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(stop0, "stop-color", "#e21ffc");
+    			attr_dev(stop0, "offset", "10%");
+    			add_location(stop0, file$h, 96, 16, 4033);
+    			attr_dev(stop1, "stop-color", "#00ffff");
+    			attr_dev(stop1, "offset", "90%");
+    			add_location(stop1, file$h, 97, 16, 4091);
+    			attr_dev(linearGradient, "id", "rcp");
+    			attr_dev(linearGradient, "x1", "0");
+    			attr_dev(linearGradient, "y1", "0");
+    			attr_dev(linearGradient, "x2", "100%");
+    			attr_dev(linearGradient, "y2", "100%");
+    			add_location(linearGradient, file$h, 95, 12, 3957);
+    			add_location(defs, file$h, 94, 8, 3938);
+    			attr_dev(rect, "class", "bg svelte-1joxjo2");
+    			attr_dev(rect, "x", "-300");
+    			attr_dev(rect, "y", "0");
+    			attr_dev(rect, "width", rect_width_value = /*dims*/ ctx[0].width + 600);
+    			attr_dev(rect, "height", rect_height_value = /*dims*/ ctx[0].height);
+    			add_location(rect, file$h, 102, 8, 4189);
+    			attr_dev(text0, "class", "source svelte-1joxjo2");
+    			attr_dev(text0, "x", text0_x_value = /*dims*/ ctx[0].width - 50);
+    			attr_dev(text0, "y", text0_y_value = /*dims*/ ctx[0].height - 50);
+    			add_location(text0, file$h, 103, 8, 4285);
+    			attr_dev(text1, "class", "header svelte-1joxjo2");
+    			add_location(text1, file$h, 107, 16, 4593);
+    			attr_dev(text2, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text2, "y", "40");
+    			add_location(text2, file$h, 108, 16, 4658);
+    			attr_dev(text3, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text3, "y", "70");
+    			add_location(text3, file$h, 109, 16, 4754);
+    			attr_dev(text4, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text4, "y", "100");
+    			add_location(text4, file$h, 110, 16, 4850);
+    			set_style(g0, "transform", "translate(" + 50 + "px, 0px)");
+    			add_location(g0, file$h, 106, 12, 4531);
+    			attr_dev(text5, "class", "header projection svelte-1joxjo2");
+    			add_location(text5, file$h, 113, 16, 5054);
+    			attr_dev(text6, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text6, "y", "40");
+    			add_location(text6, file$h, 114, 16, 5123);
+    			attr_dev(tspan0, "class", "rcp-45 svelte-1joxjo2");
+    			add_location(tspan0, file$h, 115, 50, 5249);
+    			attr_dev(tspan1, "class", "rcp-85 svelte-1joxjo2");
+    			add_location(tspan1, file$h, 115, 92, 5291);
+    			attr_dev(text7, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text7, "y", "70");
+    			add_location(text7, file$h, 115, 16, 5215);
+    			attr_dev(text8, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text8, "y", "100");
+    			add_location(text8, file$h, 116, 16, 5363);
+    			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, 0px)");
+    			add_location(g1, file$h, 112, 12, 4954);
+    			attr_dev(text9, "class", "header svelte-1joxjo2");
+    			add_location(text9, file$h, 119, 16, 5542);
+    			attr_dev(text10, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text10, "y", "40");
+    			add_location(text10, file$h, 120, 16, 5596);
+    			attr_dev(text11, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text11, "y", "70");
+    			add_location(text11, file$h, 121, 16, 5686);
+    			attr_dev(text12, "class", "sub-header svelte-1joxjo2");
+    			attr_dev(text12, "y", "100");
+    			add_location(text12, file$h, 122, 16, 5777);
+    			set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.725 + "px, 0px)");
+    			add_location(g2, file$h, 118, 12, 5464);
+    			set_style(g3, "transform", "translate(" + 0 + "px, " + 100 + "px)");
+    			add_location(g3, file$h, 105, 8, 4468);
+    			attr_dev(g4, "class", "links-group");
+    			add_location(g4, file$h, 126, 8, 5879);
+    			attr_dev(g5, "class", "text-wrap-layer");
+    			add_location(g5, file$h, 158, 12, 7759);
+    			attr_dev(g6, "class", "chart-group");
+    			set_style(g6, "transform", "translate(0px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
+    			add_location(g6, file$h, 150, 8, 7105);
+    			attr_dev(g7, "class", "hazards-group");
+    			add_location(g7, file$h, 189, 8, 10216);
+    			attr_dev(svg, "class", "climate-variables-vis svelte-1joxjo2");
+    			attr_dev(svg, "viewBox", svg_viewBox_value = "0 0 " + /*dims*/ ctx[0].width + " " + /*dims*/ ctx[0].height);
+    			attr_dev(svg, "width", "100%");
+    			add_location(svg, file$h, 93, 4, 3836);
+    			attr_dev(figure, "class", "svg-container svelte-1joxjo2");
+    			add_location(figure, file$h, 92, 0, 3799);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, figure, anchor);
+    			append_dev(figure, svg);
+    			append_dev(svg, defs);
+    			append_dev(defs, linearGradient);
+    			append_dev(linearGradient, stop0);
+    			append_dev(linearGradient, stop1);
+    			append_dev(svg, rect);
+    			append_dev(svg, text0);
+    			append_dev(text0, t0);
+    			append_dev(svg, g3);
+    			append_dev(g3, g0);
+    			append_dev(g0, text1);
+    			append_dev(text1, t1);
+    			append_dev(g0, text2);
+    			append_dev(text2, t2);
+    			append_dev(g0, text3);
+    			append_dev(text3, t3);
+    			append_dev(g0, text4);
+    			append_dev(text4, t4);
+    			append_dev(g3, g1);
+    			append_dev(g1, text5);
+    			append_dev(text5, t5);
+    			append_dev(g1, text6);
+    			append_dev(text6, t6);
+    			append_dev(g1, text7);
+    			append_dev(text7, tspan0);
+    			append_dev(tspan0, t7);
+    			append_dev(text7, t8);
+    			append_dev(text7, tspan1);
+    			append_dev(tspan1, t9);
+    			append_dev(text7, t10);
+    			append_dev(g1, text8);
+    			append_dev(text8, t11);
+    			append_dev(g3, g2);
+    			append_dev(g2, text9);
+    			append_dev(text9, t12);
+    			append_dev(g2, text10);
+    			append_dev(text10, t13);
+    			append_dev(g2, text11);
+    			append_dev(text11, t14);
+    			append_dev(g2, text12);
+    			append_dev(text12, t15);
+    			append_dev(svg, g4);
+
+    			for (let i = 0; i < each_blocks_3.length; i += 1) {
+    				each_blocks_3[i].m(g4, null);
+    			}
+
+    			append_dev(svg, g6);
+
+    			for (let i = 0; i < 5; i += 1) {
+    				each_blocks_2[i].m(g6, null);
+    			}
+
+    			append_dev(g6, g5);
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].m(g6, null);
+    			}
+
+    			append_dev(svg, g7);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(g7, null);
+    			}
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*dims*/ 1 && rect_width_value !== (rect_width_value = /*dims*/ ctx[0].width + 600)) {
+    				attr_dev(rect, "width", rect_width_value);
+    			}
+
+    			if (dirty & /*dims*/ 1 && rect_height_value !== (rect_height_value = /*dims*/ ctx[0].height)) {
+    				attr_dev(rect, "height", rect_height_value);
+    			}
+
+    			if (dirty & /*dims*/ 1 && text0_x_value !== (text0_x_value = /*dims*/ ctx[0].width - 50)) {
+    				attr_dev(text0, "x", text0_x_value);
+    			}
+
+    			if (dirty & /*dims*/ 1 && text0_y_value !== (text0_y_value = /*dims*/ ctx[0].height - 50)) {
+    				attr_dev(text0, "y", text0_y_value);
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, 0px)");
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.725 + "px, 0px)");
+    			}
+
+    			if (dirty & /*$data, d3, dims*/ 3) {
+    				each_value_3 = /*$data*/ ctx[1].schema.climateVariables.data;
+    				validate_each_argument(each_value_3);
+    				let i;
+
+    				for (i = 0; i < each_value_3.length; i += 1) {
+    					const child_ctx = get_each_context_3(ctx, each_value_3, i);
+
+    					if (each_blocks_3[i]) {
+    						each_blocks_3[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_3[i] = create_each_block_3(child_ctx);
+    						each_blocks_3[i].c();
+    						each_blocks_3[i].m(g4, null);
+    					}
+    				}
+
+    				for (; i < each_blocks_3.length; i += 1) {
+    					each_blocks_3[i].d(1);
+    				}
+
+    				each_blocks_3.length = each_value_3.length;
+    			}
+
+    			if (dirty & /*dims, chartDims, scaleX*/ 13) {
+    				each_value_2 = [2019, 2030, 2050, 2070, 2090];
+    				validate_each_argument(each_value_2);
+    				let i;
+
+    				for (i = 0; i < 5; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks_2[i]) {
+    						each_blocks_2[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_2[i] = create_each_block_2(child_ctx);
+    						each_blocks_2[i].c();
+    						each_blocks_2[i].m(g6, g5);
+    					}
+    				}
+
+    				for (; i < 5; i += 1) {
+    					each_blocks_2[i].d(1);
+    				}
+    			}
+
+    			if (dirty & /*dims, chartDims, getScaleY, $data, d3, chartPath*/ 55) {
+    				each_value_1 = /*$data*/ ctx[1].schema.climateVariables.data;
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$4(ctx, each_value_1, i);
+
+    					if (each_blocks_1[i]) {
+    						each_blocks_1[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_1[i] = create_each_block_1$4(child_ctx);
+    						each_blocks_1[i].c();
+    						each_blocks_1[i].m(g6, null);
+    					}
+    				}
+
+    				for (; i < each_blocks_1.length; i += 1) {
+    					each_blocks_1[i].d(1);
+    				}
+
+    				each_blocks_1.length = each_value_1.length;
+    			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g6, "transform", "translate(0px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
+    			}
+
+    			if (dirty & /*dims, $data, icons, slugify*/ 3) {
+    				each_value = /*$data*/ ctx[1].schema.hazards.data;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$a(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$a(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(g7, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+
+    			if (dirty & /*dims*/ 1 && svg_viewBox_value !== (svg_viewBox_value = "0 0 " + /*dims*/ ctx[0].width + " " + /*dims*/ ctx[0].height)) {
+    				attr_dev(svg, "viewBox", svg_viewBox_value);
+    			}
+    		},
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(figure);
+    			destroy_each(each_blocks_3, detaching);
+    			destroy_each(each_blocks_2, detaching);
+    			destroy_each(each_blocks_1, detaching);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$h.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$h($$self, $$props, $$invalidate) {
+    	let $data;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('ClimateVariables', slots, []);
+
+    	let { dims = {
+    		width: 1600,
+    		height: 1600,
+    		variableSpacing: 105
+    	} } = $$props;
+
+    	const chartDims = { width: 350, height: 90 };
+    	const scaleX = linear().range([0, chartDims.width]).domain([2019, $data.climate.schema.years[$data.climate.schema.years.length - 1]]);
+
+    	function getScaleY(variable) {
+    		const chartData45 = $data.climate.variables.projectedChange["RCP4.5"].Annual[variable];
+    		const chartData85 = $data.climate.variables.projectedChange["RCP8.5"].Annual[variable];
+    		if (typeof $data.climate.variables.projectedChange["RCP4.5"].Annual[variable] === 'undefined') return null;
+    		const chartData45_points = [0].concat(Object.values(chartData45.Lower)).concat(Object.values(chartData45.Median)).concat(Object.values(chartData45.Upper));
+    		const chartData85_points = [0].concat(Object.values(chartData85.Lower)).concat(Object.values(chartData85.Median)).concat(Object.values(chartData85.Upper));
+    		const dataPoints = chartData45_points.concat(chartData85_points);
+    		return linear().range([0, -chartDims.height]).domain(extent$1(dataPoints));
+    	}
+
+    	function chartPath(chartData, scaleY, variable) {
+    		const areaData = [
+    			[2019, 0, 0],
+    			[
+    				2030,
+    				min$2([
+    					Object.values(chartData.Lower)[0],
+    					Object.values(chartData.Median)[0],
+    					Object.values(chartData.Upper)[0]
+    				]),
+    				max$3([
+    					Object.values(chartData.Lower)[0],
+    					Object.values(chartData.Median)[0],
+    					Object.values(chartData.Upper)[0]
+    				])
+    			],
+    			[
+    				2050,
+    				min$2([
+    					Object.values(chartData.Lower)[1],
+    					Object.values(chartData.Median)[1],
+    					Object.values(chartData.Upper)[1]
+    				]),
+    				max$3([
+    					Object.values(chartData.Lower)[1],
+    					Object.values(chartData.Median)[1],
+    					Object.values(chartData.Upper)[1]
+    				])
+    			],
+    			[
+    				2070,
+    				min$2([
+    					Object.values(chartData.Lower)[2],
+    					Object.values(chartData.Median)[2],
+    					Object.values(chartData.Upper)[2]
+    				]),
+    				max$3([
+    					Object.values(chartData.Lower)[2],
+    					Object.values(chartData.Median)[2],
+    					Object.values(chartData.Upper)[2]
+    				])
+    			],
+    			[
+    				2090,
+    				min$2([
+    					Object.values(chartData.Lower)[3],
+    					Object.values(chartData.Median)[3],
+    					Object.values(chartData.Upper)[3]
+    				]),
+    				max$3([
+    					Object.values(chartData.Lower)[3],
+    					Object.values(chartData.Median)[3],
+    					Object.values(chartData.Upper)[3]
+    				])
+    			]
+    		];
+
+    		const areaGenerator = area().x(d => scaleX(+d[0])).y0(d => scaleY(+d[1])).y1(d => scaleY(+d[2]));
+    		return areaGenerator(areaData);
+    	}
+
+    	onMount(() => {
+    		const variablesLayer = select('.text-wrap-layer');
+    		variablesLayer.selectAll('.variable-description').data($data.schema.climateVariables.data).join('text').classed('variable-description', true).attr('x', 50).attr('y', (d, i) => dims.variableSpacing * i + 20).attr('dy', 0).text(d => d.Description).style('fill', '#fff').style('font-weight', 300).style('font-size', 14).call(textWrap, 450, 1.1, false);
+    	});
+
+    	const writable_props = ['dims'];
+
+    	Object_1.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateVariables> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$$set = $$props => {
+    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		onMount,
+    		d3,
+    		textWrap,
+    		slugify,
+    		icons,
+    		ui,
+    		data,
+    		dims,
+    		chartDims,
+    		scaleX,
+    		getScaleY,
+    		chartPath,
+    		$data
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [dims, $data, chartDims, scaleX, getScaleY, chartPath];
+    }
+
+    class ClimateVariables extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$h, create_fragment$h, safe_not_equal, { dims: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "ClimateVariables",
+    			options,
+    			id: create_fragment$h.name
+    		});
+    	}
+
+    	get dims() {
+    		throw new Error("<ClimateVariables>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set dims(value) {
+    		throw new Error("<ClimateVariables>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/byPage/adaptation/vis/ClimateHazards.svelte generated by Svelte v3.48.0 */
+    const file$g = "src/components/byPage/adaptation/vis/ClimateHazards.svelte";
+
+    function get_each_context$9(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[4] = list[i];
+    	child_ctx[6] = i;
+    	return child_ctx;
+    }
+
+    function get_each_context_1$3(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[7] = list[i];
+    	return child_ctx;
+    }
+
+    // (81:12) {#each shockStressOffsets as offset}
+    function create_each_block_1$3(ctx) {
+    	let g;
+    	let text0;
+    	let t0;
+    	let text1;
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			g = svg_element("g");
+    			text0 = svg_element("text");
+    			t0 = text$1("Shock");
+    			text1 = svg_element("text");
+    			t1 = text$1("Stress");
+    			attr_dev(text0, "class", "type-label shock svelte-1ktcv8p");
+    			set_style(text0, "transform", "translate(" + (/*dims*/ ctx[1].width - 50) + "px, " + 0 + "px)");
+    			add_location(text0, file$g, 82, 16, 3799);
+    			attr_dev(text1, "class", "type-label stress svelte-1ktcv8p");
+    			set_style(text1, "transform", "translate(" + 50 + "px, " + 0 + "px)");
+    			add_location(text1, file$g, 83, 16, 3918);
+    			set_style(g, "transform", "translate(" + 0 + "px, " + (/*dims*/ ctx[1].width * 0.25 + /*offset*/ ctx[7]) + "px)");
+    			add_location(g, file$g, 81, 12, 3711);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g, anchor);
+    			append_dev(g, text0);
+    			append_dev(text0, t0);
+    			append_dev(g, text1);
+    			append_dev(text1, t1);
+    		},
+    		p: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$3.name,
+    		type: "each",
+    		source: "(81:12) {#each shockStressOffsets as offset}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (90:12) {#each $data.schema.hazards.data as obj , i}
+    function create_each_block$9(ctx) {
+    	let g;
+    	let path;
+    	let path_d_value;
+    	let text_1;
+    	let raw_value = /*obj*/ ctx[4].Hazard + "";
+
+    	const block = {
+    		c: function create() {
+    			g = svg_element("g");
+    			path = svg_element("path");
+    			text_1 = svg_element("text");
+    			attr_dev(path, "class", "hazard-icon svelte-1ktcv8p");
+    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)]);
+    			set_style(path, "transform", "translate(0px, -80px) scale(1.25)");
+    			add_location(path, file$g, 91, 16, 4386);
+    			attr_dev(text_1, "class", "hazard-label svelte-1ktcv8p");
+    			add_location(text_1, file$g, 92, 16, 4518);
+    			set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[3][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
+    			add_location(g, file$g, 90, 12, 4222);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g, anchor);
+    			append_dev(g, path);
+    			append_dev(g, text_1);
+    			text_1.innerHTML = raw_value;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)])) {
+    				attr_dev(path, "d", path_d_value);
+    			}
+
+    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*obj*/ ctx[4].Hazard + "")) text_1.innerHTML = raw_value;
+    			if (dirty & /*$data*/ 1) {
+    				set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[3][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$9.name,
+    		type: "each",
+    		source: "(90:12) {#each $data.schema.hazards.data as obj , i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$g(ctx) {
+    	let figure;
+    	let svg;
+    	let defs;
+    	let linearGradient;
+    	let stop0;
+    	let stop1;
+    	let g1;
+    	let g0;
+    	let text0;
+    	let t0;
+    	let tspan;
+    	let t1;
+    	let t2;
+    	let text1;
+    	let t3;
+    	let text2;
+    	let t4;
+    	let g2;
+    	let g4;
+    	let g3;
+    	let each_value_1 = /*shockStressOffsets*/ ctx[2];
+    	validate_each_argument(each_value_1);
+    	let each_blocks_1 = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks_1[i] = create_each_block_1$3(get_each_context_1$3(ctx, each_value_1, i));
+    	}
+
+    	let each_value = /*$data*/ ctx[0].schema.hazards.data;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$9(get_each_context$9(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			figure = element("figure");
+    			svg = svg_element("svg");
+    			defs = svg_element("defs");
+    			linearGradient = svg_element("linearGradient");
+    			stop0 = svg_element("stop");
+    			stop1 = svg_element("stop");
+    			g1 = svg_element("g");
+    			g0 = svg_element("g");
+    			text0 = svg_element("text");
+    			t0 = text$1("Climate ");
+    			tspan = svg_element("tspan");
+    			t1 = text$1("hazards");
+    			t2 = text$1(" and related events");
+    			text1 = svg_element("text");
+    			t3 = text$1("There are four climate hazards that trigger events that impact the Hepburn community.");
+    			text2 = svg_element("text");
+    			t4 = text$1("Projected climate change will lead to an increase the frequency and/or intensity of these events.");
+    			g2 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].c();
+    			}
+
+    			g4 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			g3 = svg_element("g");
+    			attr_dev(stop0, "stop-color", "hsl(50, 100%, 70%)");
+    			attr_dev(stop0, "offset", "10%");
+    			add_location(stop0, file$g, 66, 16, 2856);
+    			attr_dev(stop1, "stop-color", "hsl(320, 100%, 50%)");
+    			attr_dev(stop1, "offset", "90%");
+    			add_location(stop1, file$g, 67, 16, 2925);
+    			attr_dev(linearGradient, "id", "gr-hazard");
+    			attr_dev(linearGradient, "x1", "0");
+    			attr_dev(linearGradient, "y1", "0");
+    			attr_dev(linearGradient, "x2", "100%");
+    			attr_dev(linearGradient, "y2", "100%");
+    			add_location(linearGradient, file$g, 65, 12, 2774);
+    			add_location(defs, file$g, 64, 8, 2755);
+    			attr_dev(tspan, "class", "hazard-text svelte-1ktcv8p");
+    			add_location(tspan, file$g, 73, 48, 3205);
+    			attr_dev(text0, "class", "header svelte-1ktcv8p");
+    			add_location(text0, file$g, 73, 16, 3173);
+    			attr_dev(text1, "class", "sub-header svelte-1ktcv8p");
+    			attr_dev(text1, "y", "40");
+    			add_location(text1, file$g, 74, 16, 3292);
+    			attr_dev(text2, "class", "sub-header svelte-1ktcv8p");
+    			attr_dev(text2, "y", "70");
+    			add_location(text2, file$g, 75, 16, 3435);
+    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
+    			add_location(g0, file$g, 72, 12, 3097);
+    			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
+    			add_location(g1, file$g, 71, 8, 3034);
+    			attr_dev(g2, "class", "shock-stress-group");
+    			add_location(g2, file$g, 79, 8, 3613);
+    			attr_dev(g3, "class", "event-description-group");
+    			add_location(g3, file$g, 95, 12, 4622);
+    			attr_dev(g4, "class", "hazards-group");
+    			set_style(g4, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
+    			add_location(g4, file$g, 88, 8, 4069);
+    			attr_dev(svg, "class", "climate-hazards-vis svelte-1ktcv8p");
+    			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
+    			add_location(svg, file$g, 63, 4, 2668);
+    			attr_dev(figure, "class", "svg-container svelte-1ktcv8p");
+    			add_location(figure, file$g, 62, 0, 2631);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, figure, anchor);
+    			append_dev(figure, svg);
+    			append_dev(svg, defs);
+    			append_dev(defs, linearGradient);
+    			append_dev(linearGradient, stop0);
+    			append_dev(linearGradient, stop1);
+    			append_dev(svg, g1);
+    			append_dev(g1, g0);
+    			append_dev(g0, text0);
+    			append_dev(text0, t0);
+    			append_dev(text0, tspan);
+    			append_dev(tspan, t1);
+    			append_dev(text0, t2);
+    			append_dev(g0, text1);
+    			append_dev(text1, t3);
+    			append_dev(g0, text2);
+    			append_dev(text2, t4);
+    			append_dev(svg, g2);
+
+    			for (let i = 0; i < each_blocks_1.length; i += 1) {
+    				each_blocks_1[i].m(g2, null);
+    			}
+
+    			append_dev(svg, g4);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(g4, null);
+    			}
+
+    			append_dev(g4, g3);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*dims, shockStressOffsets*/ 6) {
+    				each_value_1 = /*shockStressOffsets*/ ctx[2];
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$3(ctx, each_value_1, i);
+
+    					if (each_blocks_1[i]) {
+    						each_blocks_1[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_1[i] = create_each_block_1$3(child_ctx);
+    						each_blocks_1[i].c();
+    						each_blocks_1[i].m(g2, null);
+    					}
+    				}
+
+    				for (; i < each_blocks_1.length; i += 1) {
+    					each_blocks_1[i].d(1);
+    				}
+
+    				each_blocks_1.length = each_value_1.length;
+    			}
+
+    			if (dirty & /*eventsByHazard, $data, dims, icons, slugify*/ 11) {
+    				each_value = /*$data*/ ctx[0].schema.hazards.data;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$9(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$9(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(g4, g3);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(figure);
+    			destroy_each(each_blocks_1, detaching);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$g.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    const hazardOffset = 0.6;
+    const eventOffset = 72.5;
+    const textLength = 550;
+
+    function instance$g($$self, $$props, $$invalidate) {
+    	let $data;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('ClimateHazards', slots, []);
+    	const dims = { width: 1600, height: 1600 };
+    	const shockStressOffsets = [0, 150, 300, 450, 600, 750, 900, 1050, 1200];
+    	const eventsByHazard = [1].concat($data.schema.hazards.data.map(d => d["Linked hazard events"].length).map((sum => value => sum += value)(0))).map((d, i) => d + i * hazardOffset - 1);
+
+    	onMount(() => {
+    		selectAll('event.description');
+
+    		$data.schema.hazards.data.forEach((obj, i) => {
+    			$data.schema.hazardEvents.data.filter(e => e.Hazard[0] === obj.recordID).forEach((d, j) => {
+    				const group = select('.event-description-group').append('g').style('transform', `translate(${0}px, ${0 + (eventsByHazard[i] / $data.schema.hazardEvents.data.length * dims.height * 0.8 + dims.height * 0.2) + (eventOffset * j + 60)}px`);
+    				const label = group.append('text').classed('event-label', true).style('font-size', 40).style('font-weight', 700).style('text-anchor', 'middle').style('fill', '#fff').text(d["Hazard event"]);
+
+    				group.append('text').classed('event-description', true).attr('dy', 0).attr('x', d.Type === 'Shock'
+    				? dims.width * 0.125
+    				: -dims.width * 0.125 - textLength).attr('y', 0).style('font-size', 14).style('fill', '#fff').text(d["Description"]).call(textWrap, textLength, 1.05, true);
+
+    				group.append('path').style('stroke', '#fff').style('stroke-widhth', 2).style('fill', 'none').attr('d', `M${(d.Type === 'Shock' ? -1 : 1) * label.node().getBBox().width * 0.5}, 10 
+                                H${(d.Type === 'Shock' ? 1 : -1) * (dims.width * 0.5 - 50)}`);
+    			});
+    		});
+    	});
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateHazards> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		onMount,
+    		d3,
+    		textWrap,
+    		slugify,
+    		ui,
+    		data,
+    		icons,
+    		dims,
+    		shockStressOffsets,
+    		hazardOffset,
+    		eventOffset,
+    		textLength,
+    		eventsByHazard,
+    		$data
+    	});
+
+    	return [$data, dims, shockStressOffsets, eventsByHazard];
+    }
+
+    class ClimateHazards extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$g, create_fragment$g, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "ClimateHazards",
+    			options,
+    			id: create_fragment$g.name
+    		});
+    	}
+    }
+
+    /* src/components/byPage/adaptation/vis/ClimateRisks.svelte generated by Svelte v3.48.0 */
+    const file$f = "src/components/byPage/adaptation/vis/ClimateRisks.svelte";
+
+    function get_each_context$8(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[3] = list[i];
+    	child_ctx[5] = i;
+    	return child_ctx;
+    }
+
+    // (43:16) {#each $data.schema.riskDeterminants.data as obj , i}
+    function create_each_block$8(ctx) {
+    	let g1;
+    	let ellipse0;
+    	let ellipse1;
+    	let g0;
+    	let text_1;
+    	let t_value = /*obj*/ ctx[3].Name + "";
+    	let t;
+    	let g1_class_value;
+
+    	const block = {
+    		c: function create() {
+    			g1 = svg_element("g");
+    			ellipse0 = svg_element("ellipse");
+    			ellipse1 = svg_element("ellipse");
+    			g0 = svg_element("g");
+    			text_1 = svg_element("text");
+    			t = text$1(t_value);
+    			attr_dev(ellipse0, "class", "oval-bg svelte-ekibjj");
+    			attr_dev(ellipse0, "cx", "0");
+    			attr_dev(ellipse0, "cy", "0");
+    			attr_dev(ellipse0, "rx", /*dims*/ ctx[1].width * 0.2);
+    			attr_dev(ellipse0, "ry", /*dims*/ ctx[1].width * 0.125);
+    			set_style(ellipse0, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
+    			set_style(ellipse0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			add_location(ellipse0, file$f, 44, 20, 2116);
+    			attr_dev(ellipse1, "class", "oval-fg svelte-ekibjj");
+    			attr_dev(ellipse1, "cx", "0");
+    			attr_dev(ellipse1, "cy", "0");
+    			attr_dev(ellipse1, "rx", /*dims*/ ctx[1].width * 0.2);
+    			attr_dev(ellipse1, "ry", /*dims*/ ctx[1].width * 0.125);
+    			set_style(ellipse1, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
+    			set_style(ellipse1, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			add_location(ellipse1, file$f, 45, 20, 2361);
+    			attr_dev(text_1, "class", "determinant-label svelte-ekibjj");
+    			attr_dev(text_1, "x", /*dims*/ ctx[1].width * 0.1 * (/*i*/ ctx[5] === 2 ? -1 : 1));
+    			set_style(text_1, "transform", "rotate(" + (/*i*/ ctx[5] === 2 ? 180 : 0) + "deg)");
+    			add_location(text_1, file$f, 47, 24, 2764);
+    			set_style(g0, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
+    			set_style(g0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			add_location(g0, file$f, 46, 20, 2606);
+    			attr_dev(g1, "class", g1_class_value = "oval-group " + slugify(/*obj*/ ctx[3].Name) + " svelte-ekibjj");
+    			add_location(g1, file$f, 43, 16, 2051);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, g1, anchor);
+    			append_dev(g1, ellipse0);
+    			append_dev(g1, ellipse1);
+    			append_dev(g1, g0);
+    			append_dev(g0, text_1);
+    			append_dev(text_1, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1) {
+    				set_style(ellipse0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			}
+
+    			if (dirty & /*$data*/ 1) {
+    				set_style(ellipse1, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			}
+
+    			if (dirty & /*$data*/ 1 && t_value !== (t_value = /*obj*/ ctx[3].Name + "")) set_data_dev(t, t_value);
+
+    			if (dirty & /*$data*/ 1) {
+    				set_style(g0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
+    			}
+
+    			if (dirty & /*$data*/ 1 && g1_class_value !== (g1_class_value = "oval-group " + slugify(/*obj*/ ctx[3].Name) + " svelte-ekibjj")) {
+    				attr_dev(g1, "class", g1_class_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(g1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$8.name,
+    		type: "each",
+    		source: "(43:16) {#each $data.schema.riskDeterminants.data as obj , i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$f(ctx) {
+    	let figure;
+    	let svg;
+    	let defs;
+    	let linearGradient;
+    	let stop0;
+    	let stop1;
+    	let g1;
+    	let g0;
+    	let text0;
+    	let t0;
+    	let tspan;
+    	let t1;
+    	let text1;
+    	let t2;
+    	let text2;
+    	let t3;
+    	let g3;
+    	let circle;
+    	let g2;
+    	let text3;
+    	let t4;
+    	let path;
+    	let text4;
+    	let textPath;
+    	let t5;
+    	let each_value = /*$data*/ ctx[0].schema.riskDeterminants.data;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$8(get_each_context$8(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			figure = element("figure");
+    			svg = svg_element("svg");
+    			defs = svg_element("defs");
+    			linearGradient = svg_element("linearGradient");
+    			stop0 = svg_element("stop");
+    			stop1 = svg_element("stop");
+    			g1 = svg_element("g");
+    			g0 = svg_element("g");
+    			text0 = svg_element("text");
+    			t0 = text$1("Determinants of ");
+    			tspan = svg_element("tspan");
+    			t1 = text$1("Climate risk");
+    			text1 = svg_element("text");
+    			t2 = text$1("How climate hazards interact with hazard exposure and vulnerability to form risk.");
+    			text2 = svg_element("text");
+    			t3 = text$1("And the how our response through adaptation and mitigation actions can manage and frame climate risk.");
+    			g3 = svg_element("g");
+    			circle = svg_element("circle");
+    			g2 = svg_element("g");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			text3 = svg_element("text");
+    			t4 = text$1("Risk");
+    			path = svg_element("path");
+    			text4 = svg_element("text");
+    			textPath = svg_element("textPath");
+    			t5 = text$1("Response to climate change");
+    			attr_dev(stop0, "stop-color", "hsl(144, 97%, 70%)");
+    			attr_dev(stop0, "offset", "30%");
+    			add_location(stop0, file$f, 26, 16, 956);
+    			attr_dev(stop1, "stop-color", "hsl(236, 60%, 85%)");
+    			attr_dev(stop1, "offset", "90%");
+    			add_location(stop1, file$f, 27, 16, 1025);
+    			attr_dev(linearGradient, "id", "gr-risk");
+    			attr_dev(linearGradient, "x1", "0");
+    			attr_dev(linearGradient, "y1", "0");
+    			attr_dev(linearGradient, "x2", "100%");
+    			attr_dev(linearGradient, "y2", "100%");
+    			add_location(linearGradient, file$f, 25, 12, 876);
+    			add_location(defs, file$f, 23, 8, 856);
+    			attr_dev(tspan, "class", "risk-text svelte-ekibjj");
+    			add_location(tspan, file$f, 33, 55, 1311);
+    			attr_dev(text0, "class", "header svelte-ekibjj");
+    			add_location(text0, file$f, 33, 16, 1272);
+    			attr_dev(text1, "class", "sub-header svelte-ekibjj");
+    			attr_dev(text1, "y", "40");
+    			add_location(text1, file$f, 34, 16, 1382);
+    			attr_dev(text2, "class", "sub-header svelte-ekibjj");
+    			attr_dev(text2, "y", "70");
+    			add_location(text2, file$f, 35, 16, 1521);
+    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
+    			add_location(g0, file$f, 32, 12, 1196);
+    			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
+    			add_location(g1, file$f, 31, 8, 1133);
+    			attr_dev(circle, "class", "response-circle svelte-ekibjj");
+    			attr_dev(circle, "r", /*dims*/ ctx[1].width * 0.35);
+    			add_location(circle, file$f, 40, 12, 1821);
+    			set_style(g2, "transform", "translate(" + /*dims*/ ctx[1].width * 0.1 + "px, " + /*dims*/ ctx[1].width * 0 + "px)");
+    			add_location(g2, file$f, 41, 12, 1891);
+    			attr_dev(text3, "class", "center-label risk-label svelte-ekibjj");
+    			attr_dev(text3, "dy", "40");
+    			add_location(text3, file$f, 56, 12, 3120);
+    			attr_dev(path, "id", "response-label-path");
+    			attr_dev(path, "class", "label-path svelte-ekibjj");
+    			attr_dev(path, "d", circleAntiClockwise({ x: 0, y: 0 }, /*dims*/ ctx[1].width * 0.35 + 45));
+    			add_location(path, file$f, 57, 12, 3192);
+    			attr_dev(textPath, "class", "response-label svelte-ekibjj");
+    			attr_dev(textPath, "href", "#response-label-path");
+    			attr_dev(textPath, "startOffset", "25%");
+    			add_location(textPath, file$f, 59, 16, 3347);
+    			attr_dev(text4, "class", "svelte-ekibjj");
+    			add_location(text4, file$f, 58, 12, 3324);
+    			attr_dev(g3, "class", "risk-ovals-group");
+    			set_style(g3, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, " + /*dims*/ ctx[1].height * 0.55 + "px)");
+    			add_location(g3, file$f, 39, 8, 1703);
+    			attr_dev(svg, "class", "climate-hazards-vis svelte-ekibjj");
+    			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
+    			add_location(svg, file$f, 22, 4, 769);
+    			attr_dev(figure, "class", "svg-container svelte-ekibjj");
+    			add_location(figure, file$f, 21, 0, 732);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, figure, anchor);
+    			append_dev(figure, svg);
+    			append_dev(svg, defs);
+    			append_dev(defs, linearGradient);
+    			append_dev(linearGradient, stop0);
+    			append_dev(linearGradient, stop1);
+    			append_dev(svg, g1);
+    			append_dev(g1, g0);
+    			append_dev(g0, text0);
+    			append_dev(text0, t0);
+    			append_dev(text0, tspan);
+    			append_dev(tspan, t1);
+    			append_dev(g0, text1);
+    			append_dev(text1, t2);
+    			append_dev(g0, text2);
+    			append_dev(text2, t3);
+    			append_dev(svg, g3);
+    			append_dev(g3, circle);
+    			append_dev(g3, g2);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(g2, null);
+    			}
+
+    			append_dev(g3, text3);
+    			append_dev(text3, t4);
+    			append_dev(g3, path);
+    			append_dev(g3, text4);
+    			append_dev(text4, textPath);
+    			append_dev(textPath, t5);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*slugify, $data, dims*/ 3) {
+    				each_value = /*$data*/ ctx[0].schema.riskDeterminants.data;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$8(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$8(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(g2, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(figure);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$f.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$f($$self, $$props, $$invalidate) {
+    	let $data;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('ClimateRisks', slots, []);
+    	const dims = { width: 1600, height: 1600 };
+    	const eventsByHazard = [1].concat($data.schema.hazards.data.map(d => d["Linked hazard events"].length).map((sum => value => sum += value)(0))).map((d, i) => d + i * 0.65 - 1);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateRisks> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		onMount,
+    		d3,
+    		textWrap,
+    		slugify,
+    		ui,
+    		data,
+    		icons,
+    		circleAntiClockwise,
+    		dims,
+    		eventsByHazard,
+    		$data
+    	});
+
+    	return [$data, dims];
+    }
+
+    class ClimateRisks extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$f, create_fragment$f, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "ClimateRisks",
+    			options,
+    			id: create_fragment$f.name
+    		});
+    	}
+    }
+
+    /* src/components/byPage/adaptation/RiskTable.svelte generated by Svelte v3.48.0 */
+    const file$e = "src/components/byPage/adaptation/RiskTable.svelte";
+
+    function get_each_context$7(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[4] = list[i];
+    	child_ctx[8] = i;
+    	const constants_0 = /*d*/ child_ctx[4]["Risk area"].map(recordID => /*$data*/ child_ctx[0].schema.riskArea.data.filter(e => e.recordID === recordID)[0]["Risk area"]);
+    	child_ctx[5] = constants_0;
+    	const constants_1 = [...new Set(/*d*/ child_ctx[4]["Linked hazards"])].map(recordID => /*$data*/ child_ctx[0].schema.hazards.data.filter(e => e.recordID === recordID)[0]["Hazard"]);
+    	child_ctx[6] = constants_1;
+    	return child_ctx;
+    }
+
+    function get_if_ctx(ctx) {
+    	const child_ctx = ctx.slice();
+    	const constants_0 = /*rowspanData*/ child_ctx[1][/*rowspanIndexes*/ child_ctx[2].indexOf(/*i*/ child_ctx[8])];
+    	child_ctx[9] = constants_0;
+    	return child_ctx;
+    }
+
+    // (30:12) {#if rowspanIndexes.indexOf(i) > -1}
+    function create_if_block$5(ctx) {
+    	let td;
+
+    	let t_value = (/*riskGroupArray*/ ctx[5]
+    	? /*riskGroupArray*/ ctx[5].join(", ")
+    	: '') + "";
+
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			td = element("td");
+    			t = text$1(t_value);
+    			attr_dev(td, "class", "community-theme svelte-1fde3it");
+    			attr_dev(td, "rowspan", /*spanData*/ ctx[9].count);
+    			add_location(td, file$e, 31, 12, 1263);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td, anchor);
+    			append_dev(td, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$data*/ 1 && t_value !== (t_value = (/*riskGroupArray*/ ctx[5]
+    			? /*riskGroupArray*/ ctx[5].join(", ")
+    			: '') + "")) set_data_dev(t, t_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$5.name,
+    		type: "if",
+    		source: "(30:12) {#if rowspanIndexes.indexOf(i) > -1}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (26:4) {#each $data.schema.communityRisks.data as d, i}
+    function create_each_block$7(ctx) {
+    	let tr;
+    	let show_if = /*rowspanIndexes*/ ctx[2].indexOf(/*i*/ ctx[8]) > -1;
+    	let t0;
+    	let td0;
+    	let t1_value = /*d*/ ctx[4]["Community risk"] + "";
+    	let t1;
+    	let t2;
+    	let td1;
+
+    	let t3_value = (/*d*/ ctx[4]["Hazard events"]
+    	? /*d*/ ctx[4]["Hazard events"].map(/*func*/ ctx[3]).join(", ")
+    	: 'None') + "";
+
+    	let t3;
+    	let t4;
+    	let if_block = show_if && create_if_block$5(get_if_ctx(ctx));
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			if (if_block) if_block.c();
+    			t0 = space();
+    			td0 = element("td");
+    			t1 = text$1(t1_value);
+    			t2 = space();
+    			td1 = element("td");
+    			t3 = text$1(t3_value);
+    			t4 = space();
+    			attr_dev(td0, "class", "community-risk svelte-1fde3it");
+    			add_location(td0, file$e, 33, 12, 1406);
+    			attr_dev(td1, "class", "hazard-event svelte-1fde3it");
+    			add_location(td1, file$e, 34, 12, 1474);
+    			attr_dev(tr, "class", "svelte-1fde3it");
+    			add_location(tr, file$e, 28, 8, 1126);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			if (if_block) if_block.m(tr, null);
+    			append_dev(tr, t0);
+    			append_dev(tr, td0);
+    			append_dev(td0, t1);
+    			append_dev(tr, t2);
+    			append_dev(tr, td1);
+    			append_dev(td1, t3);
+    			append_dev(tr, t4);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (show_if) if_block.p(get_if_ctx(ctx), dirty);
+    			if (dirty & /*$data*/ 1 && t1_value !== (t1_value = /*d*/ ctx[4]["Community risk"] + "")) set_data_dev(t1, t1_value);
+
+    			if (dirty & /*$data*/ 1 && t3_value !== (t3_value = (/*d*/ ctx[4]["Hazard events"]
+    			? /*d*/ ctx[4]["Hazard events"].map(/*func*/ ctx[3]).join(", ")
+    			: 'None') + "")) set_data_dev(t3, t3_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    			if (if_block) if_block.d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$7.name,
+    		type: "each",
+    		source: "(26:4) {#each $data.schema.communityRisks.data as d, i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$e(ctx) {
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t1;
+    	let th1;
+    	let t3;
+    	let th2;
+    	let t5;
+    	let each_value = /*$data*/ ctx[0].schema.communityRisks.data;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$7(get_each_context$7(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Risk area";
+    			t1 = space();
+    			th1 = element("th");
+    			th1.textContent = "Climate risk to the community";
+    			t3 = space();
+    			th2 = element("th");
+    			th2.textContent = "Hazard events";
+    			t5 = space();
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(th0, "class", "svelte-1fde3it");
+    			add_location(th0, file$e, 18, 12, 579);
+    			attr_dev(th1, "class", "svelte-1fde3it");
+    			add_location(th1, file$e, 19, 12, 610);
+    			attr_dev(th2, "class", "svelte-1fde3it");
+    			add_location(th2, file$e, 20, 12, 661);
+    			attr_dev(tr, "class", "svelte-1fde3it");
+    			add_location(tr, file$e, 17, 8, 562);
+    			attr_dev(thead, "class", "svelte-1fde3it");
+    			add_location(thead, file$e, 16, 4, 546);
+    			attr_dev(table, "class", "svelte-1fde3it");
+    			add_location(table, file$e, 15, 0, 534);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t1);
+    			append_dev(tr, th1);
+    			append_dev(tr, t3);
+    			append_dev(tr, th2);
+    			append_dev(table, t5);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(table, null);
+    			}
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*$data, rowspanData, rowspanIndexes*/ 7) {
+    				each_value = /*$data*/ ctx[0].schema.communityRisks.data;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$7(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$7(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(table, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(table);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$e.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$e($$self, $$props, $$invalidate) {
+    	let $data;
+    	validate_store(data, 'data');
+    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('RiskTable', slots, []);
+
+    	const rowspanData = $data.schema.riskArea.data.map(d => {
+    		return {
+    			area: d["Risk area"],
+    			count: $data.schema.communityRisks.data.filter(e => e["Risk area"][0] === d.recordID).length
+    		};
+    	});
+
+    	const rowspanIndexes = [0].concat(rowspanData.map(d => d.count).reduce((a, x, i) => [...a, x + (a[i - 1] || 0)], []));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<RiskTable> was created with unknown prop '${key}'`);
+    	});
+
+    	const func = d => $data.schema.hazardEvents.data.filter(e => e.recordID === d)[0]["Hazard event"];
+
+    	$$self.$capture_state = () => ({
+    		ui,
+    		data,
+    		fade,
+    		rowspanData,
+    		rowspanIndexes,
+    		$data
+    	});
+
+    	return [$data, rowspanData, rowspanIndexes, func];
+    }
+
+    class RiskTable extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$e, create_fragment$e, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "RiskTable",
+    			options,
+    			id: create_fragment$e.name
+    		});
+    	}
+    }
+
+    /* src/pages/Adaptation.svelte generated by Svelte v3.48.0 */
+    const file$d = "src/pages/Adaptation.svelte";
+
+    function create_fragment$d(ctx) {
     	let div5;
     	let div4;
     	let div1;
@@ -36004,53 +39544,205 @@ var app = (function (exports) {
     	let t5;
     	let div2;
     	let p0;
-    	let t6;
-    	let em;
-    	let t8;
-    	let t9;
-    	let p1;
-    	let t11;
+    	let t7;
     	let div3;
-    	let ul;
+    	let ul0;
     	let li0;
-    	let t13;
+    	let t9;
     	let li1;
+    	let t11;
+    	let li2;
+    	let t13;
+    	let li3;
     	let t15;
-    	let div14;
-    	let section0;
-    	let div13;
-    	let h2;
+    	let li4;
     	let t17;
-    	let div9;
-    	let div6;
-    	let t19;
+    	let div26;
+    	let section0;
     	let div7;
+    	let div6;
+    	let hr0;
+    	let t18;
+    	let h20;
+    	let t20;
+    	let p1;
     	let t21;
-    	let div8;
+    	let em0;
     	let t23;
-    	let div12;
-    	let h3;
+    	let strong0;
     	let t25;
-    	let div10;
+    	let a0;
     	let t27;
-    	let div11;
+    	let em1;
     	let t29;
+    	let t30;
+    	let p2;
+    	let t31;
+    	let em2;
+    	let t33;
+    	let t34;
+    	let p3;
+    	let t36;
+    	let div8;
+    	let img0;
+    	let img0_src_value;
+    	let t37;
     	let section1;
+    	let div10;
+    	let div9;
+    	let hr1;
+    	let t38;
+    	let h21;
+    	let t40;
+    	let p4;
+    	let t41;
+    	let strong1;
+    	let t43;
+    	let t44;
+    	let p5;
+    	let t45;
+    	let a1;
+    	let t47;
+    	let a2;
+    	let t49;
+    	let strong2;
+    	let t51;
+    	let strong3;
+    	let t53;
+    	let t54;
+    	let p6;
+    	let t55;
+    	let strong4;
+    	let t57;
+    	let t58;
+    	let p7;
+    	let t59;
+    	let strong5;
+    	let t61;
+    	let a3;
+    	let t63;
+    	let a4;
+    	let t65;
+    	let strong6;
+    	let t67;
+    	let strong7;
+    	let t69;
+    	let t70;
+    	let div11;
+    	let climatevariables;
+    	let t71;
+    	let section2;
+    	let div13;
+    	let div12;
+    	let hr2;
+    	let t72;
+    	let h22;
+    	let t74;
+    	let p8;
+    	let t75;
+    	let strong8;
+    	let t77;
+    	let t78;
+    	let ul1;
+    	let li5;
+    	let strong9;
+    	let t80;
+    	let t81;
+    	let li6;
+    	let strong10;
+    	let t83;
+    	let t84;
+    	let p9;
+    	let t85;
+    	let strong11;
+    	let t87;
+    	let t88;
+    	let div14;
+    	let climatehazards;
+    	let t89;
+    	let section3;
+    	let div16;
+    	let div15;
+    	let hr3;
+    	let t90;
+    	let h23;
+    	let t92;
+    	let p10;
+    	let t93;
+    	let a5;
+    	let t95;
+    	let strong12;
+    	let t97;
+    	let em3;
+    	let t99;
+    	let em4;
+    	let t101;
+    	let t102;
+    	let p11;
+    	let t103;
+    	let strong13;
+    	let t105;
+    	let strong14;
+    	let t107;
+    	let strong15;
+    	let t109;
+    	let t110;
+    	let p12;
+    	let t111;
+    	let strong16;
+    	let t113;
+    	let strong17;
+    	let t115;
+    	let t116;
+    	let p13;
+    	let t117;
+    	let strong18;
+    	let t119;
+    	let a6;
+    	let t121;
+    	let t122;
+    	let div17;
+    	let climaterisks;
+    	let t123;
+    	let section4;
+    	let div19;
+    	let div18;
+    	let hr4;
+    	let t124;
+    	let h24;
+    	let t126;
+    	let p14;
+    	let t128;
+    	let p15;
+    	let em5;
+    	let t130;
+    	let t131;
+    	let p16;
+    	let em6;
+    	let t133;
+    	let t134;
+    	let div20;
+    	let img1;
+    	let img1_src_value;
+    	let t135;
+    	let section5;
+    	let div22;
+    	let div21;
+    	let t136;
+    	let div24;
+    	let div23;
+    	let h25;
+    	let t138;
+    	let div25;
+    	let risktable;
     	let current;
     	let mounted;
     	let dispose;
     	logo = new Logo({ $$inline: true });
-    	let each_value = /*$data*/ ctx[0].actions;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$c(get_each_context$c(ctx, each_value, i));
-    	}
-
-    	const out = i => transition_out(each_blocks[i], 1, 1, () => {
-    		each_blocks[i] = null;
-    	});
+    	climatevariables = new ClimateVariables({ $$inline: true });
+    	climatehazards = new ClimateHazards({ $$inline: true });
+    	climaterisks = new ClimateRisks({ $$inline: true });
+    	risktable = new RiskTable({ $$inline: true });
 
     	const block = {
     		c: function create() {
@@ -36062,111 +39754,465 @@ var app = (function (exports) {
     			t0 = space();
     			h1 = element("h1");
     			span0 = element("span");
-    			span0.textContent = "hepburn";
+    			span0.textContent = "Adapting to";
     			br0 = element("br");
-    			t2 = text$1("\n            adapation action");
+    			t2 = text$1("\n            climate change");
     			br1 = element("br");
     			t3 = space();
     			span1 = element("span");
-    			span1.textContent = "postcards";
+    			span1.textContent = "in Hepburn";
     			t5 = space();
     			div2 = element("div");
     			p0 = element("p");
-    			t6 = text$1("This section provides a set of summary 'postcards' for ");
-    			em = element("em");
-    			em.textContent = "every";
-    			t8 = text$1(" adaptation considered in this research. These postcards provide descriptions, details and links to further information about each action; and can be added to via the Hepburn Z-NET adaptation action database.");
-    			t9 = space();
-    			p1 = element("p");
-    			p1.textContent = "Note: Options for selecting and styling each action postcards will be provided. The default development view (as shown) is to";
-    			t11 = space();
+    			p0.textContent = "The climate is changing and we need to make sure our community is ready to adapt to future with more frequent adn severe climate-related events like bushfires, floods, droughts and heatwaves. In this section we will: summarise the latest climate change modelling for Hepburn; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.";
+    			t7 = space();
     			div3 = element("div");
-    			ul = element("ul");
+    			ul0 = element("ul");
     			li0 = element("li");
-    			li0.textContent = "Postcard maker";
-    			t13 = space();
+    			li0.textContent = "Introduction";
+    			t9 = space();
     			li1 = element("li");
-    			li1.textContent = "Actions menu";
+    			li1.textContent = "Climate variables";
+    			t11 = space();
+    			li2 = element("li");
+    			li2.textContent = "Hazards and events";
+    			t13 = space();
+    			li3 = element("li");
+    			li3.textContent = "Climate risk";
     			t15 = space();
-    			div14 = element("div");
-    			section0 = element("section");
-    			div13 = element("div");
-    			h2 = element("h2");
-    			h2.textContent = "Options for viewing creating adapation action postcards";
+    			li4 = element("li");
+    			li4.textContent = "Community impact";
     			t17 = space();
-    			div9 = element("div");
-    			div6 = element("div");
-    			div6.textContent = "Select an action from a list";
-    			t19 = space();
+    			div26 = element("div");
+    			section0 = element("section");
     			div7 = element("div");
-    			div7.textContent = "Select an action from table";
-    			t21 = space();
+    			div6 = element("div");
+    			hr0 = element("hr");
+    			t18 = space();
+    			h20 = element("h2");
+    			h20.textContent = "Climate change adaptation";
+    			t20 = space();
+    			p1 = element("p");
+    			t21 = text$1("Our climate ");
+    			em0 = element("em");
+    			em0.textContent = "is";
+    			t23 = text$1(" changing. The Paris Agreement - the legally binding international treaty on climate change - sets the goal of ");
+    			strong0 = element("strong");
+    			strong0.textContent = "limiting global warming to well below 2, preferably to 1.5 degrees Celsius";
+    			t25 = text$1(", compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and drawdown greenhouse gas emissions. And in Hepburn, we've been coordinating actions to reduce emissions through ");
+    			a0 = element("a");
+    			a0.textContent = "Z-NET Hepburn";
+    			t27 = text$1(". These emissions reduction actions also known as ");
+    			em1 = element("em");
+    			em1.textContent = "mitigation";
+    			t29 = text$1(" actions. But how do we deal with the climate change we're already locked into?");
+    			t30 = space();
+    			p2 = element("p");
+    			t31 = text$1("This is where climate change adaptation comes in: it's the \"process of adjustment to actual or expected climate and its effects\". In other words, making sure our community is prepared and able to cope with climate change. On the surface, adaptation seems ");
+    			em2 = element("em");
+    			em2.textContent = "fairly";
+    			t33 = text$1(" straightforward however it encompasses a chain of concepts - many of which overlap with other domains and 'ways of seeing the world' - which can make adaptation difficult to fully grasp.");
+    			t34 = space();
+    			p3 = element("p");
+    			p3.textContent = "This aim of this guide is help you understand what adaptation is all about, and why it matters to Hepburn.";
+    			t36 = space();
     			div8 = element("div");
-    			div8.textContent = "Select an action from table";
-    			t23 = space();
-    			div12 = element("div");
-    			h3 = element("h3");
-    			h3.textContent = "Postcard styling options";
-    			t25 = space();
-    			div10 = element("div");
-    			div10.textContent = "Color palette options";
-    			t27 = space();
-    			div11 = element("div");
-    			div11.textContent = "Image style options";
-    			t29 = space();
+    			img0 = element("img");
+    			t37 = space();
     			section1 = element("section");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(div0, "class", "hero-logo__wrapper svelte-1dw1a61");
-    			add_location(div0, file$k, 13, 12, 419);
-    			attr_dev(div1, "class", "hero-logo svelte-1dw1a61");
-    			add_location(div1, file$k, 12, 8, 383);
-    			attr_dev(span0, "class", "title--mute svelte-1dw1a61");
-    			add_location(span0, file$k, 16, 12, 533);
-    			add_location(br0, file$k, 16, 54, 575);
-    			add_location(br1, file$k, 17, 28, 609);
-    			attr_dev(span1, "class", "title--highlight svelte-1dw1a61");
-    			add_location(span1, file$k, 18, 12, 627);
-    			attr_dev(h1, "class", "hero-content__title svelte-1dw1a61");
-    			add_location(h1, file$k, 15, 8, 488);
-    			add_location(em, file$k, 21, 70, 802);
-    			add_location(p0, file$k, 21, 12, 744);
-    			attr_dev(p1, "class", "note svelte-1dw1a61");
-    			add_location(p1, file$k, 23, 12, 1055);
-    			attr_dev(div2, "class", "hero-content__text svelte-1dw1a61");
-    			add_location(div2, file$k, 20, 8, 699);
-    			attr_dev(li0, "class", "select__item svelte-1dw1a61");
-    			attr_dev(li0, "actname", "maker");
-    			add_location(li0, file$k, 28, 16, 1295);
-    			attr_dev(li1, "class", "select__item svelte-1dw1a61");
-    			attr_dev(li1, "actname", "menu");
-    			add_location(li1, file$k, 29, 16, 1396);
-    			add_location(ul, file$k, 27, 12, 1274);
-    			attr_dev(div3, "class", "select svelte-1dw1a61");
-    			add_location(div3, file$k, 26, 8, 1240);
-    			attr_dev(div4, "class", "hero-content svelte-1dw1a61");
-    			add_location(div4, file$k, 10, 4, 313);
-    			attr_dev(div5, "class", "hero-wrapper svelte-1dw1a61");
-    			add_location(div5, file$k, 9, 0, 280);
-    			add_location(h2, file$k, 39, 12, 1666);
-    			add_location(div6, file$k, 41, 16, 1765);
-    			add_location(div7, file$k, 42, 16, 1821);
-    			add_location(div8, file$k, 43, 16, 1876);
-    			add_location(div9, file$k, 40, 12, 1743);
-    			add_location(h3, file$k, 46, 16, 1968);
-    			add_location(div10, file$k, 47, 16, 2018);
-    			add_location(div11, file$k, 48, 16, 2067);
-    			add_location(div12, file$k, 45, 12, 1946);
-    			add_location(div13, file$k, 38, 8, 1648);
-    			attr_dev(section0, "class", "option-container col-1-2 svelte-1dw1a61");
-    			add_location(section0, file$k, 37, 4, 1595);
-    			attr_dev(section1, "class", "postcards-container");
-    			add_location(section1, file$k, 53, 4, 2152);
-    			attr_dev(div14, "class", "content-wrapper svelte-1dw1a61");
-    			add_location(div14, file$k, 36, 0, 1559);
+    			div10 = element("div");
+    			div9 = element("div");
+    			hr1 = element("hr");
+    			t38 = space();
+    			h21 = element("h2");
+    			h21.textContent = "How the climate is changing";
+    			t40 = space();
+    			p4 = element("p");
+    			t41 = text$1("Let's start with some definitions (and data!) ");
+    			strong1 = element("strong");
+    			strong1.textContent = "Climate variables";
+    			t43 = text$1(" are observations that you might recognise from weather forecasts and meteorological data. These are ways we can describe and measure climate change.");
+    			t44 = space();
+    			p5 = element("p");
+    			t45 = text$1("It gets more interesting when we look at climate models that project how these variables might change over time. Modelling by ");
+    			a1 = element("a");
+    			a1.textContent = "CSIRO for the Victorian Government (DEWLP)";
+    			t47 = text$1(" for the Central Highlands region (which includes Hepburn) ");
+    			a2 = element("a");
+    			a2.textContent = "projects the change in each climate variable";
+    			t49 = text$1(" between 2019 and 2090. Each model projection assumes an emissions scenarios that corresponds to a \"Representative Concentration Pathway\" (RCP) that corresponds to different levels of average global warming by 2100. The ");
+    			strong2 = element("strong");
+    			strong2.textContent = "RCP4.5";
+    			t51 = text$1(" and ");
+    			strong3 = element("strong");
+    			strong3.textContent = "RCP8.5";
+    			t53 = text$1(" scenarios shown here and correspond to global warming of 4.5℃ and 8.5℃ respectively, by 2100.");
+    			t54 = space();
+    			p6 = element("p");
+    			t55 = text$1("We can (very simply) think of these as medium and higher warming scenarios. But more importantly, together they are illustrate");
+    			strong4 = element("strong");
+    			strong4.textContent = "the general trend and level of uncertainty";
+    			t57 = text$1(" of climate modelling for Hepburn.");
+    			t58 = space();
+    			p7 = element("p");
+    			t59 = text$1("The last idea we'll consider here are ");
+    			strong5 = element("strong");
+    			strong5.textContent = "climate hazards";
+    			t61 = text$1(" and how they are driven by climate variables. Four hazards were identified in a ");
+    			a3 = element("a");
+    			a3.textContent = "situational analysis";
+    			t63 = text$1(" (by RMIT) that supports the regional ");
+    			a4 = element("a");
+    			a4.textContent = "Adapt Grampians";
+    			t65 = text$1("  initiative, which includes Hepburn Shire. These ");
+    			strong6 = element("strong");
+    			strong6.textContent = "hazards represent threats to our community ";
+    			t67 = text$1("that will be ");
+    			strong7 = element("strong");
+    			strong7.textContent = "amplified under all climate change scenarios";
+    			t69 = text$1(".");
+    			t70 = space();
+    			div11 = element("div");
+    			create_component(climatevariables.$$.fragment);
+    			t71 = space();
+    			section2 = element("section");
+    			div13 = element("div");
+    			div12 = element("div");
+    			hr2 = element("hr");
+    			t72 = space();
+    			h22 = element("h2");
+    			h22.textContent = "Climate hazards in Hepburn";
+    			t74 = space();
+    			p8 = element("p");
+    			t75 = text$1("Hazards are quite easy for us to understand, however it's their related ");
+    			strong8 = element("strong");
+    			strong8.textContent = "climate events";
+    			t77 = text$1(" that are directly experienced by the community. Climate events come in two kinds:");
+    			t78 = space();
+    			ul1 = element("ul");
+    			li5 = element("li");
+    			strong9 = element("strong");
+    			strong9.textContent = "Shocks";
+    			t80 = text$1(": these are intense, shortly sustained events that are commonly known natural (or climate) disasters; and");
+    			t81 = space();
+    			li6 = element("li");
+    			strong10 = element("strong");
+    			strong10.textContent = "Stresses";
+    			t83 = text$1(": these are events that build and compound over longer periods.");
+    			t84 = space();
+    			p9 = element("p");
+    			t85 = text$1("Climate scientists - aided by models and projections - tell us that climate change will lead to ");
+    			strong11 = element("strong");
+    			strong11.textContent = "more frequent and more intense climate events";
+    			t87 = text$1(". Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn.");
+    			t88 = space();
+    			div14 = element("div");
+    			create_component(climatehazards.$$.fragment);
+    			t89 = space();
+    			section3 = element("section");
+    			div16 = element("div");
+    			div15 = element("div");
+    			hr3 = element("hr");
+    			t90 = space();
+    			h23 = element("h2");
+    			h23.textContent = "Climate risk";
+    			t92 = space();
+    			p10 = element("p");
+    			t93 = text$1("The core definition of climate risk — provided by the ");
+    			a5 = element("a");
+    			a5.textContent = "IPCC";
+    			t95 = text$1(" — is the ");
+    			strong12 = element("strong");
+    			strong12.textContent = "\"potential for adverse consequence for human or ecological systems";
+    			t97 = text$1(" [.. and I]n the context of climate change, risks can arise from potential ");
+    			em3 = element("em");
+    			em3.textContent = "impacts";
+    			t99 = text$1(" of climate change as well as human ");
+    			em4 = element("em");
+    			em4.textContent = "responses";
+    			t101 = text$1(" to climate change\".");
+    			t102 = space();
+    			p11 = element("p");
+    			t103 = text$1("We'll start by focusing on risk in the context of the impacts of climate change as these impacts are directly experienced by the community. These ");
+    			strong13 = element("strong");
+    			strong13.textContent = "\"risks result from dynamic interactions between climate-related hazards with the exposure and vulnerability of the affected human or ecological system to the hazards\"";
+    			t105 = text$1(". In other words, the hazards that we've been talking about are just one determinant of risk: we also need to consider the concepts of ");
+    			strong14 = element("strong");
+    			strong14.textContent = "exposure";
+    			t107 = text$1(" and ");
+    			strong15 = element("strong");
+    			strong15.textContent = "vulnerability";
+    			t109 = text$1(".");
+    			t110 = space();
+    			p12 = element("p");
+    			t111 = text$1("Exposure to a hazard (related event) is hopefully an easy concept to grasp, because events are spatial and protection often involves a physical response or intervention. Vulnerability is trickier as it involves our individual and collective capacities to adapt to and cope with \"adverse consequences\". Vulnerability is closely associated with ");
+    			strong16 = element("strong");
+    			strong16.textContent = "adaptive capacity";
+    			t113 = text$1(" and  ");
+    			strong17 = element("strong");
+    			strong17.textContent = "resilience";
+    			t115 = text$1(" (which is often be used in other closely related contexts). For our purposes, we think of resilience and adaptive capacity as having similar qualities that reduce vulnerability.");
+    			t116 = space();
+    			p13 = element("p");
+    			t117 = text$1("The ");
+    			strong18 = element("strong");
+    			strong18.textContent = "response";
+    			t119 = text$1(" to climate change can also ");
+    			a6 = element("a");
+    			a6.textContent = "be considered as a fourth determinant or risk";
+    			t121 = text$1(". We'll look at this in more detail by examining Hepburn's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in  community level.");
+    			t122 = space();
+    			div17 = element("div");
+    			create_component(climaterisks.$$.fragment);
+    			t123 = space();
+    			section4 = element("section");
+    			div19 = element("div");
+    			div18 = element("div");
+    			hr4 = element("hr");
+    			t124 = space();
+    			h24 = element("h2");
+    			h24.textContent = "Climate risks and community impacts";
+    			t126 = space();
+    			p14 = element("p");
+    			p14.textContent = "We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn, and help us to understand what's at stake.";
+    			t128 = space();
+    			p15 = element("p");
+    			em5 = element("em");
+    			em5.textContent = "Placeholder message for before consultation";
+    			t130 = text$1(": These risks have been proposed as a starting point and prompt for community input and review. They are grouped into \"risk areas\" that help to group and classify them into broader themes that can help us think about the wide-ranging impacts of climate hazards and events.");
+    			t131 = space();
+    			p16 = element("p");
+    			em6 = element("em");
+    			em6.textContent = "To be updated to after community consultation and input";
+    			t133 = text$1(": These risks and risk areas have been sourced and reviewed by the Hepburn community and reflect their concerns, inputs and experience of how these known climate hazards affect the community.");
+    			t134 = space();
+    			div20 = element("div");
+    			img1 = element("img");
+    			t135 = space();
+    			section5 = element("section");
+    			div22 = element("div");
+    			div21 = element("div");
+    			t136 = space();
+    			div24 = element("div");
+    			div23 = element("div");
+    			h25 = element("h2");
+    			h25.textContent = "Translating risk into community impacts";
+    			t138 = space();
+    			div25 = element("div");
+    			create_component(risktable.$$.fragment);
+    			attr_dev(div0, "class", "hero-logo__wrapper svelte-1mpa81l");
+    			add_location(div0, file$d, 22, 12, 976);
+    			attr_dev(div1, "class", "hero-logo svelte-1mpa81l");
+    			add_location(div1, file$d, 21, 8, 940);
+    			attr_dev(span0, "class", "title--mute svelte-1mpa81l");
+    			add_location(span0, file$d, 25, 12, 1090);
+    			add_location(br0, file$d, 25, 58, 1136);
+    			add_location(br1, file$d, 26, 26, 1168);
+    			attr_dev(span1, "class", "title--highlight svelte-1mpa81l");
+    			add_location(span1, file$d, 27, 12, 1186);
+    			attr_dev(h1, "class", "hero-content__title svelte-1mpa81l");
+    			add_location(h1, file$d, 24, 8, 1045);
+    			attr_dev(p0, "class", "svelte-1mpa81l");
+    			add_location(p0, file$d, 30, 12, 1304);
+    			attr_dev(div2, "class", "hero-content__text svelte-1mpa81l");
+    			add_location(div2, file$d, 29, 8, 1259);
+    			attr_dev(li0, "class", "select__item svelte-1mpa81l");
+    			attr_dev(li0, "actname", "intro");
+    			add_location(li0, file$d, 36, 16, 1874);
+    			attr_dev(li1, "class", "select__item svelte-1mpa81l");
+    			attr_dev(li1, "actname", "variables");
+    			add_location(li1, file$d, 37, 16, 1973);
+    			attr_dev(li2, "class", "select__item svelte-1mpa81l");
+    			attr_dev(li2, "actname", "hazards");
+    			add_location(li2, file$d, 38, 16, 2081);
+    			attr_dev(li3, "class", "select__item svelte-1mpa81l");
+    			attr_dev(li3, "actname", "climateRisk");
+    			add_location(li3, file$d, 39, 16, 2188);
+    			attr_dev(li4, "class", "select__item svelte-1mpa81l");
+    			attr_dev(li4, "actname", "communityRisk");
+    			add_location(li4, file$d, 40, 16, 2293);
+    			attr_dev(ul0, "class", "svelte-1mpa81l");
+    			add_location(ul0, file$d, 35, 12, 1853);
+    			attr_dev(div3, "class", "select svelte-1mpa81l");
+    			add_location(div3, file$d, 33, 8, 1744);
+    			attr_dev(div4, "class", "hero-content svelte-1mpa81l");
+    			add_location(div4, file$d, 19, 4, 870);
+    			attr_dev(div5, "class", "hero-wrapper svelte-1mpa81l");
+    			add_location(div5, file$d, 18, 0, 837);
+    			attr_dev(hr0, "class", "svelte-1mpa81l");
+    			add_location(hr0, file$d, 52, 16, 2688);
+    			attr_dev(h20, "class", "svelte-1mpa81l");
+    			add_location(h20, file$d, 53, 16, 2709);
+    			add_location(em0, file$d, 54, 31, 2775);
+    			add_location(strong0, file$d, 54, 153, 2897);
+    			attr_dev(a0, "class", "underline");
+    			attr_dev(a0, "href", "https://hepburnznet.org.au/");
+    			attr_dev(a0, "target", "_blank");
+    			add_location(a0, file$d, 54, 450, 3194);
+    			add_location(em1, file$d, 54, 592, 3336);
+    			attr_dev(p1, "class", "svelte-1mpa81l");
+    			add_location(p1, file$d, 54, 16, 2760);
+    			add_location(em2, file$d, 56, 274, 3731);
+    			attr_dev(p2, "class", "svelte-1mpa81l");
+    			add_location(p2, file$d, 56, 16, 3473);
+    			attr_dev(p3, "class", "svelte-1mpa81l");
+    			add_location(p3, file$d, 58, 16, 3972);
+    			attr_dev(div6, "scene", "0");
+    			add_location(div6, file$d, 51, 12, 2656);
+    			attr_dev(div7, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div7, file$d, 50, 8, 2610);
+    			if (!src_url_equal(img0.src, img0_src_value = "./static/img/christian-bass-11UT32fql64-unsplash.jpg")) attr_dev(img0, "src", img0_src_value);
+    			attr_dev(img0, "alt", "");
+    			attr_dev(img0, "class", "svelte-1mpa81l");
+    			add_location(img0, file$d, 64, 12, 4186);
+    			attr_dev(div8, "class", "vis-wrapper svelte-1mpa81l");
+    			add_location(div8, file$d, 63, 8, 4146);
+    			attr_dev(section0, "act", "intro");
+    			attr_dev(section0, "class", "section-wrapper col-1-2 svelte-1mpa81l");
+    			add_location(section0, file$d, 49, 4, 2543);
+    			attr_dev(hr1, "class", "svelte-1mpa81l");
+    			add_location(hr1, file$d, 72, 16, 4476);
+    			attr_dev(h21, "class", "svelte-1mpa81l");
+    			add_location(h21, file$d, 73, 16, 4497);
+    			add_location(strong1, file$d, 74, 65, 4599);
+    			attr_dev(p4, "class", "svelte-1mpa81l");
+    			add_location(p4, file$d, 74, 16, 4550);
+    			attr_dev(a1, "href", "https://www.climatechange.vic.gov.au/victorias-changing-climate");
+    			attr_dev(a1, "target", "_blank");
+    			add_location(a1, file$d, 76, 145, 4949);
+    			attr_dev(a2, "href", "https://www.climatechangeinaustralia.gov.au/en/projects/victorian-climate-projections-2019/vcp19-accessing-datasets/");
+    			attr_dev(a2, "target", "_blank");
+    			add_location(a2, file$d, 76, 344, 5148);
+    			add_location(strong2, file$d, 76, 758, 5562);
+    			add_location(strong3, file$d, 76, 786, 5590);
+    			attr_dev(p5, "class", "svelte-1mpa81l");
+    			add_location(p5, file$d, 76, 16, 4820);
+    			add_location(strong4, file$d, 78, 145, 5887);
+    			attr_dev(p6, "class", "svelte-1mpa81l");
+    			add_location(p6, file$d, 78, 16, 5758);
+    			add_location(strong5, file$d, 80, 57, 6060);
+    			attr_dev(a3, "href", "https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf");
+    			attr_dev(a3, "target", "_blank");
+    			add_location(a3, file$d, 80, 170, 6173);
+    			attr_dev(a4, "href", "https://adaptgrampians.com.au/");
+    			attr_dev(a4, "target", "_blank");
+    			add_location(a4, file$d, 80, 391, 6394);
+    			add_location(strong6, file$d, 80, 517, 6520);
+    			add_location(strong7, file$d, 80, 591, 6594);
+    			attr_dev(p7, "class", "svelte-1mpa81l");
+    			add_location(p7, file$d, 80, 16, 6019);
+    			attr_dev(div9, "scene", "0");
+    			add_location(div9, file$d, 71, 12, 4444);
+    			attr_dev(div10, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div10, file$d, 70, 8, 4398);
+    			attr_dev(div11, "class", "vis-wrapper svelte-1mpa81l");
+    			add_location(div11, file$d, 85, 8, 6725);
+    			attr_dev(section1, "act", "variables");
+    			attr_dev(section1, "class", "section-wrapper col-2-1 svelte-1mpa81l");
+    			add_location(section1, file$d, 69, 4, 4327);
+    			attr_dev(hr2, "class", "svelte-1mpa81l");
+    			add_location(hr2, file$d, 94, 16, 6999);
+    			attr_dev(h22, "class", "svelte-1mpa81l");
+    			add_location(h22, file$d, 95, 16, 7020);
+    			add_location(strong8, file$d, 96, 91, 7147);
+    			attr_dev(p8, "class", "svelte-1mpa81l");
+    			add_location(p8, file$d, 96, 16, 7072);
+    			add_location(strong9, file$d, 98, 24, 7310);
+    			add_location(li5, file$d, 98, 20, 7306);
+    			add_location(strong10, file$d, 99, 24, 7469);
+    			add_location(li6, file$d, 99, 20, 7465);
+    			attr_dev(ul1, "class", "svelte-1mpa81l");
+    			add_location(ul1, file$d, 97, 16, 7281);
+    			add_location(strong11, file$d, 101, 115, 7700);
+    			attr_dev(p9, "class", "svelte-1mpa81l");
+    			add_location(p9, file$d, 101, 16, 7601);
+    			attr_dev(div12, "scene", "0");
+    			add_location(div12, file$d, 93, 12, 6967);
+    			attr_dev(div13, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div13, file$d, 92, 8, 6921);
+    			attr_dev(div14, "class", "vis-wrapper svelte-1mpa81l");
+    			add_location(div14, file$d, 106, 8, 7929);
+    			attr_dev(section2, "act", "hazards");
+    			attr_dev(section2, "class", "section-wrapper col-1-2 svelte-1mpa81l");
+    			add_location(section2, file$d, 91, 4, 6852);
+    			attr_dev(hr3, "class", "svelte-1mpa81l");
+    			add_location(hr3, file$d, 115, 16, 8220);
+    			attr_dev(h23, "class", "svelte-1mpa81l");
+    			add_location(h23, file$d, 116, 16, 8241);
+    			attr_dev(a5, "href", "https://www.ipcc.ch/site/assets/uploads/2021/02/Risk-guidance-FINAL_15Feb2021.pdf");
+    			attr_dev(a5, "target", "_blank");
+    			add_location(a5, file$d, 117, 79, 8342);
+    			add_location(strong12, file$d, 117, 211, 8474);
+    			add_location(em3, file$d, 117, 369, 8632);
+    			add_location(em4, file$d, 117, 421, 8684);
+    			attr_dev(p10, "class", "svelte-1mpa81l");
+    			add_location(p10, file$d, 117, 16, 8279);
+    			add_location(strong13, file$d, 119, 165, 8910);
+    			add_location(strong14, file$d, 119, 483, 9228);
+    			add_location(strong15, file$d, 119, 513, 9258);
+    			attr_dev(p11, "class", "svelte-1mpa81l");
+    			add_location(p11, file$d, 119, 16, 8761);
+    			add_location(strong16, file$d, 121, 362, 9674);
+    			add_location(strong17, file$d, 121, 402, 9714);
+    			attr_dev(p12, "class", "svelte-1mpa81l");
+    			add_location(p12, file$d, 121, 16, 9328);
+    			add_location(strong18, file$d, 123, 23, 9964);
+    			attr_dev(a6, "href", "https://www.sciencedirect.com/science/article/pii/S2590332221001792");
+    			attr_dev(a6, "target", "_blank");
+    			add_location(a6, file$d, 123, 76, 10017);
+    			attr_dev(p13, "class", "svelte-1mpa81l");
+    			add_location(p13, file$d, 123, 16, 9957);
+    			attr_dev(div15, "scene", "0");
+    			add_location(div15, file$d, 114, 12, 8188);
+    			attr_dev(div16, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div16, file$d, 113, 8, 8142);
+    			attr_dev(div17, "class", "vis-wrapper svelte-1mpa81l");
+    			add_location(div17, file$d, 128, 8, 10412);
+    			attr_dev(section3, "act", "climateRisk");
+    			attr_dev(section3, "class", "section-wrapper col-2-1 svelte-1mpa81l");
+    			add_location(section3, file$d, 112, 4, 8069);
+    			attr_dev(hr4, "class", "svelte-1mpa81l");
+    			add_location(hr4, file$d, 137, 16, 10711);
+    			attr_dev(h24, "class", "svelte-1mpa81l");
+    			add_location(h24, file$d, 138, 16, 10732);
+    			attr_dev(p14, "class", "svelte-1mpa81l");
+    			add_location(p14, file$d, 139, 16, 10794);
+    			add_location(em5, file$d, 141, 19, 11238);
+    			attr_dev(p15, "class", "svelte-1mpa81l");
+    			add_location(p15, file$d, 141, 16, 11235);
+    			add_location(em6, file$d, 142, 19, 11586);
+    			attr_dev(p16, "class", "svelte-1mpa81l");
+    			add_location(p16, file$d, 142, 16, 11583);
+    			attr_dev(div18, "scene", "0");
+    			add_location(div18, file$d, 136, 12, 10679);
+    			attr_dev(div19, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div19, file$d, 135, 8, 10633);
+    			if (!src_url_equal(img1.src, img1_src_value = "./static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg")) attr_dev(img1, "src", img1_src_value);
+    			attr_dev(img1, "alt", "");
+    			attr_dev(img1, "class", "svelte-1mpa81l");
+    			add_location(img1, file$d, 147, 12, 11929);
+    			attr_dev(div20, "class", "vis-wrapper svelte-1mpa81l");
+    			add_location(div20, file$d, 146, 8, 11889);
+    			attr_dev(section4, "act", "communityRisk");
+    			attr_dev(section4, "class", "section-wrapper col-1-2 svelte-1mpa81l");
+    			add_location(section4, file$d, 134, 4, 10558);
+    			attr_dev(div21, "class", "invert-bg-clip svelte-1mpa81l");
+    			add_location(div21, file$d, 154, 12, 12189);
+    			attr_dev(div22, "class", "invert-bg svelte-1mpa81l");
+    			add_location(div22, file$d, 153, 8, 12150);
+    			attr_dev(h25, "class", "svelte-1mpa81l");
+    			add_location(h25, file$d, 158, 16, 12326);
+    			attr_dev(div23, "scene", "0");
+    			add_location(div23, file$d, 157, 12, 12294);
+    			attr_dev(div24, "class", "narrative-wrapper svelte-1mpa81l");
+    			add_location(div24, file$d, 156, 8, 12248);
+    			attr_dev(div25, "class", "table-wrapper svelte-1mpa81l");
+    			add_location(div25, file$d, 161, 8, 12417);
+    			attr_dev(section5, "act", "communityImpact");
+    			attr_dev(section5, "class", "section-wrapper table invert svelte-1mpa81l");
+    			add_location(section5, file$d, 152, 4, 12068);
+    			attr_dev(div26, "class", "content-wrapper svelte-1mpa81l");
+    			add_location(div26, file$d, 47, 0, 2469);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36188,109 +40234,236 @@ var app = (function (exports) {
     			append_dev(div4, t5);
     			append_dev(div4, div2);
     			append_dev(div2, p0);
-    			append_dev(p0, t6);
-    			append_dev(p0, em);
-    			append_dev(p0, t8);
-    			append_dev(div2, t9);
-    			append_dev(div2, p1);
-    			append_dev(div4, t11);
+    			append_dev(div4, t7);
     			append_dev(div4, div3);
-    			append_dev(div3, ul);
-    			append_dev(ul, li0);
-    			append_dev(ul, t13);
-    			append_dev(ul, li1);
-    			insert_dev(target, t15, anchor);
-    			insert_dev(target, div14, anchor);
-    			append_dev(div14, section0);
-    			append_dev(section0, div13);
-    			append_dev(div13, h2);
-    			append_dev(div13, t17);
-    			append_dev(div13, div9);
-    			append_dev(div9, div6);
-    			append_dev(div9, t19);
-    			append_dev(div9, div7);
-    			append_dev(div9, t21);
-    			append_dev(div9, div8);
-    			append_dev(div13, t23);
+    			append_dev(div3, ul0);
+    			append_dev(ul0, li0);
+    			append_dev(ul0, t9);
+    			append_dev(ul0, li1);
+    			append_dev(ul0, t11);
+    			append_dev(ul0, li2);
+    			append_dev(ul0, t13);
+    			append_dev(ul0, li3);
+    			append_dev(ul0, t15);
+    			append_dev(ul0, li4);
+    			insert_dev(target, t17, anchor);
+    			insert_dev(target, div26, anchor);
+    			append_dev(div26, section0);
+    			append_dev(section0, div7);
+    			append_dev(div7, div6);
+    			append_dev(div6, hr0);
+    			append_dev(div6, t18);
+    			append_dev(div6, h20);
+    			append_dev(div6, t20);
+    			append_dev(div6, p1);
+    			append_dev(p1, t21);
+    			append_dev(p1, em0);
+    			append_dev(p1, t23);
+    			append_dev(p1, strong0);
+    			append_dev(p1, t25);
+    			append_dev(p1, a0);
+    			append_dev(p1, t27);
+    			append_dev(p1, em1);
+    			append_dev(p1, t29);
+    			append_dev(div6, t30);
+    			append_dev(div6, p2);
+    			append_dev(p2, t31);
+    			append_dev(p2, em2);
+    			append_dev(p2, t33);
+    			append_dev(div6, t34);
+    			append_dev(div6, p3);
+    			append_dev(section0, t36);
+    			append_dev(section0, div8);
+    			append_dev(div8, img0);
+    			append_dev(div26, t37);
+    			append_dev(div26, section1);
+    			append_dev(section1, div10);
+    			append_dev(div10, div9);
+    			append_dev(div9, hr1);
+    			append_dev(div9, t38);
+    			append_dev(div9, h21);
+    			append_dev(div9, t40);
+    			append_dev(div9, p4);
+    			append_dev(p4, t41);
+    			append_dev(p4, strong1);
+    			append_dev(p4, t43);
+    			append_dev(div9, t44);
+    			append_dev(div9, p5);
+    			append_dev(p5, t45);
+    			append_dev(p5, a1);
+    			append_dev(p5, t47);
+    			append_dev(p5, a2);
+    			append_dev(p5, t49);
+    			append_dev(p5, strong2);
+    			append_dev(p5, t51);
+    			append_dev(p5, strong3);
+    			append_dev(p5, t53);
+    			append_dev(div9, t54);
+    			append_dev(div9, p6);
+    			append_dev(p6, t55);
+    			append_dev(p6, strong4);
+    			append_dev(p6, t57);
+    			append_dev(div9, t58);
+    			append_dev(div9, p7);
+    			append_dev(p7, t59);
+    			append_dev(p7, strong5);
+    			append_dev(p7, t61);
+    			append_dev(p7, a3);
+    			append_dev(p7, t63);
+    			append_dev(p7, a4);
+    			append_dev(p7, t65);
+    			append_dev(p7, strong6);
+    			append_dev(p7, t67);
+    			append_dev(p7, strong7);
+    			append_dev(p7, t69);
+    			append_dev(section1, t70);
+    			append_dev(section1, div11);
+    			mount_component(climatevariables, div11, null);
+    			append_dev(div26, t71);
+    			append_dev(div26, section2);
+    			append_dev(section2, div13);
     			append_dev(div13, div12);
-    			append_dev(div12, h3);
-    			append_dev(div12, t25);
-    			append_dev(div12, div10);
-    			append_dev(div12, t27);
-    			append_dev(div12, div11);
-    			append_dev(div14, t29);
-    			append_dev(div14, section1);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(section1, null);
-    			}
-
+    			append_dev(div12, hr2);
+    			append_dev(div12, t72);
+    			append_dev(div12, h22);
+    			append_dev(div12, t74);
+    			append_dev(div12, p8);
+    			append_dev(p8, t75);
+    			append_dev(p8, strong8);
+    			append_dev(p8, t77);
+    			append_dev(div12, t78);
+    			append_dev(div12, ul1);
+    			append_dev(ul1, li5);
+    			append_dev(li5, strong9);
+    			append_dev(li5, t80);
+    			append_dev(ul1, t81);
+    			append_dev(ul1, li6);
+    			append_dev(li6, strong10);
+    			append_dev(li6, t83);
+    			append_dev(div12, t84);
+    			append_dev(div12, p9);
+    			append_dev(p9, t85);
+    			append_dev(p9, strong11);
+    			append_dev(p9, t87);
+    			append_dev(section2, t88);
+    			append_dev(section2, div14);
+    			mount_component(climatehazards, div14, null);
+    			append_dev(div26, t89);
+    			append_dev(div26, section3);
+    			append_dev(section3, div16);
+    			append_dev(div16, div15);
+    			append_dev(div15, hr3);
+    			append_dev(div15, t90);
+    			append_dev(div15, h23);
+    			append_dev(div15, t92);
+    			append_dev(div15, p10);
+    			append_dev(p10, t93);
+    			append_dev(p10, a5);
+    			append_dev(p10, t95);
+    			append_dev(p10, strong12);
+    			append_dev(p10, t97);
+    			append_dev(p10, em3);
+    			append_dev(p10, t99);
+    			append_dev(p10, em4);
+    			append_dev(p10, t101);
+    			append_dev(div15, t102);
+    			append_dev(div15, p11);
+    			append_dev(p11, t103);
+    			append_dev(p11, strong13);
+    			append_dev(p11, t105);
+    			append_dev(p11, strong14);
+    			append_dev(p11, t107);
+    			append_dev(p11, strong15);
+    			append_dev(p11, t109);
+    			append_dev(div15, t110);
+    			append_dev(div15, p12);
+    			append_dev(p12, t111);
+    			append_dev(p12, strong16);
+    			append_dev(p12, t113);
+    			append_dev(p12, strong17);
+    			append_dev(p12, t115);
+    			append_dev(div15, t116);
+    			append_dev(div15, p13);
+    			append_dev(p13, t117);
+    			append_dev(p13, strong18);
+    			append_dev(p13, t119);
+    			append_dev(p13, a6);
+    			append_dev(p13, t121);
+    			append_dev(section3, t122);
+    			append_dev(section3, div17);
+    			mount_component(climaterisks, div17, null);
+    			append_dev(div26, t123);
+    			append_dev(div26, section4);
+    			append_dev(section4, div19);
+    			append_dev(div19, div18);
+    			append_dev(div18, hr4);
+    			append_dev(div18, t124);
+    			append_dev(div18, h24);
+    			append_dev(div18, t126);
+    			append_dev(div18, p14);
+    			append_dev(div18, t128);
+    			append_dev(div18, p15);
+    			append_dev(p15, em5);
+    			append_dev(p15, t130);
+    			append_dev(div18, t131);
+    			append_dev(div18, p16);
+    			append_dev(p16, em6);
+    			append_dev(p16, t133);
+    			append_dev(section4, t134);
+    			append_dev(section4, div20);
+    			append_dev(div20, img1);
+    			append_dev(div26, t135);
+    			append_dev(div26, section5);
+    			append_dev(section5, div22);
+    			append_dev(div22, div21);
+    			append_dev(section5, t136);
+    			append_dev(section5, div24);
+    			append_dev(div24, div23);
+    			append_dev(div23, h25);
+    			append_dev(section5, t138);
+    			append_dev(section5, div25);
+    			mount_component(risktable, div25, null);
     			current = true;
 
     			if (!mounted) {
     				dispose = [
-    					listen_dev(li0, "click", scrollTo, false, false, false),
-    					listen_dev(li1, "click", scrollTo, false, false, false)
+    					listen_dev(li0, "click", /*scrollTo*/ ctx[0], false, false, false),
+    					listen_dev(li1, "click", /*scrollTo*/ ctx[0], false, false, false),
+    					listen_dev(li2, "click", /*scrollTo*/ ctx[0], false, false, false),
+    					listen_dev(li3, "click", /*scrollTo*/ ctx[0], false, false, false),
+    					listen_dev(li4, "click", /*scrollTo*/ ctx[0], false, false, false)
     				];
 
     				mounted = true;
     			}
     		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$data*/ 1) {
-    				each_value = /*$data*/ ctx[0].actions;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$c(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    						transition_in(each_blocks[i], 1);
-    					} else {
-    						each_blocks[i] = create_each_block$c(child_ctx);
-    						each_blocks[i].c();
-    						transition_in(each_blocks[i], 1);
-    						each_blocks[i].m(section1, null);
-    					}
-    				}
-
-    				group_outros();
-
-    				for (i = each_value.length; i < each_blocks.length; i += 1) {
-    					out(i);
-    				}
-
-    				check_outros();
-    			}
-    		},
+    		p: noop$4,
     		i: function intro(local) {
     			if (current) return;
     			transition_in(logo.$$.fragment, local);
-
-    			for (let i = 0; i < each_value.length; i += 1) {
-    				transition_in(each_blocks[i]);
-    			}
-
+    			transition_in(climatevariables.$$.fragment, local);
+    			transition_in(climatehazards.$$.fragment, local);
+    			transition_in(climaterisks.$$.fragment, local);
+    			transition_in(risktable.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(logo.$$.fragment, local);
-    			each_blocks = each_blocks.filter(Boolean);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				transition_out(each_blocks[i]);
-    			}
-
+    			transition_out(climatevariables.$$.fragment, local);
+    			transition_out(climatehazards.$$.fragment, local);
+    			transition_out(climaterisks.$$.fragment, local);
+    			transition_out(risktable.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div5);
     			destroy_component(logo);
-    			if (detaching) detach_dev(t15);
-    			if (detaching) detach_dev(div14);
-    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(t17);
+    			if (detaching) detach_dev(div26);
+    			destroy_component(climatevariables);
+    			destroy_component(climatehazards);
+    			destroy_component(climaterisks);
+    			destroy_component(risktable);
     			mounted = false;
     			run_all(dispose);
     		}
@@ -36298,7 +40471,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$d.name,
     		type: "component",
     		source: "",
     		ctx
@@ -36307,32 +40480,45 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
+    function instance$d($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Postcards', slots, []);
+    	validate_slots('Adaptation', slots, []);
+
+    	const scrollTo = function () {
+    		document.querySelector(`section[act=${this.getAttribute('actName')}]`).scrollIntoView({ behavior: 'smooth' });
+    	};
+
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Postcards> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Adaptation> was created with unknown prop '${key}'`);
     	});
 
-    	$$self.$capture_state = () => ({ Logo, Postcard, data, $data });
-    	return [$data];
+    	$$self.$capture_state = () => ({
+    		Logo,
+    		ui,
+    		data,
+    		Type,
+    		ClimateVariables,
+    		ClimateHazards,
+    		ClimateRisks,
+    		RiskTable,
+    		scrollTo
+    	});
+
+    	return [scrollTo];
     }
 
-    class Postcards extends SvelteComponentDev {
+    class Adaptation extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$k, create_fragment$k, safe_not_equal, {});
+    		init$1(this, options, instance$d, create_fragment$d, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
-    			tagName: "Postcards",
+    			tagName: "Adaptation",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$d.name
     		});
     	}
     }
@@ -39345,3351 +43531,10 @@ var app = (function (exports) {
     //export * from "./ScrollSmoother.js";
     //export * from "./SplitText.js";
 
-    /* src/components/byPage/actions/vis/Type.svelte generated by Svelte v3.48.0 */
-    const file$j = "src/components/byPage/actions/vis/Type.svelte";
-
-    function create_fragment$j(ctx) {
-    	let g7;
-    	let g2;
-    	let g0;
-    	let text0;
-    	let tspan0;
-    	let t0;
-    	let t1;
-    	let text1;
-    	let t2;
-    	let g1;
-    	let text2;
-    	let tspan1;
-    	let t3;
-    	let t4;
-    	let text3;
-    	let t5;
-    	let g6;
-    	let g3;
-    	let g4;
-    	let g5;
-    	let g7_intro;
-
-    	const block = {
-    		c: function create() {
-    			g7 = svg_element("g");
-    			g2 = svg_element("g");
-    			g0 = svg_element("g");
-    			text0 = svg_element("text");
-    			tspan0 = svg_element("tspan");
-    			t0 = text$1("More");
-    			t1 = text$1(" Abstract");
-    			text1 = svg_element("text");
-    			t2 = text$1("Builds capacity");
-    			g1 = svg_element("g");
-    			text2 = svg_element("text");
-    			tspan1 = svg_element("tspan");
-    			t3 = text$1("More");
-    			t4 = text$1(" Concrete");
-    			text3 = svg_element("text");
-    			t5 = text$1("Responds to risk");
-    			g6 = svg_element("g");
-    			g3 = svg_element("g");
-    			g4 = svg_element("g");
-    			g5 = svg_element("g");
-    			attr_dev(tspan0, "class", "svelte-1c3fmty");
-    			toggle_class(tspan0, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			add_location(tspan0, file$j, 83, 98, 4216);
-    			attr_dev(text0, "class", "spectrum-label svelte-1c3fmty");
-    			toggle_class(text0, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text0, file$j, 83, 16, 4134);
-    			attr_dev(text1, "class", "spectrum-sub-label svelte-1c3fmty");
-    			attr_dev(text1, "dy", "35");
-    			toggle_class(text1, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text1, file$j, 84, 16, 4316);
-
-    			set_style(g0, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    			? 0
-    			: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    			? /*dims*/ ctx[0].height * 0.05
-    			: /*dims*/ ctx[0].height * 0.025) + "px)");
-
-    			add_location(g0, file$j, 82, 12, 3948);
-    			attr_dev(tspan1, "class", "svelte-1c3fmty");
-    			toggle_class(tspan1, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			add_location(tspan1, file$j, 87, 98, 4730);
-    			attr_dev(text2, "class", "spectrum-label svelte-1c3fmty");
-    			toggle_class(text2, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text2, file$j, 87, 16, 4648);
-    			attr_dev(text3, "class", "spectrum-sub-label svelte-1c3fmty");
-    			attr_dev(text3, "dy", "35");
-    			toggle_class(text3, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text3, file$j, 88, 16, 4830);
-
-    			set_style(g1, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    			? 0
-    			: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    			? /*dims*/ ctx[0].height * 0.65
-    			: /*dims*/ ctx[0].height * 0.85) + "px)");
-
-    			add_location(g1, file$j, 86, 12, 4463);
-    			attr_dev(g2, "class", "spectrum-group svelte-1c3fmty");
-    			add_location(g2, file$j, 81, 8, 3907);
-    			attr_dev(g3, "class", "connector-container");
-    			add_location(g3, file$j, 92, 12, 5130);
-    			attr_dev(g4, "class", "action-type-node-container");
-    			add_location(g4, file$j, 93, 12, 5180);
-    			attr_dev(g5, "class", "outcomes-label-container");
-    			add_location(g5, file$j, 94, 12, 5237);
-    			attr_dev(g6, "class", "flow-diagram svelte-1c3fmty");
-    			set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, 0px)");
-    			toggle_class(g6, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(g6, file$j, 91, 8, 4987);
-    			attr_dev(g7, "id", "type-vis-container");
-    			add_location(g7, file$j, 79, 0, 3774);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g7, anchor);
-    			append_dev(g7, g2);
-    			append_dev(g2, g0);
-    			append_dev(g0, text0);
-    			append_dev(text0, tspan0);
-    			append_dev(tspan0, t0);
-    			append_dev(text0, t1);
-    			append_dev(g0, text1);
-    			append_dev(text1, t2);
-    			append_dev(g2, g1);
-    			append_dev(g1, text2);
-    			append_dev(text2, tspan1);
-    			append_dev(tspan1, t3);
-    			append_dev(text2, t4);
-    			append_dev(g1, text3);
-    			append_dev(text3, t5);
-    			append_dev(g7, g6);
-    			append_dev(g6, g3);
-    			append_dev(g6, g4);
-    			append_dev(g6, g5);
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(tspan0, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(text0, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(text1, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			}
-
-    			if (dirty & /*$ui, dims*/ 3) {
-    				set_style(g0, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    				? 0
-    				: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    				? /*dims*/ ctx[0].height * 0.05
-    				: /*dims*/ ctx[0].height * 0.025) + "px)");
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(tspan1, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(text2, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(text3, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			}
-
-    			if (dirty & /*$ui, dims*/ 3) {
-    				set_style(g1, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    				? 0
-    				: /*dims*/ ctx[0].width * 0.5) + "px, " + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
-    				? /*dims*/ ctx[0].height * 0.65
-    				: /*dims*/ ctx[0].height * 0.85) + "px)");
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, 0px)");
-    			}
-
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(g6, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			}
-    		},
-    		i: function intro(local) {
-    			if (!g7_intro) {
-    				add_render_callback(() => {
-    					g7_intro = create_in_transition(g7, fade, {});
-    					g7_intro.start();
-    				});
-    			}
-    		},
-    		o: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g7);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$j.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$j($$self, $$props, $$invalidate) {
-    	let $data;
-    	let $ui;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
-    	validate_store(ui, 'ui');
-    	component_subscribe($$self, ui, $$value => $$invalidate(1, $ui = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Type', slots, []);
-    	let { dims = { width: 1600, height: 1600 } } = $$props;
-
-    	let { typeData = {
-    		nodes: $data.schema.actionTypeNodes.data,
-    		links: $data.schema.actionTypeLinks.data
-    	} } = $$props;
-
-    	// Drawn on mount to allow for calling of text wrapping
-    	onMount(() => {
-    		const connectors = select('.connector-container'),
-    			actionTypeNodes = select('.action-type-node-container');
-    			select('.outcomes-label-container');
-
-    		// Action type nodes
-    		actionTypeNodes.selectAll('.action-type-node').data(typeData.nodes).join(enter => {
-    			const group = enter.append('g').attr("class", d => slugify(d.Class)).style('transform', d => `translate( ${d.xPos * 0.5 * dims.width}px, ${d.yPos * dims.height}px`);
-    			const bg = group.append('rect').style('fill', 'var(--bg-color)').style('stroke', d => d.Class === 'foundation' ? '#000' : 'none').style('stroke-width', '3px').style('border-radius', '3px').style('rx', '5px').style('ry', '5px');
-
-    			group.append('path').classed('flow', true).style('transform', d => d.nodeCurve !== "invert"
-    			? `translate(0px, ${d.curveYoffset}px)`
-    			: `translate(0px, ${d.curveYoffset - 20}px) scaleY(-1)`).attr('d', d => d.Class === 'type'
-    			? "M -100 10 C -30 50, 30 50, 100 10"
-    			: null).classed('remove', d => d.Class !== 'type').style('fill', 'var(--bg-color');
-
-    			let text;
-    			text = group.append('text').classed(`action-node-label `, true).attr('x', 0).attr('y', 0).attr('dy', 0).text(d => d.Name).classed(d => d.Class, true).call(textWrap, dims.width * 0.2, 1.1, true);
-    			let box = text.node().getBBox();
-    			bg.attr('width', d => d.Class === 'foundation' ? box.width + 80 : 180);
-
-    			bg.attr('height', d => d.Class === 'foundation' || d.Class === 'response'
-    			? box.height + 50
-    			: 70);
-
-    			bg.attr('x', d => d.Class === 'foundation' ? -box.width * 0.5 - 40 : -90);
-
-    			bg.attr('y', d => d.Class === 'foundation' || d.Class === 'response'
-    			? -box.height * 0.5 - 30
-    			: -35);
-    		});
-
-    		// Links 
-    		for (const link of typeData.links) {
-    			const source = typeData.nodes.filter(e => e.Name === link._source.replaceAll('\"', ''))[0];
-    			const target = typeData.nodes.filter(e => e.Name === link._target.replaceAll('\"', ''))[0];
-
-    			connectors.append('path').classed('flow', true).attr('d', typeof link.midX !== 'undefined'
-    			? `M${source.xPos * 0.5 * dims.width}, ${source.yPos * dims.height} 
-                    L${link.midX * 0.5 * dims.width}, ${link.midY * dims.height} 
-                    L${target.xPos * 0.5 * dims.width}, ${target.yPos * dims.height}`
-    			: `M${source.xPos * 0.5 * dims.width}, ${source.yPos * dims.height} 
-                        L${target.xPos * 0.5 * dims.width}, ${target.yPos * dims.height}`);
-    		}
-    	});
-
-    	const writable_props = ['dims', 'typeData'];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Type> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$$set = $$props => {
-    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
-    		if ('typeData' in $$props) $$invalidate(2, typeData = $$props.typeData);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		fade,
-    		scale,
-    		onMount,
-    		d3,
-    		textWrap,
-    		slugify,
-    		ui,
-    		data,
-    		dims,
-    		typeData,
-    		$data,
-    		$ui
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
-    		if ('typeData' in $$props) $$invalidate(2, typeData = $$props.typeData);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	return [dims, $ui, typeData];
-    }
-
-    class Type extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$j, create_fragment$j, safe_not_equal, { dims: 0, typeData: 2 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Type",
-    			options,
-    			id: create_fragment$j.name
-    		});
-    	}
-
-    	get dims() {
-    		throw new Error("<Type>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set dims(value) {
-    		throw new Error("<Type>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get typeData() {
-    		throw new Error("<Type>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set typeData(value) {
-    		throw new Error("<Type>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
-    /* src/components/byPage/adaptation/vis/ClimateVariables.svelte generated by Svelte v3.48.0 */
-
-    const { Object: Object_1 } = globals;
-    const file$i = "src/components/byPage/adaptation/vis/ClimateVariables.svelte";
-
-    function get_each_context$b(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[6] = list[i];
-    	child_ctx[8] = i;
-    	return child_ctx;
-    }
-
-    function get_each_context_1$5(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[9] = list[i];
-    	child_ctx[8] = i;
-    	const constants_0 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable];
-    	child_ctx[10] = constants_0;
-    	const constants_1 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable];
-    	child_ctx[11] = constants_1;
-    	const constants_2 = /*$data*/ child_ctx[1].schema.climateVariablesCH.data.filter(e => e.Variable === /*d*/ child_ctx[9].Variable)[0]["Change unit"];
-    	child_ctx[12] = constants_2;
-
-    	const constants_3 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable]
-    	? max$3([
-    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable].Upper["2090"],
-    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable].Upper["2090"]
-    		])
-    	: 0;
-
-    	child_ctx[13] = constants_3;
-
-    	const constants_4 = /*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable]
-    	? min$2([
-    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP8.5"].Annual[/*d*/ child_ctx[9].Variable].Lower["2090"],
-    			/*$data*/ child_ctx[1].climate.variables.projectedChange["RCP4.5"].Annual[/*d*/ child_ctx[9].Variable].Lower["2090"]
-    		])
-    	: 0;
-
-    	child_ctx[14] = constants_4;
-    	const constants_5 = /*getScaleY*/ child_ctx[4](/*d*/ child_ctx[9].Variable);
-    	child_ctx[15] = constants_5;
-    	return child_ctx;
-    }
-
-    function get_each_context_2(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[17] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context_3(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[20] = list[i];
-    	child_ctx[8] = i;
-    	return child_ctx;
-    }
-
-    function get_each_context_4(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[22] = list[i];
-    	const constants_0 = /*$data*/ child_ctx[1].schema.hazards.data.filter(d => d.recordID === /*recordID*/ child_ctx[22])[0].Hazard;
-    	child_ctx[23] = constants_0;
-
-    	const constants_1 = {
-    		x: /*dims*/ child_ctx[0].width * 0.67 - 50,
-    		y: /*dims*/ child_ctx[0].variableSpacing * /*i*/ child_ctx[8] + /*dims*/ child_ctx[0].height * 0.25
-    	};
-
-    	child_ctx[24] = constants_1;
-
-    	const constants_2 = {
-    		x: /*dims*/ child_ctx[0].width * 0.85,
-    		y: /*$data*/ child_ctx[1].schema.hazards.data.map(d => d.Hazard).indexOf(/*hazard*/ child_ctx[23]) / /*$data*/ child_ctx[1].schema.hazards.data.length * /*dims*/ child_ctx[0].height * 0.7 + /*dims*/ child_ctx[0].height * 0.3
-    	};
-
-    	child_ctx[25] = constants_2;
-    	return child_ctx;
-    }
-
-    // (129:16) {#if nodeObj["Linked hazards"] }
-    function create_if_block_2$4(ctx) {
-    	let each_1_anchor;
-    	let each_value_4 = /*nodeObj*/ ctx[20]["Linked hazards"];
-    	validate_each_argument(each_value_4);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_4.length; i += 1) {
-    		each_blocks[i] = create_each_block_4(get_each_context_4(ctx, each_value_4, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty$3();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*d3, dims, $data*/ 3) {
-    				each_value_4 = /*nodeObj*/ ctx[20]["Linked hazards"];
-    				validate_each_argument(each_value_4);
-    				let i;
-
-    				for (i = 0; i < each_value_4.length; i += 1) {
-    					const child_ctx = get_each_context_4(ctx, each_value_4, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_4(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_4.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_2$4.name,
-    		type: "if",
-    		source: "(129:16) {#if nodeObj[\\\"Linked hazards\\\"] }",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (130:20) {#each nodeObj["Linked hazards"] as recordID}
-    function create_each_block_4(ctx) {
-    	let path;
-    	let path_d_value;
-
-    	const block = {
-    		c: function create() {
-    			path = svg_element("path");
-    			attr_dev(path, "class", "gridline svelte-1joxjo2");
-
-    			attr_dev(path, "d", path_d_value = linkHorizontal()({
-    				source: [/*sourcePos*/ ctx[24].x, /*sourcePos*/ ctx[24].y],
-    				target: [/*targetPos*/ ctx[25].x, /*targetPos*/ ctx[25].y]
-    			}));
-
-    			add_location(path, file$i, 141, 24, 6806);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, path, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*dims, $data*/ 3 && path_d_value !== (path_d_value = linkHorizontal()({
-    				source: [/*sourcePos*/ ctx[24].x, /*sourcePos*/ ctx[24].y],
-    				target: [/*targetPos*/ ctx[25].x, /*targetPos*/ ctx[25].y]
-    			}))) {
-    				attr_dev(path, "d", path_d_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(path);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_4.name,
-    		type: "each",
-    		source: "(130:20) {#each nodeObj[\\\"Linked hazards\\\"] as recordID}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (128:12) {#each $data.schema.climateVariablesCH.data as nodeObj, i }
-    function create_each_block_3(ctx) {
-    	let if_block_anchor;
-    	let if_block = /*nodeObj*/ ctx[20]["Linked hazards"] && create_if_block_2$4(ctx);
-
-    	const block = {
-    		c: function create() {
-    			if (if_block) if_block.c();
-    			if_block_anchor = empty$3();
-    		},
-    		m: function mount(target, anchor) {
-    			if (if_block) if_block.m(target, anchor);
-    			insert_dev(target, if_block_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (/*nodeObj*/ ctx[20]["Linked hazards"]) {
-    				if (if_block) {
-    					if_block.p(ctx, dirty);
-    				} else {
-    					if_block = create_if_block_2$4(ctx);
-    					if_block.c();
-    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
-    				}
-    			} else if (if_block) {
-    				if_block.d(1);
-    				if_block = null;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (if_block) if_block.d(detaching);
-    			if (detaching) detach_dev(if_block_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_3.name,
-    		type: "each",
-    		source: "(128:12) {#each $data.schema.climateVariablesCH.data as nodeObj, i }",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (152:12) {#each [2019, 2030, 2050, 2070, 2090] as year}
-    function create_each_block_2(ctx) {
-    	let g;
-    	let path;
-    	let path_d_value;
-    	let text0;
-    	let text1;
-    	let text1_y_value;
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			path = svg_element("path");
-    			text0 = svg_element("text");
-    			text1 = svg_element("text");
-    			attr_dev(path, "class", "gridline time svelte-1joxjo2");
-    			attr_dev(path, "d", path_d_value = "M" + /*scaleX*/ ctx[3](/*year*/ ctx[17]) + ", " + (-/*chartDims*/ ctx[2].height - 10) + " V" + /*dims*/ ctx[0].height * 0.715);
-    			add_location(path, file$i, 153, 20, 7376);
-    			attr_dev(text0, "class", "label-year svelte-1joxjo2");
-    			attr_dev(text0, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
-    			attr_dev(text0, "y", -/*chartDims*/ ctx[2].height - 20);
-    			add_location(text0, file$i, 154, 20, 7500);
-    			attr_dev(text1, "class", "label-year svelte-1joxjo2");
-    			attr_dev(text1, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
-    			attr_dev(text1, "y", text1_y_value = /*dims*/ ctx[0].height * 0.715 + 15);
-    			add_location(text1, file$i, 155, 20, 7613);
-    			set_style(g, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			add_location(g, file$i, 152, 16, 7268);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, path);
-    			append_dev(g, text0);
-    			text0.innerHTML = /*year*/ ctx[17];
-    			append_dev(g, text1);
-    			text1.innerHTML = /*year*/ ctx[17];
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*dims*/ 1 && path_d_value !== (path_d_value = "M" + /*scaleX*/ ctx[3](/*year*/ ctx[17]) + ", " + (-/*chartDims*/ ctx[2].height - 10) + " V" + /*dims*/ ctx[0].height * 0.715)) {
-    				attr_dev(path, "d", path_d_value);
-    			}
-
-    			if (dirty & /*dims*/ 1 && text1_y_value !== (text1_y_value = /*dims*/ ctx[0].height * 0.715 + 15)) {
-    				attr_dev(text1, "y", text1_y_value);
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_2.name,
-    		type: "each",
-    		source: "(152:12) {#each [2019, 2030, 2050, 2070, 2090] as year}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (179:32) {#if max > 0}
-    function create_if_block_1$4(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text$1("+");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_1$4.name,
-    		type: "if",
-    		source: "(179:32) {#if max > 0}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (182:32) {#if min > 0}
-    function create_if_block$5(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text$1("+");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block$5.name,
-    		type: "if",
-    		source: "(182:32) {#if min > 0}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (161:12) {#each $data.schema.climateVariablesCH.data as d, i}
-    function create_each_block_1$5(ctx) {
-    	let g2;
-    	let path0;
-    	let path0_d_value;
-    	let text0;
-    	let raw_value = /*d*/ ctx[9].Variable + "";
-    	let g1;
-    	let g0;
-    	let path1;
-    	let path1_d_value;
-    	let path2;
-    	let path2_d_value;
-    	let text1;
-    	let t0_value = /*max*/ ctx[13] + "";
-    	let t0;
-    	let t1_value = /*chartUnit*/ ctx[12] + "";
-    	let t1;
-    	let text2;
-    	let t2_value = /*min*/ ctx[14] + "";
-    	let t2;
-    	let t3_value = /*chartUnit*/ ctx[12] + "";
-    	let t3;
-    	let if_block0 = /*max*/ ctx[13] > 0 && create_if_block_1$4(ctx);
-    	let if_block1 = /*min*/ ctx[14] > 0 && create_if_block$5(ctx);
-
-    	const block = {
-    		c: function create() {
-    			g2 = svg_element("g");
-    			path0 = svg_element("path");
-    			text0 = svg_element("text");
-    			g1 = svg_element("g");
-    			g0 = svg_element("g");
-    			path1 = svg_element("path");
-    			path2 = svg_element("path");
-    			text1 = svg_element("text");
-    			if (if_block0) if_block0.c();
-    			t0 = text$1(t0_value);
-    			t1 = text$1(t1_value);
-    			text2 = svg_element("text");
-    			if (if_block1) if_block1.c();
-    			t2 = text$1(t2_value);
-    			t3 = text$1(t3_value);
-    			attr_dev(path0, "class", "gridline svelte-1joxjo2");
-    			attr_dev(path0, "d", path0_d_value = "M" + 50 + ", 0 H" + (/*dims*/ ctx[0].width * 0.67 - 50));
-    			add_location(path0, file$i, 169, 20, 8953);
-    			attr_dev(text0, "class", "variable-label svelte-1joxjo2");
-    			set_style(text0, "transform", "translate(" + 50 + "px, " + -10 + "px)");
-    			add_location(text0, file$i, 170, 20, 9042);
-    			attr_dev(path1, "class", "area-chart rcp-45 svelte-1joxjo2");
-    			attr_dev(path1, "d", path1_d_value = /*chartPath*/ ctx[5](/*chartData45*/ ctx[10], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
-    			add_location(path1, file$i, 175, 28, 9410);
-    			attr_dev(path2, "class", "area-chart rcp-85 svelte-1joxjo2");
-    			attr_dev(path2, "d", path2_d_value = /*chartPath*/ ctx[5](/*chartData85*/ ctx[11], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
-    			add_location(path2, file$i, 176, 28, 9525);
-    			attr_dev(text1, "class", "unit-label svelte-1joxjo2");
-    			set_style(text1, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*max*/ ctx[13]) + 6) + "px)");
-    			add_location(text1, file$i, 177, 28, 9640);
-    			attr_dev(text2, "class", "unit-label svelte-1joxjo2");
-    			set_style(text2, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*min*/ ctx[14]) + 6) + "px)");
-    			add_location(text2, file$i, 180, 28, 9877);
-    			set_style(g0, "transform", "translate(0px, " + -/*scaleY*/ ctx[15](0) + "px)");
-    			add_location(g0, file$i, 174, 24, 9326);
-    			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			add_location(g1, file$i, 173, 20, 9213);
-    			set_style(g2, "transform", "translate(" + 0 + "px, " + /*dims*/ ctx[0].variableSpacing * /*i*/ ctx[8] + "px)");
-    			add_location(g2, file$i, 168, 16, 8861);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g2, anchor);
-    			append_dev(g2, path0);
-    			append_dev(g2, text0);
-    			text0.innerHTML = raw_value;
-    			append_dev(g2, g1);
-    			append_dev(g1, g0);
-    			append_dev(g0, path1);
-    			append_dev(g0, path2);
-    			append_dev(g0, text1);
-    			if (if_block0) if_block0.m(text1, null);
-    			append_dev(text1, t0);
-    			append_dev(text1, t1);
-    			append_dev(g0, text2);
-    			if (if_block1) if_block1.m(text2, null);
-    			append_dev(text2, t2);
-    			append_dev(text2, t3);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*dims*/ 1 && path0_d_value !== (path0_d_value = "M" + 50 + ", 0 H" + (/*dims*/ ctx[0].width * 0.67 - 50))) {
-    				attr_dev(path0, "d", path0_d_value);
-    			}
-
-    			if (dirty & /*$data*/ 2 && raw_value !== (raw_value = /*d*/ ctx[9].Variable + "")) text0.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 2 && path1_d_value !== (path1_d_value = /*chartPath*/ ctx[5](/*chartData45*/ ctx[10], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable))) {
-    				attr_dev(path1, "d", path1_d_value);
-    			}
-
-    			if (dirty & /*$data*/ 2 && path2_d_value !== (path2_d_value = /*chartPath*/ ctx[5](/*chartData85*/ ctx[11], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable))) {
-    				attr_dev(path2, "d", path2_d_value);
-    			}
-
-    			if (/*max*/ ctx[13] > 0) {
-    				if (if_block0) ; else {
-    					if_block0 = create_if_block_1$4(ctx);
-    					if_block0.c();
-    					if_block0.m(text1, t0);
-    				}
-    			} else if (if_block0) {
-    				if_block0.d(1);
-    				if_block0 = null;
-    			}
-
-    			if (dirty & /*$data*/ 2 && t0_value !== (t0_value = /*max*/ ctx[13] + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*$data*/ 2 && t1_value !== (t1_value = /*chartUnit*/ ctx[12] + "")) set_data_dev(t1, t1_value);
-
-    			if (dirty & /*$data*/ 2) {
-    				set_style(text1, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*max*/ ctx[13]) + 6) + "px)");
-    			}
-
-    			if (/*min*/ ctx[14] > 0) {
-    				if (if_block1) ; else {
-    					if_block1 = create_if_block$5(ctx);
-    					if_block1.c();
-    					if_block1.m(text2, t2);
-    				}
-    			} else if (if_block1) {
-    				if_block1.d(1);
-    				if_block1 = null;
-    			}
-
-    			if (dirty & /*$data*/ 2 && t2_value !== (t2_value = /*min*/ ctx[14] + "")) set_data_dev(t2, t2_value);
-    			if (dirty & /*$data*/ 2 && t3_value !== (t3_value = /*chartUnit*/ ctx[12] + "")) set_data_dev(t3, t3_value);
-
-    			if (dirty & /*$data*/ 2) {
-    				set_style(text2, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*min*/ ctx[14]) + 6) + "px)");
-    			}
-
-    			if (dirty & /*$data*/ 2) {
-    				set_style(g0, "transform", "translate(0px, " + -/*scaleY*/ ctx[15](0) + "px)");
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g2, "transform", "translate(" + 0 + "px, " + /*dims*/ ctx[0].variableSpacing * /*i*/ ctx[8] + "px)");
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g2);
-    			if (if_block0) if_block0.d();
-    			if (if_block1) if_block1.d();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_1$5.name,
-    		type: "each",
-    		source: "(161:12) {#each $data.schema.climateVariablesCH.data as d, i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (191:12) {#each $data.schema.hazards.data as obj , i}
-    function create_each_block$b(ctx) {
-    	let g;
-    	let path;
-    	let path_d_value;
-    	let text0;
-    	let raw0_value = /*obj*/ ctx[6].Hazard + "";
-    	let text1;
-    	let raw1_value = /*obj*/ ctx[6].Trend + "";
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			path = svg_element("path");
-    			text0 = svg_element("text");
-    			text1 = svg_element("text");
-    			attr_dev(path, "class", "hazard-icon svelte-1joxjo2");
-    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[6].Hazard)]);
-    			set_style(path, "transform", "translate(0px, -100px) scale(2)");
-    			add_location(path, file$i, 193, 16, 10494);
-    			attr_dev(text0, "class", "hazard-label svelte-1joxjo2");
-    			add_location(text0, file$i, 194, 16, 10624);
-    			attr_dev(text1, "class", "hazard-trend projection svelte-1joxjo2");
-    			attr_dev(text1, "y", "35");
-    			add_location(text1, file$i, 195, 16, 10695);
-    			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * 0.825 + "px, " + (/*i*/ ctx[8] / /*$data*/ ctx[1].schema.hazards.data.length * /*dims*/ ctx[0].height * 0.7 + /*dims*/ ctx[0].height * 0.3 + 20) + "px)");
-    			add_location(g, file$i, 192, 12, 10332);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, path);
-    			append_dev(g, text0);
-    			text0.innerHTML = raw0_value;
-    			append_dev(g, text1);
-    			text1.innerHTML = raw1_value;
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[6].Hazard)])) {
-    				attr_dev(path, "d", path_d_value);
-    			}
-
-    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*obj*/ ctx[6].Hazard + "")) text0.innerHTML = raw0_value;			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*obj*/ ctx[6].Trend + "")) text1.innerHTML = raw1_value;
-    			if (dirty & /*dims, $data*/ 3) {
-    				set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * 0.825 + "px, " + (/*i*/ ctx[8] / /*$data*/ ctx[1].schema.hazards.data.length * /*dims*/ ctx[0].height * 0.7 + /*dims*/ ctx[0].height * 0.3 + 20) + "px)");
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$b.name,
-    		type: "each",
-    		source: "(191:12) {#each $data.schema.hazards.data as obj , i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$i(ctx) {
-    	let figure;
-    	let svg;
-    	let defs;
-    	let linearGradient;
-    	let stop0;
-    	let stop1;
-    	let rect;
-    	let rect_width_value;
-    	let rect_height_value;
-    	let text0;
-    	let t0;
-    	let text0_x_value;
-    	let text0_y_value;
-    	let g3;
-    	let g0;
-    	let text1;
-    	let t1;
-    	let text2;
-    	let t2;
-    	let text3;
-    	let t3;
-    	let text4;
-    	let t4;
-    	let g1;
-    	let text5;
-    	let t5;
-    	let text6;
-    	let t6;
-    	let text7;
-    	let tspan0;
-    	let t7;
-    	let t8;
-    	let tspan1;
-    	let t9;
-    	let t10;
-    	let text8;
-    	let t11;
-    	let g2;
-    	let text9;
-    	let t12;
-    	let text10;
-    	let t13;
-    	let text11;
-    	let t14;
-    	let text12;
-    	let t15;
-    	let g4;
-    	let g6;
-    	let g5;
-    	let g7;
-    	let svg_viewBox_value;
-    	let each_value_3 = /*$data*/ ctx[1].schema.climateVariablesCH.data;
-    	validate_each_argument(each_value_3);
-    	let each_blocks_3 = [];
-
-    	for (let i = 0; i < each_value_3.length; i += 1) {
-    		each_blocks_3[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
-    	}
-
-    	let each_value_2 = [2019, 2030, 2050, 2070, 2090];
-    	validate_each_argument(each_value_2);
-    	let each_blocks_2 = [];
-
-    	for (let i = 0; i < 5; i += 1) {
-    		each_blocks_2[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
-    	}
-
-    	let each_value_1 = /*$data*/ ctx[1].schema.climateVariablesCH.data;
-    	validate_each_argument(each_value_1);
-    	let each_blocks_1 = [];
-
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks_1[i] = create_each_block_1$5(get_each_context_1$5(ctx, each_value_1, i));
-    	}
-
-    	let each_value = /*$data*/ ctx[1].schema.hazards.data;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$b(get_each_context$b(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			figure = element("figure");
-    			svg = svg_element("svg");
-    			defs = svg_element("defs");
-    			linearGradient = svg_element("linearGradient");
-    			stop0 = svg_element("stop");
-    			stop1 = svg_element("stop");
-    			rect = svg_element("rect");
-    			text0 = svg_element("text");
-    			t0 = text$1("Source: All projection data and variable defintions from CSIRO and the Victorian Government, 2019");
-    			g3 = svg_element("g");
-    			g0 = svg_element("g");
-    			text1 = svg_element("text");
-    			t1 = text$1("Climate variables");
-    			text2 = svg_element("text");
-    			t2 = text$1("Meaures of the climate models used in");
-    			text3 = svg_element("text");
-    			t3 = text$1("the Victorian Climate Projections 2019");
-    			text4 = svg_element("text");
-    			t4 = text$1("for the Central Highlands region");
-    			g1 = svg_element("g");
-    			text5 = svg_element("text");
-    			t5 = text$1("Projections");
-    			text6 = svg_element("text");
-    			t6 = text$1("Range of projected change for the ");
-    			text7 = svg_element("text");
-    			tspan0 = svg_element("tspan");
-    			t7 = text$1("RCP 4.5");
-    			t8 = text$1(" and ");
-    			tspan1 = svg_element("tspan");
-    			t9 = text$1("RCP 8.5");
-    			t10 = text$1(" scenarios ");
-    			text8 = svg_element("text");
-    			t11 = text$1("from 2019 (baseline) to 2090 ");
-    			g2 = svg_element("g");
-    			text9 = svg_element("text");
-    			t12 = text$1("Hazards");
-    			text10 = svg_element("text");
-    			t13 = text$1("How climate variables and trends");
-    			text11 = svg_element("text");
-    			t14 = text$1("are linked to the climate hazards");
-    			text12 = svg_element("text");
-    			t15 = text$1("facing Hepburn Shire");
-    			g4 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks_3.length; i += 1) {
-    				each_blocks_3[i].c();
-    			}
-
-    			g6 = svg_element("g");
-
-    			for (let i = 0; i < 5; i += 1) {
-    				each_blocks_2[i].c();
-    			}
-
-    			g5 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].c();
-    			}
-
-    			g7 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(stop0, "stop-color", "#e21ffc");
-    			attr_dev(stop0, "offset", "10%");
-    			add_location(stop0, file$i, 96, 16, 4035);
-    			attr_dev(stop1, "stop-color", "#00ffff");
-    			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$i, 97, 16, 4093);
-    			attr_dev(linearGradient, "id", "rcp");
-    			attr_dev(linearGradient, "x1", "0");
-    			attr_dev(linearGradient, "y1", "0");
-    			attr_dev(linearGradient, "x2", "100%");
-    			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$i, 95, 12, 3959);
-    			add_location(defs, file$i, 94, 8, 3940);
-    			attr_dev(rect, "class", "bg svelte-1joxjo2");
-    			attr_dev(rect, "x", "-300");
-    			attr_dev(rect, "y", "0");
-    			attr_dev(rect, "width", rect_width_value = /*dims*/ ctx[0].width + 600);
-    			attr_dev(rect, "height", rect_height_value = /*dims*/ ctx[0].height);
-    			add_location(rect, file$i, 102, 8, 4191);
-    			attr_dev(text0, "class", "source svelte-1joxjo2");
-    			attr_dev(text0, "x", text0_x_value = /*dims*/ ctx[0].width - 50);
-    			attr_dev(text0, "y", text0_y_value = /*dims*/ ctx[0].height - 20);
-    			add_location(text0, file$i, 103, 8, 4287);
-    			attr_dev(text1, "class", "header svelte-1joxjo2");
-    			add_location(text1, file$i, 107, 16, 4594);
-    			attr_dev(text2, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text2, "y", "40");
-    			add_location(text2, file$i, 108, 16, 4659);
-    			attr_dev(text3, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text3, "y", "70");
-    			add_location(text3, file$i, 109, 16, 4754);
-    			attr_dev(text4, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text4, "y", "100");
-    			add_location(text4, file$i, 110, 16, 4850);
-    			set_style(g0, "transform", "translate(" + 50 + "px, 0px)");
-    			add_location(g0, file$i, 106, 12, 4532);
-    			attr_dev(text5, "class", "header projection svelte-1joxjo2");
-    			add_location(text5, file$i, 113, 16, 5054);
-    			attr_dev(text6, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text6, "y", "40");
-    			add_location(text6, file$i, 114, 16, 5123);
-    			attr_dev(tspan0, "class", "rcp-45 svelte-1joxjo2");
-    			add_location(tspan0, file$i, 115, 50, 5249);
-    			attr_dev(tspan1, "class", "rcp-85 svelte-1joxjo2");
-    			add_location(tspan1, file$i, 115, 92, 5291);
-    			attr_dev(text7, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text7, "y", "70");
-    			add_location(text7, file$i, 115, 16, 5215);
-    			attr_dev(text8, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text8, "y", "100");
-    			add_location(text8, file$i, 116, 16, 5363);
-    			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, 0px)");
-    			add_location(g1, file$i, 112, 12, 4954);
-    			attr_dev(text9, "class", "header svelte-1joxjo2");
-    			add_location(text9, file$i, 119, 16, 5542);
-    			attr_dev(text10, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text10, "y", "40");
-    			add_location(text10, file$i, 120, 16, 5596);
-    			attr_dev(text11, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text11, "y", "70");
-    			add_location(text11, file$i, 121, 16, 5686);
-    			attr_dev(text12, "class", "sub-header svelte-1joxjo2");
-    			attr_dev(text12, "y", "100");
-    			add_location(text12, file$i, 122, 16, 5777);
-    			set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.725 + "px, 0px)");
-    			add_location(g2, file$i, 118, 12, 5464);
-    			set_style(g3, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g3, file$i, 105, 8, 4469);
-    			attr_dev(g4, "class", "links-group");
-    			add_location(g4, file$i, 126, 8, 5879);
-    			attr_dev(g5, "class", "text-wrap-layer");
-    			add_location(g5, file$i, 158, 12, 7761);
-    			attr_dev(g6, "class", "chart-group");
-    			set_style(g6, "transform", "translate(0px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
-    			add_location(g6, file$i, 150, 8, 7107);
-    			attr_dev(g7, "class", "hazards-group");
-    			add_location(g7, file$i, 189, 8, 10222);
-    			attr_dev(svg, "class", "climate-variables-vis svelte-1joxjo2");
-    			attr_dev(svg, "viewBox", svg_viewBox_value = "0 0 " + /*dims*/ ctx[0].width + " " + /*dims*/ ctx[0].height);
-    			attr_dev(svg, "width", "100%");
-    			add_location(svg, file$i, 93, 4, 3838);
-    			attr_dev(figure, "class", "svg-container svelte-1joxjo2");
-    			add_location(figure, file$i, 92, 0, 3801);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, figure, anchor);
-    			append_dev(figure, svg);
-    			append_dev(svg, defs);
-    			append_dev(defs, linearGradient);
-    			append_dev(linearGradient, stop0);
-    			append_dev(linearGradient, stop1);
-    			append_dev(svg, rect);
-    			append_dev(svg, text0);
-    			append_dev(text0, t0);
-    			append_dev(svg, g3);
-    			append_dev(g3, g0);
-    			append_dev(g0, text1);
-    			append_dev(text1, t1);
-    			append_dev(g0, text2);
-    			append_dev(text2, t2);
-    			append_dev(g0, text3);
-    			append_dev(text3, t3);
-    			append_dev(g0, text4);
-    			append_dev(text4, t4);
-    			append_dev(g3, g1);
-    			append_dev(g1, text5);
-    			append_dev(text5, t5);
-    			append_dev(g1, text6);
-    			append_dev(text6, t6);
-    			append_dev(g1, text7);
-    			append_dev(text7, tspan0);
-    			append_dev(tspan0, t7);
-    			append_dev(text7, t8);
-    			append_dev(text7, tspan1);
-    			append_dev(tspan1, t9);
-    			append_dev(text7, t10);
-    			append_dev(g1, text8);
-    			append_dev(text8, t11);
-    			append_dev(g3, g2);
-    			append_dev(g2, text9);
-    			append_dev(text9, t12);
-    			append_dev(g2, text10);
-    			append_dev(text10, t13);
-    			append_dev(g2, text11);
-    			append_dev(text11, t14);
-    			append_dev(g2, text12);
-    			append_dev(text12, t15);
-    			append_dev(svg, g4);
-
-    			for (let i = 0; i < each_blocks_3.length; i += 1) {
-    				each_blocks_3[i].m(g4, null);
-    			}
-
-    			append_dev(svg, g6);
-
-    			for (let i = 0; i < 5; i += 1) {
-    				each_blocks_2[i].m(g6, null);
-    			}
-
-    			append_dev(g6, g5);
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].m(g6, null);
-    			}
-
-    			append_dev(svg, g7);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(g7, null);
-    			}
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*dims*/ 1 && rect_width_value !== (rect_width_value = /*dims*/ ctx[0].width + 600)) {
-    				attr_dev(rect, "width", rect_width_value);
-    			}
-
-    			if (dirty & /*dims*/ 1 && rect_height_value !== (rect_height_value = /*dims*/ ctx[0].height)) {
-    				attr_dev(rect, "height", rect_height_value);
-    			}
-
-    			if (dirty & /*dims*/ 1 && text0_x_value !== (text0_x_value = /*dims*/ ctx[0].width - 50)) {
-    				attr_dev(text0, "x", text0_x_value);
-    			}
-
-    			if (dirty & /*dims*/ 1 && text0_y_value !== (text0_y_value = /*dims*/ ctx[0].height - 20)) {
-    				attr_dev(text0, "y", text0_y_value);
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, 0px)");
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.725 + "px, 0px)");
-    			}
-
-    			if (dirty & /*$data, d3, dims*/ 3) {
-    				each_value_3 = /*$data*/ ctx[1].schema.climateVariablesCH.data;
-    				validate_each_argument(each_value_3);
-    				let i;
-
-    				for (i = 0; i < each_value_3.length; i += 1) {
-    					const child_ctx = get_each_context_3(ctx, each_value_3, i);
-
-    					if (each_blocks_3[i]) {
-    						each_blocks_3[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_3[i] = create_each_block_3(child_ctx);
-    						each_blocks_3[i].c();
-    						each_blocks_3[i].m(g4, null);
-    					}
-    				}
-
-    				for (; i < each_blocks_3.length; i += 1) {
-    					each_blocks_3[i].d(1);
-    				}
-
-    				each_blocks_3.length = each_value_3.length;
-    			}
-
-    			if (dirty & /*dims, chartDims, scaleX*/ 13) {
-    				each_value_2 = [2019, 2030, 2050, 2070, 2090];
-    				validate_each_argument(each_value_2);
-    				let i;
-
-    				for (i = 0; i < 5; i += 1) {
-    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
-
-    					if (each_blocks_2[i]) {
-    						each_blocks_2[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_2[i] = create_each_block_2(child_ctx);
-    						each_blocks_2[i].c();
-    						each_blocks_2[i].m(g6, g5);
-    					}
-    				}
-
-    				for (; i < 5; i += 1) {
-    					each_blocks_2[i].d(1);
-    				}
-    			}
-
-    			if (dirty & /*dims, chartDims, getScaleY, $data, d3, chartPath*/ 55) {
-    				each_value_1 = /*$data*/ ctx[1].schema.climateVariablesCH.data;
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$5(ctx, each_value_1, i);
-
-    					if (each_blocks_1[i]) {
-    						each_blocks_1[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_1[i] = create_each_block_1$5(child_ctx);
-    						each_blocks_1[i].c();
-    						each_blocks_1[i].m(g6, null);
-    					}
-    				}
-
-    				for (; i < each_blocks_1.length; i += 1) {
-    					each_blocks_1[i].d(1);
-    				}
-
-    				each_blocks_1.length = each_value_1.length;
-    			}
-
-    			if (dirty & /*dims*/ 1) {
-    				set_style(g6, "transform", "translate(0px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
-    			}
-
-    			if (dirty & /*dims, $data, icons, slugify*/ 3) {
-    				each_value = /*$data*/ ctx[1].schema.hazards.data;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$b(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$b(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(g7, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-
-    			if (dirty & /*dims*/ 1 && svg_viewBox_value !== (svg_viewBox_value = "0 0 " + /*dims*/ ctx[0].width + " " + /*dims*/ ctx[0].height)) {
-    				attr_dev(svg, "viewBox", svg_viewBox_value);
-    			}
-    		},
-    		i: noop$4,
-    		o: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(figure);
-    			destroy_each(each_blocks_3, detaching);
-    			destroy_each(each_blocks_2, detaching);
-    			destroy_each(each_blocks_1, detaching);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$i.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$i($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('ClimateVariables', slots, []);
-
-    	let { dims = {
-    		width: 1600,
-    		height: 1600,
-    		variableSpacing: 105
-    	} } = $$props;
-
-    	const chartDims = { width: 350, height: 90 };
-    	const scaleX = linear().range([0, chartDims.width]).domain([2019, $data.climate.schema.years[$data.climate.schema.years.length - 1]]);
-
-    	function getScaleY(variable) {
-    		const chartData45 = $data.climate.variables.projectedChange["RCP4.5"].Annual[variable];
-    		const chartData85 = $data.climate.variables.projectedChange["RCP8.5"].Annual[variable];
-    		if (typeof $data.climate.variables.projectedChange["RCP4.5"].Annual[variable] === 'undefined') return null;
-    		const chartData45_points = [0].concat(Object.values(chartData45.Lower)).concat(Object.values(chartData45.Median)).concat(Object.values(chartData45.Upper));
-    		const chartData85_points = [0].concat(Object.values(chartData85.Lower)).concat(Object.values(chartData85.Median)).concat(Object.values(chartData85.Upper));
-    		const dataPoints = chartData45_points.concat(chartData85_points);
-    		return linear().range([0, -chartDims.height]).domain(extent$1(dataPoints));
-    	}
-
-    	function chartPath(chartData, scaleY, variable) {
-    		const areaData = [
-    			[2019, 0, 0],
-    			[
-    				2030,
-    				min$2([
-    					Object.values(chartData.Lower)[0],
-    					Object.values(chartData.Median)[0],
-    					Object.values(chartData.Upper)[0]
-    				]),
-    				max$3([
-    					Object.values(chartData.Lower)[0],
-    					Object.values(chartData.Median)[0],
-    					Object.values(chartData.Upper)[0]
-    				])
-    			],
-    			[
-    				2050,
-    				min$2([
-    					Object.values(chartData.Lower)[1],
-    					Object.values(chartData.Median)[1],
-    					Object.values(chartData.Upper)[1]
-    				]),
-    				max$3([
-    					Object.values(chartData.Lower)[1],
-    					Object.values(chartData.Median)[1],
-    					Object.values(chartData.Upper)[1]
-    				])
-    			],
-    			[
-    				2070,
-    				min$2([
-    					Object.values(chartData.Lower)[2],
-    					Object.values(chartData.Median)[2],
-    					Object.values(chartData.Upper)[2]
-    				]),
-    				max$3([
-    					Object.values(chartData.Lower)[2],
-    					Object.values(chartData.Median)[2],
-    					Object.values(chartData.Upper)[2]
-    				])
-    			],
-    			[
-    				2090,
-    				min$2([
-    					Object.values(chartData.Lower)[3],
-    					Object.values(chartData.Median)[3],
-    					Object.values(chartData.Upper)[3]
-    				]),
-    				max$3([
-    					Object.values(chartData.Lower)[3],
-    					Object.values(chartData.Median)[3],
-    					Object.values(chartData.Upper)[3]
-    				])
-    			]
-    		];
-
-    		const areaGenerator = area().x(d => scaleX(+d[0])).y0(d => scaleY(+d[1])).y1(d => scaleY(+d[2]));
-    		return areaGenerator(areaData);
-    	}
-
-    	onMount(() => {
-    		const variablesLayer = select('.text-wrap-layer');
-    		variablesLayer.selectAll('.variable-description').data($data.schema.climateVariablesCH.data).join('text').classed('variable-description', true).attr('x', 50).attr('y', (d, i) => dims.variableSpacing * i + 20).attr('dy', 0).text(d => d.Description).style('fill', '#fff').style('font-weight', 300).style('font-size', 14).call(textWrap, 450, 1.1, false);
-    	});
-
-    	const writable_props = ['dims'];
-
-    	Object_1.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateVariables> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$$set = $$props => {
-    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		fade,
-    		onMount,
-    		d3,
-    		textWrap,
-    		slugify,
-    		icons,
-    		ui,
-    		data,
-    		dims,
-    		chartDims,
-    		scaleX,
-    		getScaleY,
-    		chartPath,
-    		$data
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ('dims' in $$props) $$invalidate(0, dims = $$props.dims);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	return [dims, $data, chartDims, scaleX, getScaleY, chartPath];
-    }
-
-    class ClimateVariables extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$i, create_fragment$i, safe_not_equal, { dims: 0 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ClimateVariables",
-    			options,
-    			id: create_fragment$i.name
-    		});
-    	}
-
-    	get dims() {
-    		throw new Error("<ClimateVariables>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set dims(value) {
-    		throw new Error("<ClimateVariables>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
-    /* src/components/byPage/adaptation/vis/ClimateHazards.svelte generated by Svelte v3.48.0 */
-    const file$h = "src/components/byPage/adaptation/vis/ClimateHazards.svelte";
-
-    function get_each_context$a(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[4] = list[i];
-    	child_ctx[6] = i;
-    	return child_ctx;
-    }
-
-    function get_each_context_1$4(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[7] = list[i];
-    	return child_ctx;
-    }
-
-    // (81:12) {#each shockStressOffsets as offset}
-    function create_each_block_1$4(ctx) {
-    	let g;
-    	let text0;
-    	let t0;
-    	let text1;
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			text0 = svg_element("text");
-    			t0 = text$1("Shock");
-    			text1 = svg_element("text");
-    			t1 = text$1("Stress");
-    			attr_dev(text0, "class", "type-label shock svelte-1ktcv8p");
-    			set_style(text0, "transform", "translate(" + (/*dims*/ ctx[1].width - 50) + "px, " + 0 + "px)");
-    			add_location(text0, file$h, 82, 16, 3786);
-    			attr_dev(text1, "class", "type-label stress svelte-1ktcv8p");
-    			set_style(text1, "transform", "translate(" + 50 + "px, " + 0 + "px)");
-    			add_location(text1, file$h, 83, 16, 3905);
-    			set_style(g, "transform", "translate(" + 0 + "px, " + (/*dims*/ ctx[1].width * 0.25 + /*offset*/ ctx[7]) + "px)");
-    			add_location(g, file$h, 81, 12, 3698);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, text0);
-    			append_dev(text0, t0);
-    			append_dev(g, text1);
-    			append_dev(text1, t1);
-    		},
-    		p: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_1$4.name,
-    		type: "each",
-    		source: "(81:12) {#each shockStressOffsets as offset}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (90:12) {#each $data.schema.hazards.data as obj , i}
-    function create_each_block$a(ctx) {
-    	let g;
-    	let path;
-    	let path_d_value;
-    	let text_1;
-    	let raw_value = /*obj*/ ctx[4].Hazard + "";
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			path = svg_element("path");
-    			text_1 = svg_element("text");
-    			attr_dev(path, "class", "hazard-icon svelte-1ktcv8p");
-    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)]);
-    			set_style(path, "transform", "translate(0px, -80px) scale(1.25)");
-    			add_location(path, file$h, 91, 16, 4373);
-    			attr_dev(text_1, "class", "hazard-label svelte-1ktcv8p");
-    			add_location(text_1, file$h, 92, 16, 4505);
-    			set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[3][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
-    			add_location(g, file$h, 90, 12, 4209);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, path);
-    			append_dev(g, text_1);
-    			text_1.innerHTML = raw_value;
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)])) {
-    				attr_dev(path, "d", path_d_value);
-    			}
-
-    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*obj*/ ctx[4].Hazard + "")) text_1.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 1) {
-    				set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[3][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$a.name,
-    		type: "each",
-    		source: "(90:12) {#each $data.schema.hazards.data as obj , i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$h(ctx) {
-    	let figure;
-    	let svg;
-    	let defs;
-    	let linearGradient;
-    	let stop0;
-    	let stop1;
-    	let g1;
-    	let g0;
-    	let text0;
-    	let t0;
-    	let tspan;
-    	let t1;
-    	let t2;
-    	let text1;
-    	let t3;
-    	let text2;
-    	let t4;
-    	let g2;
-    	let g4;
-    	let g3;
-    	let each_value_1 = /*shockStressOffsets*/ ctx[2];
-    	validate_each_argument(each_value_1);
-    	let each_blocks_1 = [];
-
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks_1[i] = create_each_block_1$4(get_each_context_1$4(ctx, each_value_1, i));
-    	}
-
-    	let each_value = /*$data*/ ctx[0].schema.hazards.data;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$a(get_each_context$a(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			figure = element("figure");
-    			svg = svg_element("svg");
-    			defs = svg_element("defs");
-    			linearGradient = svg_element("linearGradient");
-    			stop0 = svg_element("stop");
-    			stop1 = svg_element("stop");
-    			g1 = svg_element("g");
-    			g0 = svg_element("g");
-    			text0 = svg_element("text");
-    			t0 = text$1("Climate ");
-    			tspan = svg_element("tspan");
-    			t1 = text$1("hazards");
-    			t2 = text$1(" and events");
-    			text1 = svg_element("text");
-    			t3 = text$1("There are four climate hazards that trigger events that impact the Hepburn community.");
-    			text2 = svg_element("text");
-    			t4 = text$1("Projected climate change is projected to increase the frequecy and intensity of these events.");
-    			g2 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].c();
-    			}
-
-    			g4 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			g3 = svg_element("g");
-    			attr_dev(stop0, "stop-color", "hsl(50, 100%, 70%)");
-    			attr_dev(stop0, "offset", "10%");
-    			add_location(stop0, file$h, 66, 16, 2855);
-    			attr_dev(stop1, "stop-color", "hsl(320, 100%, 50%)");
-    			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$h, 67, 16, 2924);
-    			attr_dev(linearGradient, "id", "gr-hazard");
-    			attr_dev(linearGradient, "x1", "0");
-    			attr_dev(linearGradient, "y1", "0");
-    			attr_dev(linearGradient, "x2", "100%");
-    			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$h, 65, 12, 2773);
-    			add_location(defs, file$h, 64, 8, 2754);
-    			attr_dev(tspan, "class", "hazard-text svelte-1ktcv8p");
-    			add_location(tspan, file$h, 73, 48, 3204);
-    			attr_dev(text0, "class", "header svelte-1ktcv8p");
-    			add_location(text0, file$h, 73, 16, 3172);
-    			attr_dev(text1, "class", "sub-header svelte-1ktcv8p");
-    			attr_dev(text1, "y", "40");
-    			add_location(text1, file$h, 74, 16, 3283);
-    			attr_dev(text2, "class", "sub-header svelte-1ktcv8p");
-    			attr_dev(text2, "y", "70");
-    			add_location(text2, file$h, 75, 16, 3426);
-    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g0, file$h, 72, 12, 3096);
-    			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g1, file$h, 71, 8, 3033);
-    			attr_dev(g2, "class", "shock-stress-group");
-    			add_location(g2, file$h, 79, 8, 3600);
-    			attr_dev(g3, "class", "event-description-group");
-    			add_location(g3, file$h, 95, 12, 4609);
-    			attr_dev(g4, "class", "hazards-group");
-    			set_style(g4, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g4, file$h, 88, 8, 4056);
-    			attr_dev(svg, "class", "climate-hazards-vis svelte-1ktcv8p");
-    			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
-    			add_location(svg, file$h, 63, 4, 2667);
-    			attr_dev(figure, "class", "svg-container svelte-1ktcv8p");
-    			add_location(figure, file$h, 62, 0, 2630);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, figure, anchor);
-    			append_dev(figure, svg);
-    			append_dev(svg, defs);
-    			append_dev(defs, linearGradient);
-    			append_dev(linearGradient, stop0);
-    			append_dev(linearGradient, stop1);
-    			append_dev(svg, g1);
-    			append_dev(g1, g0);
-    			append_dev(g0, text0);
-    			append_dev(text0, t0);
-    			append_dev(text0, tspan);
-    			append_dev(tspan, t1);
-    			append_dev(text0, t2);
-    			append_dev(g0, text1);
-    			append_dev(text1, t3);
-    			append_dev(g0, text2);
-    			append_dev(text2, t4);
-    			append_dev(svg, g2);
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].m(g2, null);
-    			}
-
-    			append_dev(svg, g4);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(g4, null);
-    			}
-
-    			append_dev(g4, g3);
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*dims, shockStressOffsets*/ 6) {
-    				each_value_1 = /*shockStressOffsets*/ ctx[2];
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$4(ctx, each_value_1, i);
-
-    					if (each_blocks_1[i]) {
-    						each_blocks_1[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_1[i] = create_each_block_1$4(child_ctx);
-    						each_blocks_1[i].c();
-    						each_blocks_1[i].m(g2, null);
-    					}
-    				}
-
-    				for (; i < each_blocks_1.length; i += 1) {
-    					each_blocks_1[i].d(1);
-    				}
-
-    				each_blocks_1.length = each_value_1.length;
-    			}
-
-    			if (dirty & /*eventsByHazard, $data, dims, icons, slugify*/ 11) {
-    				each_value = /*$data*/ ctx[0].schema.hazards.data;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$a(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$a(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(g4, g3);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
-    		i: noop$4,
-    		o: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(figure);
-    			destroy_each(each_blocks_1, detaching);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$h.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    const hazardOffset = 0.65;
-    const eventOffset = 75;
-    const textLength = 550;
-
-    function instance$h($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('ClimateHazards', slots, []);
-    	const dims = { width: 1600, height: 1600 };
-    	const shockStressOffsets = [0, 150, 300, 450, 600, 750, 900, 1050, 1200];
-    	const eventsByHazard = [1].concat($data.schema.hazards.data.map(d => d["Linked hazard events"].length).map((sum => value => sum += value)(0))).map((d, i) => d + i * hazardOffset - 1);
-
-    	onMount(() => {
-    		selectAll('event.description');
-
-    		$data.schema.hazards.data.forEach((obj, i) => {
-    			$data.schema.hazardEvents.data.filter(e => e.Hazard[0] === obj.recordID).forEach((d, j) => {
-    				const group = select('.event-description-group').append('g').style('transform', `translate(${0}px, ${0 + (eventsByHazard[i] / $data.schema.hazardEvents.data.length * dims.height * 0.8 + dims.height * 0.2) + (eventOffset * j + 60)}px`);
-    				const label = group.append('text').classed('event-label', true).style('font-size', 40).style('font-weight', 700).style('text-anchor', 'middle').style('fill', '#fff').text(d["Hazard event"]);
-
-    				group.append('text').classed('event-description', true).attr('dy', 0).attr('x', d.Type === 'Shock'
-    				? dims.width * 0.125
-    				: -dims.width * 0.125 - textLength).attr('y', 0).style('font-size', 14).style('fill', '#fff').text(d["Description"]).call(textWrap, textLength, 1.05, true);
-
-    				group.append('path').style('stroke', '#fff').style('stroke-widhth', 2).style('fill', 'none').attr('d', `M${(d.Type === 'Shock' ? -1 : 1) * label.node().getBBox().width * 0.5}, 10 
-                                H${(d.Type === 'Shock' ? 1 : -1) * (dims.width * 0.5 - 50)}`);
-    			});
-    		});
-    	});
-
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateHazards> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$capture_state = () => ({
-    		fade,
-    		onMount,
-    		d3,
-    		textWrap,
-    		slugify,
-    		ui,
-    		data,
-    		icons,
-    		dims,
-    		shockStressOffsets,
-    		hazardOffset,
-    		eventOffset,
-    		textLength,
-    		eventsByHazard,
-    		$data
-    	});
-
-    	return [$data, dims, shockStressOffsets, eventsByHazard];
-    }
-
-    class ClimateHazards extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$h, create_fragment$h, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ClimateHazards",
-    			options,
-    			id: create_fragment$h.name
-    		});
-    	}
-    }
-
-    /* src/components/byPage/adaptation/vis/ClimateRisks.svelte generated by Svelte v3.48.0 */
-    const file$g = "src/components/byPage/adaptation/vis/ClimateRisks.svelte";
-
-    function get_each_context$9(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[4] = list[i];
-    	child_ctx[6] = i;
-    	return child_ctx;
-    }
-
-    function get_each_context_1$3(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[7] = list[i];
-    	child_ctx[6] = i;
-    	return child_ctx;
-    }
-
-    // (43:16) {#each $data.schema.hazardEvents.data.filter(d => d.Hazard[0] === obj.recordID) as d, i}
-    function create_each_block_1$3(ctx) {
-    	let g;
-    	let text0;
-    	let raw0_value = /*d*/ ctx[7]["Hazard event"] + "";
-    	let text1;
-    	let raw1_value = /*d*/ ctx[7]["Description"] + "";
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			text0 = svg_element("text");
-    			text1 = svg_element("text");
-    			attr_dev(text0, "class", "event-label svelte-1tl5ufe");
-    			add_location(text0, file$g, 44, 20, 2251);
-    			attr_dev(text1, "class", "event-description svelte-1tl5ufe");
-    			attr_dev(text1, "dy", "25");
-    			add_location(text1, file$g, 45, 20, 2332);
-    			set_style(g, "transform", "translate(" + 0 + "px, " + (80 * /*i*/ ctx[6] + 60) + "px)");
-    			add_location(g, file$g, 43, 16, 2172);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, text0);
-    			text0.innerHTML = raw0_value;
-    			append_dev(g, text1);
-    			text1.innerHTML = raw1_value;
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 1 && raw0_value !== (raw0_value = /*d*/ ctx[7]["Hazard event"] + "")) text0.innerHTML = raw0_value;			if (dirty & /*$data*/ 1 && raw1_value !== (raw1_value = /*d*/ ctx[7]["Description"] + "")) text1.innerHTML = raw1_value;		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_1$3.name,
-    		type: "each",
-    		source: "(43:16) {#each $data.schema.hazardEvents.data.filter(d => d.Hazard[0] === obj.recordID) as d, i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (39:12) {#each $data.schema.hazards.data as obj , i}
-    function create_each_block$9(ctx) {
-    	let g;
-    	let path;
-    	let path_d_value;
-    	let text_1;
-    	let raw_value = /*obj*/ ctx[4].Hazard + "";
-
-    	function func(...args) {
-    		return /*func*/ ctx[3](/*obj*/ ctx[4], ...args);
-    	}
-
-    	let each_value_1 = /*$data*/ ctx[0].schema.hazardEvents.data.filter(func);
-    	validate_each_argument(each_value_1);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks[i] = create_each_block_1$3(get_each_context_1$3(ctx, each_value_1, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			path = svg_element("path");
-    			text_1 = svg_element("text");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(path, "class", "hazard-icon svelte-1tl5ufe");
-    			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)]);
-    			set_style(path, "transform", "translate(0px, -80px) scale(1.25)");
-    			add_location(path, file$g, 40, 16, 1864);
-    			attr_dev(text_1, "class", "hazard-label svelte-1tl5ufe");
-    			add_location(text_1, file$g, 41, 16, 1996);
-    			set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[2][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
-    			add_location(g, file$g, 39, 12, 1702);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, path);
-    			append_dev(g, text_1);
-    			text_1.innerHTML = raw_value;
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(g, null);
-    			}
-    		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-
-    			if (dirty & /*$data*/ 1 && path_d_value !== (path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)])) {
-    				attr_dev(path, "d", path_d_value);
-    			}
-
-    			if (dirty & /*$data*/ 1 && raw_value !== (raw_value = /*obj*/ ctx[4].Hazard + "")) text_1.innerHTML = raw_value;
-    			if (dirty & /*$data*/ 1) {
-    				each_value_1 = /*$data*/ ctx[0].schema.hazardEvents.data.filter(func);
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$3(ctx, each_value_1, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_1$3(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(g, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_1.length;
-    			}
-
-    			if (dirty & /*$data*/ 1) {
-    				set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[2][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$9.name,
-    		type: "each",
-    		source: "(39:12) {#each $data.schema.hazards.data as obj , i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$g(ctx) {
-    	let figure;
-    	let svg;
-    	let defs;
-    	let linearGradient;
-    	let stop0;
-    	let stop1;
-    	let g1;
-    	let g0;
-    	let text0;
-    	let t0;
-    	let tspan;
-    	let t1;
-    	let t2;
-    	let text1;
-    	let t3;
-    	let text2;
-    	let t4;
-    	let g2;
-    	let each_value = /*$data*/ ctx[0].schema.hazards.data;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$9(get_each_context$9(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			figure = element("figure");
-    			svg = svg_element("svg");
-    			defs = svg_element("defs");
-    			linearGradient = svg_element("linearGradient");
-    			stop0 = svg_element("stop");
-    			stop1 = svg_element("stop");
-    			g1 = svg_element("g");
-    			g0 = svg_element("g");
-    			text0 = svg_element("text");
-    			t0 = text$1("Climate ");
-    			tspan = svg_element("tspan");
-    			t1 = text$1("hazards");
-    			t2 = text$1(" and community risks");
-    			text1 = svg_element("text");
-    			t3 = text$1("Linking hazards to risk");
-    			text2 = svg_element("text");
-    			t4 = text$1(".");
-    			g2 = svg_element("g");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(stop0, "stop-color", "hsl(50, 100%, 70%)");
-    			attr_dev(stop0, "offset", "10%");
-    			add_location(stop0, file$g, 24, 16, 948);
-    			attr_dev(stop1, "stop-color", "hsl(320, 100%, 50%)");
-    			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$g, 25, 16, 1017);
-    			attr_dev(linearGradient, "id", "gr-hazard");
-    			attr_dev(linearGradient, "x1", "0");
-    			attr_dev(linearGradient, "y1", "0");
-    			attr_dev(linearGradient, "x2", "100%");
-    			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$g, 23, 12, 866);
-    			add_location(defs, file$g, 22, 8, 847);
-    			attr_dev(tspan, "class", "hazard-text svelte-1tl5ufe");
-    			add_location(tspan, file$g, 31, 48, 1297);
-    			attr_dev(text0, "class", "header svelte-1tl5ufe");
-    			add_location(text0, file$g, 31, 16, 1265);
-    			attr_dev(text1, "class", "sub-header svelte-1tl5ufe");
-    			attr_dev(text1, "y", "40");
-    			add_location(text1, file$g, 32, 16, 1385);
-    			attr_dev(text2, "class", "sub-header svelte-1tl5ufe");
-    			attr_dev(text2, "y", "70");
-    			add_location(text2, file$g, 33, 16, 1466);
-    			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g0, file$g, 30, 12, 1189);
-    			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g1, file$g, 29, 8, 1126);
-    			attr_dev(g2, "class", "hazards-group");
-    			set_style(g2, "transform", "translate(" + /*dims*/ ctx[1].width * 0.25 + "px, 0px)");
-    			add_location(g2, file$g, 37, 8, 1548);
-    			attr_dev(svg, "class", "climate-hazards-vis svelte-1tl5ufe");
-    			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
-    			add_location(svg, file$g, 21, 4, 760);
-    			attr_dev(figure, "class", "svg-container svelte-1tl5ufe");
-    			add_location(figure, file$g, 20, 0, 723);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, figure, anchor);
-    			append_dev(figure, svg);
-    			append_dev(svg, defs);
-    			append_dev(defs, linearGradient);
-    			append_dev(linearGradient, stop0);
-    			append_dev(linearGradient, stop1);
-    			append_dev(svg, g1);
-    			append_dev(g1, g0);
-    			append_dev(g0, text0);
-    			append_dev(text0, t0);
-    			append_dev(text0, tspan);
-    			append_dev(tspan, t1);
-    			append_dev(text0, t2);
-    			append_dev(g0, text1);
-    			append_dev(text1, t3);
-    			append_dev(g0, text2);
-    			append_dev(text2, t4);
-    			append_dev(svg, g2);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(g2, null);
-    			}
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*eventsByHazard, $data, dims, icons, slugify*/ 7) {
-    				each_value = /*$data*/ ctx[0].schema.hazards.data;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$9(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$9(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(g2, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
-    		i: noop$4,
-    		o: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(figure);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$g.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$g($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('ClimateRisks', slots, []);
-    	const dims = { width: 1600, height: 1600 };
-    	const eventsByHazard = [1].concat($data.schema.hazards.data.map(d => d["Linked hazard events"].length).map((sum => value => sum += value)(0))).map((d, i) => d + i * 0.65 - 1);
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ClimateRisks> was created with unknown prop '${key}'`);
-    	});
-
-    	const func = (obj, d) => d.Hazard[0] === obj.recordID;
-
-    	$$self.$capture_state = () => ({
-    		fade,
-    		onMount,
-    		d3,
-    		textWrap,
-    		slugify,
-    		ui,
-    		data,
-    		icons,
-    		dims,
-    		eventsByHazard,
-    		$data
-    	});
-
-    	return [$data, dims, eventsByHazard, func];
-    }
-
-    class ClimateRisks extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$g, create_fragment$g, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ClimateRisks",
-    			options,
-    			id: create_fragment$g.name
-    		});
-    	}
-    }
-
-    /* src/components/byPage/adaptation/RiskTable.svelte generated by Svelte v3.48.0 */
-
-    const { console: console_1$2 } = globals;
-    const file$f = "src/components/byPage/adaptation/RiskTable.svelte";
-
-    function get_each_context$8(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[2] = list[i];
-    	child_ctx[6] = i;
-    	const constants_0 = /*d*/ child_ctx[2]["Risk area"].map(recordID => /*$data*/ child_ctx[0].schema.riskArea.data.filter(e => e.recordID === recordID)[0]["Risk area"]);
-    	child_ctx[3] = constants_0;
-    	const constants_1 = [...new Set(/*d*/ child_ctx[2]["Linked hazards"])].map(recordID => /*$data*/ child_ctx[0].schema.hazards.data.filter(e => e.recordID === recordID)[0]["Hazard"]);
-    	child_ctx[4] = constants_1;
-    	return child_ctx;
-    }
-
-    // (21:4) {#each $data.schema.communityRisks.data as d, i}
-    function create_each_block$8(ctx) {
-    	let tr;
-    	let td0;
-
-    	let t0_value = (/*riskGroupArray*/ ctx[3]
-    	? /*riskGroupArray*/ ctx[3].join(", ")
-    	: '') + "";
-
-    	let t0;
-    	let t1;
-    	let td1;
-    	let t2_value = /*d*/ ctx[2]["Community risk"] + "";
-    	let t2;
-    	let t3;
-    	let td2;
-
-    	let t4_value = (/*d*/ ctx[2]["Hazard events"]
-    	? /*d*/ ctx[2]["Hazard events"].map(/*func*/ ctx[1]).join(", ")
-    	: 'None') + "";
-
-    	let t4;
-    	let t5;
-
-    	const block = {
-    		c: function create() {
-    			tr = element("tr");
-    			td0 = element("td");
-    			t0 = text$1(t0_value);
-    			t1 = space();
-    			td1 = element("td");
-    			t2 = text$1(t2_value);
-    			t3 = space();
-    			td2 = element("td");
-    			t4 = text$1(t4_value);
-    			t5 = space();
-    			attr_dev(td0, "class", "community-theme svelte-12r1yrs");
-    			add_location(td0, file$f, 25, 8, 747);
-    			attr_dev(td1, "class", "community-risk svelte-12r1yrs");
-    			add_location(td1, file$f, 26, 8, 842);
-    			attr_dev(td2, "class", "hazard-event svelte-12r1yrs");
-    			add_location(td2, file$f, 27, 8, 906);
-    			attr_dev(tr, "class", "svelte-12r1yrs");
-    			add_location(tr, file$f, 24, 4, 734);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, tr, anchor);
-    			append_dev(tr, td0);
-    			append_dev(td0, t0);
-    			append_dev(tr, t1);
-    			append_dev(tr, td1);
-    			append_dev(td1, t2);
-    			append_dev(tr, t3);
-    			append_dev(tr, td2);
-    			append_dev(td2, t4);
-    			append_dev(tr, t5);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 1 && t0_value !== (t0_value = (/*riskGroupArray*/ ctx[3]
-    			? /*riskGroupArray*/ ctx[3].join(", ")
-    			: '') + "")) set_data_dev(t0, t0_value);
-
-    			if (dirty & /*$data*/ 1 && t2_value !== (t2_value = /*d*/ ctx[2]["Community risk"] + "")) set_data_dev(t2, t2_value);
-
-    			if (dirty & /*$data*/ 1 && t4_value !== (t4_value = (/*d*/ ctx[2]["Hazard events"]
-    			? /*d*/ ctx[2]["Hazard events"].map(/*func*/ ctx[1]).join(", ")
-    			: 'None') + "")) set_data_dev(t4, t4_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(tr);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$8.name,
-    		type: "each",
-    		source: "(21:4) {#each $data.schema.communityRisks.data as d, i}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$f(ctx) {
-    	let table;
-    	let tr;
-    	let th0;
-    	let t1;
-    	let th1;
-    	let t3;
-    	let th2;
-    	let t5;
-    	let each_value = /*$data*/ ctx[0].schema.communityRisks.data;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$8(get_each_context$8(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			table = element("table");
-    			tr = element("tr");
-    			th0 = element("th");
-    			th0.textContent = "Risk theme";
-    			t1 = space();
-    			th1 = element("th");
-    			th1.textContent = "Community risk";
-    			t3 = space();
-    			th2 = element("th");
-    			th2.textContent = "Hazard events";
-    			t5 = space();
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(th0, "class", "svelte-12r1yrs");
-    			add_location(th0, file$f, 14, 8, 241);
-    			attr_dev(th1, "class", "svelte-12r1yrs");
-    			add_location(th1, file$f, 15, 8, 269);
-    			attr_dev(th2, "class", "svelte-12r1yrs");
-    			add_location(th2, file$f, 16, 8, 301);
-    			attr_dev(tr, "class", "svelte-12r1yrs");
-    			add_location(tr, file$f, 13, 4, 228);
-    			attr_dev(table, "class", "svelte-12r1yrs");
-    			add_location(table, file$f, 12, 0, 216);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, table, anchor);
-    			append_dev(table, tr);
-    			append_dev(tr, th0);
-    			append_dev(tr, t1);
-    			append_dev(tr, th1);
-    			append_dev(tr, t3);
-    			append_dev(tr, th2);
-    			append_dev(table, t5);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(table, null);
-    			}
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$data*/ 1) {
-    				each_value = /*$data*/ ctx[0].schema.communityRisks.data;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$8(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$8(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(table, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
-    		i: noop$4,
-    		o: noop$4,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(table);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$f.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$f($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('RiskTable', slots, []);
-    	console.log($data.schema.communityRisks.data);
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$2.warn(`<RiskTable> was created with unknown prop '${key}'`);
-    	});
-
-    	const func = d => $data.schema.hazardEvents.data.filter(e => e.recordID === d)[0]["Hazard event"];
-    	$$self.$capture_state = () => ({ ui, data, fade, $data });
-    	return [$data, func];
-    }
-
-    class RiskTable extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$f, create_fragment$f, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "RiskTable",
-    			options,
-    			id: create_fragment$f.name
-    		});
-    	}
-    }
-
-    /* src/pages/Adaptation.svelte generated by Svelte v3.48.0 */
-    const file$e = "src/pages/Adaptation.svelte";
-
-    function create_fragment$e(ctx) {
-    	let div5;
-    	let div4;
-    	let div1;
-    	let div0;
-    	let logo;
-    	let t0;
-    	let h1;
-    	let span0;
-    	let br0;
-    	let t2;
-    	let br1;
-    	let t3;
-    	let span1;
-    	let t5;
-    	let div2;
-    	let p0;
-    	let t7;
-    	let div3;
-    	let ul0;
-    	let li0;
-    	let t9;
-    	let li1;
-    	let t11;
-    	let li2;
-    	let t13;
-    	let li3;
-    	let t15;
-    	let li4;
-    	let t17;
-    	let li5;
-    	let t19;
-    	let li6;
-    	let t21;
-    	let div29;
-    	let section0;
-    	let div7;
-    	let div6;
-    	let hr0;
-    	let t22;
-    	let h20;
-    	let t24;
-    	let p1;
-    	let t25;
-    	let em;
-    	let t27;
-    	let t28;
-    	let ul1;
-    	let li7;
-    	let t30;
-    	let li8;
-    	let t32;
-    	let li9;
-    	let t34;
-    	let div8;
-    	let img0;
-    	let img0_src_value;
-    	let t35;
-    	let section1;
-    	let div10;
-    	let div9;
-    	let hr1;
-    	let t36;
-    	let h21;
-    	let t38;
-    	let p2;
-    	let t40;
-    	let p3;
-    	let t42;
-    	let div11;
-    	let climatevariables;
-    	let t43;
-    	let section2;
-    	let div13;
-    	let div12;
-    	let hr2;
-    	let t44;
-    	let h22;
-    	let t46;
-    	let p4;
-    	let t48;
-    	let p5;
-    	let t50;
-    	let p6;
-    	let t52;
-    	let p7;
-    	let t54;
-    	let div14;
-    	let climatehazards;
-    	let t55;
-    	let section3;
-    	let div16;
-    	let div15;
-    	let hr3;
-    	let t56;
-    	let h23;
-    	let t58;
-    	let p8;
-    	let t60;
-    	let p9;
-    	let t62;
-    	let p10;
-    	let t64;
-    	let div17;
-    	let climaterisks;
-    	let t65;
-    	let section4;
-    	let div19;
-    	let div18;
-    	let t66;
-    	let div21;
-    	let div20;
-    	let h24;
-    	let t68;
-    	let p11;
-    	let t70;
-    	let div22;
-    	let risktable;
-    	let t71;
-    	let section5;
-    	let div24;
-    	let div23;
-    	let hr4;
-    	let t72;
-    	let h25;
-    	let t74;
-    	let p12;
-    	let t76;
-    	let p13;
-    	let t78;
-    	let p14;
-    	let t80;
-    	let p15;
-    	let t82;
-    	let p16;
-    	let strong;
-    	let t84;
-    	let div25;
-    	let img1;
-    	let img1_src_value;
-    	let t85;
-    	let section6;
-    	let div27;
-    	let div26;
-    	let hr5;
-    	let t86;
-    	let h26;
-    	let t88;
-    	let p17;
-    	let t90;
-    	let p18;
-    	let t92;
-    	let p19;
-    	let t94;
-    	let div28;
-    	let svg;
-    	let type;
-    	let current;
-    	let mounted;
-    	let dispose;
-    	logo = new Logo({ $$inline: true });
-    	climatevariables = new ClimateVariables({ $$inline: true });
-    	climatehazards = new ClimateHazards({ $$inline: true });
-    	climaterisks = new ClimateRisks({ $$inline: true });
-    	risktable = new RiskTable({ $$inline: true });
-    	type = new Type({ $$inline: true });
-
-    	const block = {
-    		c: function create() {
-    			div5 = element("div");
-    			div4 = element("div");
-    			div1 = element("div");
-    			div0 = element("div");
-    			create_component(logo.$$.fragment);
-    			t0 = space();
-    			h1 = element("h1");
-    			span0 = element("span");
-    			span0.textContent = "Adapting to";
-    			br0 = element("br");
-    			t2 = text$1("\n            climate change");
-    			br1 = element("br");
-    			t3 = space();
-    			span1 = element("span");
-    			span1.textContent = "in Hepburn";
-    			t5 = space();
-    			div2 = element("div");
-    			p0 = element("p");
-    			p0.textContent = "The climate is changing and we need to make sure our community will adapt to the risks of climate change. This includes more severe and frequent events like bushfires, floods, droughts and heatwaves. In this section we'll summarise the research and modelling of how Hepburn's climate is expected to change, and introduce the key concepts of climate change adpatation.";
-    			t7 = space();
-    			div3 = element("div");
-    			ul0 = element("ul");
-    			li0 = element("li");
-    			li0.textContent = "Introduction";
-    			t9 = space();
-    			li1 = element("li");
-    			li1.textContent = "Climate variables";
-    			t11 = space();
-    			li2 = element("li");
-    			li2.textContent = "Hazards and events";
-    			t13 = space();
-    			li3 = element("li");
-    			li3.textContent = "Climate risk";
-    			t15 = space();
-    			li4 = element("li");
-    			li4.textContent = "Community risks";
-    			t17 = space();
-    			li5 = element("li");
-    			li5.textContent = "Risk and adaptive capacity";
-    			t19 = space();
-    			li6 = element("li");
-    			li6.textContent = "Adaptation action";
-    			t21 = space();
-    			div29 = element("div");
-    			section0 = element("section");
-    			div7 = element("div");
-    			div6 = element("div");
-    			hr0 = element("hr");
-    			t22 = space();
-    			h20 = element("h2");
-    			h20.textContent = "Climate change adaptation";
-    			t24 = space();
-    			p1 = element("p");
-    			t25 = text$1("We'll start by acknowledging that the climate is changing - regardless of mitigation efforts, because there's inertia from greenhouse gases that have already been released into the atmosphere - and that as a community, we need be ready for the impacts climate change. Climate change adaptation seems ");
-    			em = element("em");
-    			em.textContent = "fairly";
-    			t27 = text$1(" simple then, or at least the goal of it is. Howt you need to know to better understand:");
-    			t28 = space();
-    			ul1 = element("ul");
-    			li7 = element("li");
-    			li7.textContent = "what we need to adapt to: how climate variables are projected to change and how this increases likelihood of climate hazard events";
-    			t30 = space();
-    			li8 = element("li");
-    			li8.textContent = "what we mean by climate risk through the potential impact on the community";
-    			t32 = space();
-    			li9 = element("li");
-    			li9.textContent = "how adaptation can be framed as managing and reducing risk; and increasing our resilience or adapative capacity";
-    			t34 = space();
-    			div8 = element("div");
-    			img0 = element("img");
-    			t35 = space();
-    			section1 = element("section");
-    			div10 = element("div");
-    			div9 = element("div");
-    			hr1 = element("hr");
-    			t36 = space();
-    			h21 = element("h2");
-    			h21.textContent = "Measuring how the climate is changing";
-    			t38 = space();
-    			p2 = element("p");
-    			p2.textContent = "Here we take a look at climate variables and how they're projected to change under different climate modelling scenarios. Climate variables are observations be can see in recognisable weather patterns, like temperature and rainfall: they are easy to grasp and associate with climate hazard events like floods, heatwaves, fires and drought.";
-    			t40 = space();
-    			p3 = element("p");
-    			p3.textContent = "The role of model projections and different climate scenarios will be used to highlight how the occurence of hazard events is expected to increase in every scenario. This reiterates the need to take action to adapt, and how its important that actions are robust and need to perform well under a wide range of climate futures.";
-    			t42 = space();
-    			div11 = element("div");
-    			create_component(climatevariables.$$.fragment);
-    			t43 = space();
-    			section2 = element("section");
-    			div13 = element("div");
-    			div12 = element("div");
-    			hr2 = element("hr");
-    			t44 = space();
-    			h22 = element("h2");
-    			h22.textContent = "Climate hazards in Hepburn";
-    			t46 = space();
-    			p4 = element("p");
-    			p4.textContent = "Not every impact of climate change is relavent to Hepburn (e.g. sea level rise). And not every climate hazard can be linked to climate change (e.g. wind events)";
-    			t48 = space();
-    			p5 = element("p");
-    			p5.textContent = "The role of model projections and different climate scenarios will be used to highlight how the occurence of hazard events is expected to increase in every scenario. This reiterates the need to take action to adapt, and how its important that actions are robust and need to perform well under a wide range of climate futures.";
-    			t50 = space();
-    			p6 = element("p");
-    			p6.textContent = "The difference between a hazard and an event will also be clarifed, as well as the link to climate variables that drive thhe hazards. These relationaships will be presented in a visual to show how the change in cliamte, measured and observed in climate variables, increases the frequency and severity of hazards, and leads to more hazard events.";
-    			t52 = space();
-    			p7 = element("p");
-    			p7.textContent = "Acknowledge that the IPCC has 'has developed the more general concept of ‘climatic impact driver’ to provide information about “natural or human-induced climate events or trends that may have an impact (detrimental or beneficial) on an element of society or ecosystems”";
-    			t54 = space();
-    			div14 = element("div");
-    			create_component(climatehazards.$$.fragment);
-    			t55 = space();
-    			section3 = element("section");
-    			div16 = element("div");
-    			div15 = element("div");
-    			hr3 = element("hr");
-    			t56 = space();
-    			h23 = element("h2");
-    			h23.textContent = "Climate risks and community impacts";
-    			t58 = space();
-    			p8 = element("p");
-    			p8.textContent = "This section will explain risk and iilustrate the concept of through potential community impacts(?).  These impacts can be quite specific and unqiue to Hepburn and the community, and are likely to be aggregated into themes and focus areas (for the region.)";
-    			t60 = space();
-    			p9 = element("p");
-    			p9.textContent = "The initial aim here is to make the concept of climate risks as tangible as posible by framing them as (potential) community impacts. An information visualisation might be possible here IF impacts/risks are well structured.";
-    			t62 = space();
-    			p10 = element("p");
-    			p10.textContent = "Another consideration is the idea of risk as \"the potential for adverse consequences\" and \"earlier definitions centred on the interaction between hazard, vulnerability and exposure\" (which is more closley related to a section the inlcudes adaptive capacity)";
-    			t64 = space();
-    			div17 = element("div");
-    			create_component(climaterisks.$$.fragment);
-    			t65 = space();
-    			section4 = element("section");
-    			div19 = element("div");
-    			div18 = element("div");
-    			t66 = space();
-    			div21 = element("div");
-    			div20 = element("div");
-    			h24 = element("h2");
-    			h24.textContent = "Translating risk into community impacts";
-    			t68 = space();
-    			p11 = element("p");
-    			p11.textContent = "This table would show all the identified community risks and the claimte hazards and events that are linked to them (note: list is unsorted and woudd be grouped by theme. Icons to be used for hazards). This table would be designed to suit the collated impact data.: \"Risk bearer\" may also be collected (i.e. 'parts of the community') and/or focus area could be tagged.";
-    			t70 = space();
-    			div22 = element("div");
-    			create_component(risktable.$$.fragment);
-    			t71 = space();
-    			section5 = element("section");
-    			div24 = element("div");
-    			div23 = element("div");
-    			hr4 = element("hr");
-    			t72 = space();
-    			h25 = element("h2");
-    			h25.textContent = "Exposure, vulnerability and adapative capacity";
-    			t74 = space();
-    			p12 = element("p");
-    			p12.textContent = "Here we identify the exposure and vulnerability as key drivers of risk. And while exposure to a hazard is relatively easy to comprehend (as it has a tangible 'spatial' characteristic), vulnerabilty is more difficult to define and measure.";
-    			t76 = space();
-    			p13 = element("p");
-    			p13.textContent = "An illustrative example might be to think about climate hazards in the developing world and how ill-prepapred some commiunties are in facing, responding to, and recovering from natural climate disasters. Not only might they ve more exposed to incerasing climate hazards, but (in general) they much more vulnerable than Australian's and their communities and institutions lack what's called '(coping and) adaptive capacity': these include the capcity to anticpate risk, to rspond to risk, and to recover and change. All of these considerations reduce risk and the impact on communities, of climate events.";
-    			t78 = space();
-    			p14 = element("p");
-    			p14.textContent = "The international example is extreme but real. It is easy to then recognise that there are differences in exposure, vulnerability and adaptive capacity between say, regional and urban areas of Victoria. And that that";
-    			t80 = space();
-    			p15 = element("p");
-    			p15.textContent = "Note: might use images rather than any diagramatic reprsentation. Or have a basic HTML relationship of:";
-    			t82 = space();
-    			p16 = element("p");
-    			strong = element("strong");
-    			strong.textContent = "Risk determinants = Hazard x Vulnerability x Exposure";
-    			t84 = space();
-    			div25 = element("div");
-    			img1 = element("img");
-    			t85 = space();
-    			section6 = element("section");
-    			div27 = element("div");
-    			div26 = element("div");
-    			hr5 = element("hr");
-    			t86 = space();
-    			h26 = element("h2");
-    			h26.textContent = "What does adapatation action look like?";
-    			t88 = space();
-    			p17 = element("p");
-    			p17.textContent = "This section will emphasise taht not only do we need to take action to adapt to climate change, but that we need a suite of actions need to be well coordinated to respond to risk and build resilience. This is an obious but recurring theme with adapation: that it is a broad endeavaor that overlaps with many of our communities natural goals. In effect, a lot of the activities and actions we are already doing have adapation benefits. And a lot of adpation actions have other benefits (and potentially unintended consequences!)";
-    			t90 = space();
-    			p18 = element("p");
-    			p18.textContent = "We need to be mindful of all of these adaptation concepts and how they might be linked to our existing goals and intitiaves. We also need ot be mindful that there are a lot of differnet actors and stakaholder that are invovled in actions that have adaptation benefits. These actors all operate in their spheres of responsibility and influence; and so when we look at actions, a key goal is to not just look at individual actions, but to understand how all our acitons work together to meet our adpatation challenges.";
-    			t92 = space();
-    			p19 = element("p");
-    			p19.textContent = "Ends with → to explore the action 'portfolio'";
-    			t94 = space();
-    			div28 = element("div");
-    			svg = svg_element("svg");
-    			create_component(type.$$.fragment);
-    			attr_dev(div0, "class", "hero-logo__wrapper svelte-120xfr");
-    			add_location(div0, file$e, 26, 12, 1069);
-    			attr_dev(div1, "class", "hero-logo svelte-120xfr");
-    			add_location(div1, file$e, 25, 8, 1033);
-    			attr_dev(span0, "class", "title--mute svelte-120xfr");
-    			add_location(span0, file$e, 29, 12, 1183);
-    			add_location(br0, file$e, 29, 58, 1229);
-    			add_location(br1, file$e, 30, 26, 1261);
-    			attr_dev(span1, "class", "title--highlight svelte-120xfr");
-    			add_location(span1, file$e, 31, 12, 1279);
-    			attr_dev(h1, "class", "hero-content__title svelte-120xfr");
-    			add_location(h1, file$e, 28, 8, 1138);
-    			add_location(p0, file$e, 34, 12, 1397);
-    			attr_dev(div2, "class", "hero-content__text svelte-120xfr");
-    			add_location(div2, file$e, 33, 8, 1352);
-    			attr_dev(li0, "class", "select__item svelte-120xfr");
-    			attr_dev(li0, "actname", "intro");
-    			add_location(li0, file$e, 40, 16, 1938);
-    			attr_dev(li1, "class", "select__item svelte-120xfr");
-    			attr_dev(li1, "actname", "variables");
-    			add_location(li1, file$e, 41, 16, 2037);
-    			attr_dev(li2, "class", "select__item svelte-120xfr");
-    			attr_dev(li2, "actname", "hazards");
-    			add_location(li2, file$e, 42, 16, 2145);
-    			attr_dev(li3, "class", "select__item svelte-120xfr");
-    			attr_dev(li3, "actname", "risk");
-    			add_location(li3, file$e, 43, 16, 2252);
-    			attr_dev(li4, "class", "select__item svelte-120xfr");
-    			attr_dev(li4, "actname", "communityRisk");
-    			add_location(li4, file$e, 44, 16, 2350);
-    			attr_dev(li5, "class", "select__item svelte-120xfr");
-    			attr_dev(li5, "actname", "riskAdaptiveCap");
-    			add_location(li5, file$e, 45, 16, 2460);
-    			attr_dev(li6, "class", "select__item svelte-120xfr");
-    			attr_dev(li6, "actname", "acitonType");
-    			add_location(li6, file$e, 46, 16, 2584);
-    			add_location(ul0, file$e, 39, 12, 1917);
-    			attr_dev(div3, "class", "select svelte-120xfr");
-    			add_location(div3, file$e, 37, 8, 1808);
-    			attr_dev(div4, "class", "hero-content svelte-120xfr");
-    			add_location(div4, file$e, 23, 4, 963);
-    			attr_dev(div5, "class", "hero-wrapper svelte-120xfr");
-    			add_location(div5, file$e, 22, 0, 930);
-    			attr_dev(hr0, "class", "svelte-120xfr");
-    			add_location(hr0, file$e, 58, 16, 2977);
-    			attr_dev(h20, "class", "svelte-120xfr");
-    			add_location(h20, file$e, 59, 16, 2998);
-    			add_location(em, file$e, 60, 319, 3352);
-    			add_location(p1, file$e, 60, 16, 3049);
-    			add_location(li7, file$e, 62, 20, 3501);
-    			add_location(li8, file$e, 63, 20, 3661);
-    			add_location(li9, file$e, 64, 20, 3765);
-    			add_location(ul1, file$e, 61, 16, 3476);
-    			attr_dev(div6, "scene", "0");
-    			add_location(div6, file$e, 57, 12, 2945);
-    			attr_dev(div7, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div7, file$e, 56, 8, 2899);
-    			if (!src_url_equal(img0.src, img0_src_value = "./static/img/christian-bass-11UT32fql64-unsplash.jpg")) attr_dev(img0, "src", img0_src_value);
-    			attr_dev(img0, "alt", "");
-    			attr_dev(img0, "class", "svelte-120xfr");
-    			add_location(img0, file$e, 70, 12, 3991);
-    			attr_dev(div8, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div8, file$e, 69, 8, 3951);
-    			attr_dev(section0, "act", "intro");
-    			attr_dev(section0, "class", "section-wrapper col-1-2 svelte-120xfr");
-    			add_location(section0, file$e, 55, 4, 2832);
-    			attr_dev(hr1, "class", "svelte-120xfr");
-    			add_location(hr1, file$e, 78, 16, 4281);
-    			attr_dev(h21, "class", "svelte-120xfr");
-    			add_location(h21, file$e, 79, 16, 4302);
-    			add_location(p2, file$e, 80, 16, 4365);
-    			add_location(p3, file$e, 82, 16, 4746);
-    			attr_dev(div9, "scene", "0");
-    			add_location(div9, file$e, 77, 12, 4249);
-    			attr_dev(div10, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div10, file$e, 76, 8, 4203);
-    			attr_dev(div11, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div11, file$e, 86, 8, 5122);
-    			attr_dev(section1, "act", "variables");
-    			attr_dev(section1, "class", "section-wrapper col-2-1 svelte-120xfr");
-    			add_location(section1, file$e, 75, 4, 4132);
-    			attr_dev(hr2, "class", "svelte-120xfr");
-    			add_location(hr2, file$e, 95, 16, 5396);
-    			attr_dev(h22, "class", "svelte-120xfr");
-    			add_location(h22, file$e, 96, 16, 5417);
-    			add_location(p4, file$e, 97, 16, 5469);
-    			add_location(p5, file$e, 99, 16, 5671);
-    			add_location(p6, file$e, 100, 16, 6020);
-    			add_location(p7, file$e, 101, 16, 6390);
-    			attr_dev(div12, "scene", "0");
-    			add_location(div12, file$e, 94, 12, 5364);
-    			attr_dev(div13, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div13, file$e, 93, 8, 5318);
-    			attr_dev(div14, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div14, file$e, 105, 8, 6712);
-    			attr_dev(section2, "act", "hazards");
-    			attr_dev(section2, "class", "section-wrapper col-1-2 svelte-120xfr");
-    			add_location(section2, file$e, 92, 4, 5249);
-    			attr_dev(hr3, "class", "svelte-120xfr");
-    			add_location(hr3, file$e, 114, 16, 7002);
-    			attr_dev(h23, "class", "svelte-120xfr");
-    			add_location(h23, file$e, 115, 16, 7023);
-    			add_location(p8, file$e, 116, 16, 7085);
-    			add_location(p9, file$e, 118, 16, 7383);
-    			add_location(p10, file$e, 119, 16, 7630);
-    			attr_dev(div15, "scene", "0");
-    			add_location(div15, file$e, 113, 12, 6970);
-    			attr_dev(div16, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div16, file$e, 112, 8, 6924);
-    			attr_dev(div17, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div17, file$e, 123, 8, 7939);
-    			attr_dev(section3, "act", "risks");
-    			attr_dev(section3, "class", "section-wrapper col-2-1 svelte-120xfr");
-    			add_location(section3, file$e, 111, 4, 6857);
-    			attr_dev(div18, "class", "invert-bg-clip svelte-120xfr");
-    			add_location(div18, file$e, 130, 12, 8162);
-    			attr_dev(div19, "class", "invert-bg svelte-120xfr");
-    			add_location(div19, file$e, 129, 8, 8123);
-    			attr_dev(h24, "class", "svelte-120xfr");
-    			add_location(h24, file$e, 134, 16, 8299);
-    			add_location(p11, file$e, 135, 16, 8364);
-    			attr_dev(div20, "scene", "0");
-    			add_location(div20, file$e, 133, 12, 8267);
-    			attr_dev(div21, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div21, file$e, 132, 8, 8221);
-    			attr_dev(div22, "class", "table-wrapper svelte-120xfr");
-    			add_location(div22, file$e, 139, 8, 8801);
-    			attr_dev(section4, "act", "communityImpact");
-    			attr_dev(section4, "class", "section-wrapper col-2-1 table invert svelte-120xfr");
-    			add_location(section4, file$e, 128, 4, 8033);
-    			attr_dev(hr4, "class", "svelte-120xfr");
-    			add_location(hr4, file$e, 148, 16, 9094);
-    			attr_dev(h25, "class", "svelte-120xfr");
-    			add_location(h25, file$e, 149, 16, 9115);
-    			add_location(p12, file$e, 150, 16, 9187);
-    			add_location(p13, file$e, 151, 16, 9449);
-    			add_location(p14, file$e, 153, 16, 10095);
-    			add_location(p15, file$e, 154, 16, 10337);
-    			add_location(strong, file$e, 155, 19, 10468);
-    			add_location(p16, file$e, 155, 16, 10465);
-    			attr_dev(div23, "scene", "0");
-    			add_location(div23, file$e, 147, 12, 9062);
-    			attr_dev(div24, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div24, file$e, 146, 8, 9016);
-    			if (!src_url_equal(img1.src, img1_src_value = "./static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg")) attr_dev(img1, "src", img1_src_value);
-    			attr_dev(img1, "alt", "");
-    			attr_dev(img1, "class", "svelte-120xfr");
-    			add_location(img1, file$e, 160, 12, 10626);
-    			attr_dev(div25, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div25, file$e, 159, 8, 10586);
-    			attr_dev(section5, "act", "riskAdaptiveCap");
-    			attr_dev(section5, "class", "section-wrapper col-1-2 svelte-120xfr");
-    			add_location(section5, file$e, 145, 4, 8939);
-    			attr_dev(hr5, "class", "svelte-120xfr");
-    			add_location(hr5, file$e, 168, 16, 10902);
-    			attr_dev(h26, "class", "svelte-120xfr");
-    			add_location(h26, file$e, 169, 16, 10923);
-    			add_location(p17, file$e, 170, 16, 10988);
-    			add_location(p18, file$e, 172, 16, 11557);
-    			add_location(p19, file$e, 173, 16, 12097);
-    			attr_dev(div26, "scene", "0");
-    			add_location(div26, file$e, 167, 12, 10870);
-    			attr_dev(div27, "class", "narrative-wrapper svelte-120xfr");
-    			add_location(div27, file$e, 166, 8, 10824);
-    			attr_dev(svg, "viewBox", "0 0 1600 1600");
-    			attr_dev(svg, "width", "100%");
-    			add_location(svg, file$e, 178, 12, 12234);
-    			attr_dev(div28, "class", "vis-wrapper svelte-120xfr");
-    			add_location(div28, file$e, 177, 8, 12194);
-    			attr_dev(section6, "act", "actions");
-    			attr_dev(section6, "class", "section-wrapper col-2-1 svelte-120xfr");
-    			add_location(section6, file$e, 165, 4, 10755);
-    			attr_dev(div29, "class", "content-wrapper svelte-120xfr");
-    			add_location(div29, file$e, 53, 0, 2758);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div5, anchor);
-    			append_dev(div5, div4);
-    			append_dev(div4, div1);
-    			append_dev(div1, div0);
-    			mount_component(logo, div0, null);
-    			append_dev(div4, t0);
-    			append_dev(div4, h1);
-    			append_dev(h1, span0);
-    			append_dev(h1, br0);
-    			append_dev(h1, t2);
-    			append_dev(h1, br1);
-    			append_dev(h1, t3);
-    			append_dev(h1, span1);
-    			append_dev(div4, t5);
-    			append_dev(div4, div2);
-    			append_dev(div2, p0);
-    			append_dev(div4, t7);
-    			append_dev(div4, div3);
-    			append_dev(div3, ul0);
-    			append_dev(ul0, li0);
-    			append_dev(ul0, t9);
-    			append_dev(ul0, li1);
-    			append_dev(ul0, t11);
-    			append_dev(ul0, li2);
-    			append_dev(ul0, t13);
-    			append_dev(ul0, li3);
-    			append_dev(ul0, t15);
-    			append_dev(ul0, li4);
-    			append_dev(ul0, t17);
-    			append_dev(ul0, li5);
-    			append_dev(ul0, t19);
-    			append_dev(ul0, li6);
-    			insert_dev(target, t21, anchor);
-    			insert_dev(target, div29, anchor);
-    			append_dev(div29, section0);
-    			append_dev(section0, div7);
-    			append_dev(div7, div6);
-    			append_dev(div6, hr0);
-    			append_dev(div6, t22);
-    			append_dev(div6, h20);
-    			append_dev(div6, t24);
-    			append_dev(div6, p1);
-    			append_dev(p1, t25);
-    			append_dev(p1, em);
-    			append_dev(p1, t27);
-    			append_dev(div6, t28);
-    			append_dev(div6, ul1);
-    			append_dev(ul1, li7);
-    			append_dev(ul1, t30);
-    			append_dev(ul1, li8);
-    			append_dev(ul1, t32);
-    			append_dev(ul1, li9);
-    			append_dev(section0, t34);
-    			append_dev(section0, div8);
-    			append_dev(div8, img0);
-    			append_dev(div29, t35);
-    			append_dev(div29, section1);
-    			append_dev(section1, div10);
-    			append_dev(div10, div9);
-    			append_dev(div9, hr1);
-    			append_dev(div9, t36);
-    			append_dev(div9, h21);
-    			append_dev(div9, t38);
-    			append_dev(div9, p2);
-    			append_dev(div9, t40);
-    			append_dev(div9, p3);
-    			append_dev(section1, t42);
-    			append_dev(section1, div11);
-    			mount_component(climatevariables, div11, null);
-    			append_dev(div29, t43);
-    			append_dev(div29, section2);
-    			append_dev(section2, div13);
-    			append_dev(div13, div12);
-    			append_dev(div12, hr2);
-    			append_dev(div12, t44);
-    			append_dev(div12, h22);
-    			append_dev(div12, t46);
-    			append_dev(div12, p4);
-    			append_dev(div12, t48);
-    			append_dev(div12, p5);
-    			append_dev(div12, t50);
-    			append_dev(div12, p6);
-    			append_dev(div12, t52);
-    			append_dev(div12, p7);
-    			append_dev(section2, t54);
-    			append_dev(section2, div14);
-    			mount_component(climatehazards, div14, null);
-    			append_dev(div29, t55);
-    			append_dev(div29, section3);
-    			append_dev(section3, div16);
-    			append_dev(div16, div15);
-    			append_dev(div15, hr3);
-    			append_dev(div15, t56);
-    			append_dev(div15, h23);
-    			append_dev(div15, t58);
-    			append_dev(div15, p8);
-    			append_dev(div15, t60);
-    			append_dev(div15, p9);
-    			append_dev(div15, t62);
-    			append_dev(div15, p10);
-    			append_dev(section3, t64);
-    			append_dev(section3, div17);
-    			mount_component(climaterisks, div17, null);
-    			append_dev(div29, t65);
-    			append_dev(div29, section4);
-    			append_dev(section4, div19);
-    			append_dev(div19, div18);
-    			append_dev(section4, t66);
-    			append_dev(section4, div21);
-    			append_dev(div21, div20);
-    			append_dev(div20, h24);
-    			append_dev(div20, t68);
-    			append_dev(div20, p11);
-    			append_dev(section4, t70);
-    			append_dev(section4, div22);
-    			mount_component(risktable, div22, null);
-    			append_dev(div29, t71);
-    			append_dev(div29, section5);
-    			append_dev(section5, div24);
-    			append_dev(div24, div23);
-    			append_dev(div23, hr4);
-    			append_dev(div23, t72);
-    			append_dev(div23, h25);
-    			append_dev(div23, t74);
-    			append_dev(div23, p12);
-    			append_dev(div23, t76);
-    			append_dev(div23, p13);
-    			append_dev(div23, t78);
-    			append_dev(div23, p14);
-    			append_dev(div23, t80);
-    			append_dev(div23, p15);
-    			append_dev(div23, t82);
-    			append_dev(div23, p16);
-    			append_dev(p16, strong);
-    			append_dev(section5, t84);
-    			append_dev(section5, div25);
-    			append_dev(div25, img1);
-    			append_dev(div29, t85);
-    			append_dev(div29, section6);
-    			append_dev(section6, div27);
-    			append_dev(div27, div26);
-    			append_dev(div26, hr5);
-    			append_dev(div26, t86);
-    			append_dev(div26, h26);
-    			append_dev(div26, t88);
-    			append_dev(div26, p17);
-    			append_dev(div26, t90);
-    			append_dev(div26, p18);
-    			append_dev(div26, t92);
-    			append_dev(div26, p19);
-    			append_dev(section6, t94);
-    			append_dev(section6, div28);
-    			append_dev(div28, svg);
-    			mount_component(type, svg, null);
-    			current = true;
-
-    			if (!mounted) {
-    				dispose = [
-    					listen_dev(li0, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li1, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li2, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li3, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li4, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li5, "click", /*scrollTo*/ ctx[0], false, false, false),
-    					listen_dev(li6, "click", /*scrollTo*/ ctx[0], false, false, false)
-    				];
-
-    				mounted = true;
-    			}
-    		},
-    		p: noop$4,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(logo.$$.fragment, local);
-    			transition_in(climatevariables.$$.fragment, local);
-    			transition_in(climatehazards.$$.fragment, local);
-    			transition_in(climaterisks.$$.fragment, local);
-    			transition_in(risktable.$$.fragment, local);
-    			transition_in(type.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(logo.$$.fragment, local);
-    			transition_out(climatevariables.$$.fragment, local);
-    			transition_out(climatehazards.$$.fragment, local);
-    			transition_out(climaterisks.$$.fragment, local);
-    			transition_out(risktable.$$.fragment, local);
-    			transition_out(type.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div5);
-    			destroy_component(logo);
-    			if (detaching) detach_dev(t21);
-    			if (detaching) detach_dev(div29);
-    			destroy_component(climatevariables);
-    			destroy_component(climatehazards);
-    			destroy_component(climaterisks);
-    			destroy_component(risktable);
-    			destroy_component(type);
-    			mounted = false;
-    			run_all(dispose);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$e.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$e($$self, $$props, $$invalidate) {
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Adaptation', slots, []);
-
-    	const scrollTo = function () {
-    		document.querySelector(`section[act=${this.getAttribute('actName')}]`).scrollIntoView({ behavior: 'smooth' });
-    	};
-
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Adaptation> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$capture_state = () => ({
-    		Logo,
-    		gsap: gsapWithCSS,
-    		ScrollTrigger,
-    		ui,
-    		data,
-    		tsv,
-    		Type,
-    		ClimateVariables,
-    		ClimateHazards,
-    		ClimateRisks,
-    		RiskTable,
-    		scrollTo
-    	});
-
-    	return [scrollTo];
-    }
-
-    class Adaptation extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init$1(this, options, instance$e, create_fragment$e, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Adaptation",
-    			options,
-    			id: create_fragment$e.name
-    		});
-    	}
-    }
-
     /* src/components/byPage/actions/vis/Legend.svelte generated by Svelte v3.48.0 */
-    const file$d = "src/components/byPage/actions/vis/Legend.svelte";
+    const file$c = "src/components/byPage/actions/vis/Legend.svelte";
 
-    function get_each_context$7(ctx, list, i) {
+    function get_each_context$6(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[5] = list[i];
     	child_ctx[7] = i;
@@ -42721,16 +43566,16 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			attr_dev(circle, "r", /*iconRadius*/ ctx[3]);
     			attr_dev(circle, "class", "hazard-circle  svelte-1ks9sl9");
-    			add_location(circle, file$d, 26, 20, 1278);
+    			add_location(circle, file$c, 26, 20, 1278);
     			attr_dev(path, "class", "hazard-icon svelte-1ks9sl9");
     			attr_dev(path, "d", path_d_value = icons[slugify(/*hazard*/ ctx[8])]);
-    			add_location(path, file$d, 27, 20, 1350);
+    			add_location(path, file$c, 27, 20, 1350);
     			attr_dev(text_1, "class", "hazard-label svelte-1ks9sl9");
     			set_style(text_1, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 25) + "px)");
-    			add_location(text_1, file$d, 28, 20, 1435);
+    			add_location(text_1, file$c, 28, 20, 1435);
     			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*hazard*/ ctx[8])) + " svelte-1ks9sl9"));
     			set_style(g, "transform", "translate(" + /*i*/ ctx[7] * /*iconRadius*/ ctx[3] * 3 + "px, " + 0 + "px)");
-    			add_location(g, file$d, 25, 16, 1168);
+    			add_location(g, file$c, 25, 16, 1168);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -42766,7 +43611,7 @@ var app = (function (exports) {
     }
 
     // (66:16) {#each  $data.schema.actionScale.data.map(d => d.Scale) as scale, i}
-    function create_each_block$7(ctx) {
+    function create_each_block$6(ctx) {
     	let g;
     	let circle0;
     	let circle0_r_value;
@@ -42784,16 +43629,16 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			attr_dev(circle0, "r", circle0_r_value = /*$ui*/ ctx[1].vis.nodes.scales.radiusScale(/*scale*/ ctx[5]));
     			attr_dev(circle0, "class", "scale-circle  svelte-1ks9sl9");
-    			add_location(circle0, file$d, 67, 20, 4026);
+    			add_location(circle0, file$c, 67, 20, 4026);
     			attr_dev(circle1, "r", circle1_r_value = /*dims*/ ctx[0].nodeRadius + 2.5);
     			attr_dev(circle1, "class", "scale-node svelte-1ks9sl9");
-    			add_location(circle1, file$d, 68, 20, 4126);
+    			add_location(circle1, file$c, 68, 20, 4126);
     			attr_dev(text_1, "class", "scale-label svelte-1ks9sl9");
     			set_style(text_1, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 25) + "px)");
-    			add_location(text_1, file$d, 69, 20, 4205);
+    			add_location(text_1, file$c, 69, 20, 4205);
     			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*scale*/ ctx[5])) + " svelte-1ks9sl9"));
     			set_style(g, "transform", "translate(" + /*i*/ ctx[7] * /*iconRadius*/ ctx[3] * 3 + "px, " + 0 + "px)");
-    			add_location(g, file$d, 66, 16, 3917);
+    			add_location(g, file$c, 66, 16, 3917);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -42823,7 +43668,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$7.name,
+    		id: create_each_block$6.name,
     		type: "each",
     		source: "(66:16) {#each  $data.schema.actionScale.data.map(d => d.Scale) as scale, i}",
     		ctx
@@ -42832,7 +43677,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$d(ctx) {
+    function create_fragment$c(ctx) {
     	let g10;
     	let g9;
     	let g1;
@@ -42875,7 +43720,7 @@ var app = (function (exports) {
     	let g7;
     	let g10_transition;
     	let current;
-    	let each_value_1 = /*$data*/ ctx[2].schema.hazards.data.map(func$2);
+    	let each_value_1 = /*$data*/ ctx[2].schema.hazards.data.map(func$1);
     	validate_each_argument(each_value_1);
     	let each_blocks_1 = [];
 
@@ -42888,7 +43733,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$7(get_each_context$7(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$6(get_each_context$6(ctx, each_value, i));
     	}
 
     	const block = {
@@ -42945,74 +43790,74 @@ var app = (function (exports) {
 
     			attr_dev(text0, "class", "legend-title svelte-1ks9sl9");
     			set_style(text0, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text0, file$d, 22, 12, 841);
+    			add_location(text0, file$c, 22, 12, 841);
     			set_style(g0, "transform", "translate(" + -(/*$data*/ ctx[2].schema.hazards.data.length - 1) * 3 * 0.5 * /*iconRadius*/ ctx[3] + "px, 0px)");
-    			add_location(g0, file$d, 23, 12, 963);
+    			add_location(g0, file$c, 23, 12, 963);
     			attr_dev(g1, "class", "legend-group svelte-1ks9sl9");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.hazards + "px, 0px)");
     			toggle_class(g1, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.hazards);
-    			add_location(g1, file$d, 21, 8, 662);
+    			add_location(g1, file$c, 21, 8, 662);
     			attr_dev(text1, "class", "legend-title center svelte-1ks9sl9");
     			set_style(text1, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text1, file$d, 36, 12, 1844);
+    			add_location(text1, file$c, 36, 12, 1844);
     			attr_dev(path0, "class", "approach-group risk svelte-1ks9sl9");
     			attr_dev(path0, "d", triangle(/*iconRadius*/ ctx[3], 'down'));
-    			add_location(path0, file$d, 39, 20, 2082);
-    			add_location(tspan0, file$d, 41, 24, 2287);
+    			add_location(path0, file$c, 39, 20, 2082);
+    			add_location(tspan0, file$c, 41, 24, 2287);
     			attr_dev(tspan1, "dy", "20");
     			attr_dev(tspan1, "x", "0");
-    			add_location(tspan1, file$d, 42, 24, 2333);
+    			add_location(tspan1, file$c, 42, 24, 2333);
     			attr_dev(text2, "class", "approach-label risk svelte-1ks9sl9");
     			set_style(text2, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text2, file$d, 40, 20, 2171);
+    			add_location(text2, file$c, 40, 20, 2171);
     			set_style(g2, "transform", "translate(" + -/*iconRadius*/ ctx[3] * 3.5 + "px, " + 0 + "px)");
-    			add_location(g2, file$d, 38, 16, 1996);
+    			add_location(g2, file$c, 38, 16, 1996);
     			attr_dev(path1, "class", "approach-group resilience svelte-1ks9sl9");
     			attr_dev(path1, "d", triangle(/*iconRadius*/ ctx[3], 'up'));
     			set_style(path1, "transform", "translate(0px, " + 0 + "px)");
-    			add_location(path1, file$d, 46, 20, 2516);
-    			add_location(tspan2, file$d, 48, 24, 2769);
+    			add_location(path1, file$c, 46, 20, 2516);
+    			add_location(tspan2, file$c, 48, 24, 2769);
     			attr_dev(tspan3, "dy", "20");
     			attr_dev(tspan3, "x", "0");
-    			add_location(tspan3, file$d, 48, 45, 2790);
+    			add_location(tspan3, file$c, 48, 45, 2790);
     			attr_dev(text3, "class", "approach-label risk svelte-1ks9sl9");
     			set_style(text3, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text3, file$d, 47, 20, 2653);
+    			add_location(text3, file$c, 47, 20, 2653);
     			set_style(g3, "transform", "translate(" + /*iconRadius*/ ctx[3] * 3.5 + "px, " + 0 + "px)");
-    			add_location(g3, file$d, 45, 16, 2432);
+    			add_location(g3, file$c, 45, 16, 2432);
     			attr_dev(path2, "class", "approach-group risk svelte-1ks9sl9");
     			attr_dev(path2, "d", triangle(/*iconRadius*/ ctx[3], 'down'));
-    			add_location(path2, file$d, 52, 20, 2913);
+    			add_location(path2, file$c, 52, 20, 2913);
     			attr_dev(path3, "class", "approach-group resilience svelte-1ks9sl9");
     			attr_dev(path3, "d", triangle(/*iconRadius*/ ctx[3], 'up'));
-    			add_location(path3, file$d, 53, 20, 3004);
-    			add_location(tspan4, file$d, 55, 24, 3227);
+    			add_location(path3, file$c, 53, 20, 3004);
+    			add_location(tspan4, file$c, 55, 24, 3227);
     			attr_dev(tspan5, "dy", "20");
     			attr_dev(tspan5, "x", "0");
-    			add_location(tspan5, file$d, 55, 51, 3254);
+    			add_location(tspan5, file$c, 55, 51, 3254);
     			attr_dev(text4, "class", "approach-label risk resilience svelte-1ks9sl9");
     			set_style(text4, "transform", "translate(" + 0 + "px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text4, file$d, 54, 20, 3098);
-    			add_location(g4, file$d, 51, 16, 2889);
-    			add_location(g5, file$d, 37, 12, 1976);
+    			add_location(text4, file$c, 54, 20, 3098);
+    			add_location(g4, file$c, 51, 16, 2889);
+    			add_location(g5, file$c, 37, 12, 1976);
     			attr_dev(g6, "class", "legend-group svelte-1ks9sl9");
     			set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.approach + "px, 0px)");
     			toggle_class(g6, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.approach);
-    			add_location(g6, file$d, 35, 8, 1663);
+    			add_location(g6, file$c, 35, 8, 1663);
     			attr_dev(text5, "class", "legend-title svelte-1ks9sl9");
     			set_style(text5, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text5, file$d, 63, 12, 3592);
+    			add_location(text5, file$c, 63, 12, 3592);
     			set_style(g7, "transform", "translate(" + -(/*$data*/ ctx[2].schema.hazards.data.length - 1) * 3 * 0.5 * /*iconRadius*/ ctx[3] + "px, 0px)");
-    			add_location(g7, file$d, 64, 12, 3710);
+    			add_location(g7, file$c, 64, 12, 3710);
     			attr_dev(g8, "class", "legend-group svelte-1ks9sl9");
     			set_style(g8, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.scale + "px , 0px)");
     			toggle_class(g8, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.scale);
-    			add_location(g8, file$d, 62, 8, 3416);
+    			add_location(g8, file$c, 62, 8, 3416);
     			set_style(g9, "transform", "translate( 0px, " + (/*dims*/ ctx[0].height - 70) + "px)");
-    			add_location(g9, file$d, 19, 4, 557);
+    			add_location(g9, file$c, 19, 4, 557);
     			attr_dev(g10, "id", "legend-container");
     			attr_dev(g10, "class", "svelte-1ks9sl9");
-    			add_location(g10, file$d, 17, 0, 508);
+    			add_location(g10, file$c, 17, 0, 508);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -43072,7 +43917,7 @@ var app = (function (exports) {
     		},
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*slugify, $data, iconRadius, icons*/ 12) {
-    				each_value_1 = /*$data*/ ctx[2].schema.hazards.data.map(func$2);
+    				each_value_1 = /*$data*/ ctx[2].schema.hazards.data.map(func$1);
     				validate_each_argument(each_value_1);
     				let i;
 
@@ -43121,12 +43966,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$7(ctx, each_value, i);
+    					const child_ctx = get_each_context$6(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$7(child_ctx);
+    						each_blocks[i] = create_each_block$6(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g7, null);
     					}
@@ -43180,7 +44025,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$d.name,
+    		id: create_fragment$c.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43189,10 +44034,10 @@ var app = (function (exports) {
     	return block;
     }
 
-    const func$2 = d => d.Hazard;
+    const func$1 = d => d.Hazard;
     const func_1 = d => d.Scale;
 
-    function instance$d($$self, $$props, $$invalidate) {
+    function instance$c($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -43247,13 +44092,13 @@ var app = (function (exports) {
     class Legend extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$d, create_fragment$d, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$c, create_fragment$c, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Legend",
     			options,
-    			id: create_fragment$d.name
+    			id: create_fragment$c.name
     		});
     	}
 
@@ -43267,9 +44112,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Force.svelte generated by Svelte v3.48.0 */
-    const file$c = "src/components/byPage/actions/vis/Force.svelte";
+    const file$b = "src/components/byPage/actions/vis/Force.svelte";
 
-    function get_each_context$6(ctx, list, i) {
+    function get_each_context$5(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[17] = list[i];
     	child_ctx[19] = i;
@@ -43300,9 +44145,9 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			circle = svg_element("circle");
-    			attr_dev(circle, "class", circle_class_value = "node-shadow " + slugify(/*$data*/ ctx[2].schema.actionScale.data.filter(func)[0].Scale) + " svelte-s8vndr");
+    			attr_dev(circle, "class", circle_class_value = "node-shadow " + slugify(/*$data*/ ctx[2].schema.actionScale.data.filter(func)[0].Scale) + " svelte-yr9wu9");
     			attr_dev(circle, "r", circle_r_value = /*$ui*/ ctx[3].vis.nodes.scales.radiusScale(/*$data*/ ctx[2].schema.actionScale.data.filter(func_1)[0].Scale));
-    			add_location(circle, file$c, 115, 16, 3919);
+    			add_location(circle, file$b, 115, 16, 3919);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -43310,7 +44155,7 @@ var app = (function (exports) {
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (dirty & /*$data, renderedNodes*/ 6 && circle_class_value !== (circle_class_value = "node-shadow " + slugify(/*$data*/ ctx[2].schema.actionScale.data.filter(func)[0].Scale) + " svelte-s8vndr")) {
+    			if (dirty & /*$data, renderedNodes*/ 6 && circle_class_value !== (circle_class_value = "node-shadow " + slugify(/*$data*/ ctx[2].schema.actionScale.data.filter(func)[0].Scale) + " svelte-yr9wu9")) {
     				attr_dev(circle, "class", circle_class_value);
     			}
 
@@ -43354,7 +44199,7 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g, "class", "node-arcs");
-    			add_location(g, file$c, 126, 16, 4532);
+    			add_location(g, file$b, 126, 16, 4532);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -43418,7 +44263,7 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			path = svg_element("path");
-    			attr_dev(path, "class", path_class_value = "" + (null_to_empty(slugify(/*hazardSchema*/ ctx[4].filter(func_2)[0].Hazard)) + " svelte-s8vndr"));
+    			attr_dev(path, "class", path_class_value = "" + (null_to_empty(slugify(/*hazardSchema*/ ctx[4].filter(func_2)[0].Hazard)) + " svelte-yr9wu9"));
 
     			attr_dev(path, "d", path_d_value = /*arc*/ ctx[7]({
     				innerRadius: /*dims*/ ctx[0].nodeRadius,
@@ -43427,7 +44272,7 @@ var app = (function (exports) {
     				endAngle: /*i*/ ctx[19] * (2 * Math.PI / /*node*/ ctx[17]["Hazard"].length) + 2 * Math.PI / /*node*/ ctx[17]["Hazard"].length
     			}));
 
-    			add_location(path, file$c, 128, 24, 4637);
+    			add_location(path, file$b, 128, 24, 4637);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -43435,7 +44280,7 @@ var app = (function (exports) {
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (dirty & /*renderedNodes*/ 2 && path_class_value !== (path_class_value = "" + (null_to_empty(slugify(/*hazardSchema*/ ctx[4].filter(func_2)[0].Hazard)) + " svelte-s8vndr"))) {
+    			if (dirty & /*renderedNodes*/ 2 && path_class_value !== (path_class_value = "" + (null_to_empty(slugify(/*hazardSchema*/ ctx[4].filter(func_2)[0].Hazard)) + " svelte-yr9wu9"))) {
     				attr_dev(path, "class", path_class_value);
     			}
 
@@ -43474,7 +44319,7 @@ var app = (function (exports) {
     			g = svg_element("g");
     			if (if_block) if_block.c();
     			attr_dev(g, "class", "approach-triangles");
-    			add_location(g, file$c, 141, 16, 5299);
+    			add_location(g, file$b, 141, 16, 5299);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -43591,9 +44436,9 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			path = svg_element("path");
-    			attr_dev(path, "class", "approach-triangle resilience svelte-s8vndr");
+    			attr_dev(path, "class", "approach-triangle resilience svelte-yr9wu9");
     			attr_dev(path, "d", path_d_value = triangle(/*dims*/ ctx[0].nodeRadius, 'up'));
-    			add_location(path, file$c, 144, 24, 5505);
+    			add_location(path, file$b, 144, 24, 5505);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -43627,9 +44472,9 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			path = svg_element("path");
-    			attr_dev(path, "class", "approach-triangle risk svelte-s8vndr");
+    			attr_dev(path, "class", "approach-triangle risk svelte-yr9wu9");
     			attr_dev(path, "d", path_d_value = triangle(/*dims*/ ctx[0].nodeRadius, 'down'));
-    			add_location(path, file$c, 147, 24, 5726);
+    			add_location(path, file$b, 147, 24, 5726);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -43663,7 +44508,7 @@ var app = (function (exports) {
     	const block = {
     		c: function create() {
     			path = svg_element("path");
-    			attr_dev(path, "class", "symbol svelte-s8vndr");
+    			attr_dev(path, "class", "symbol svelte-yr9wu9");
 
     			attr_dev(path, "d", path_d_value = /*arc*/ ctx[7]({
     				innerRadius: /*dims*/ ctx[0].nodeRadius * 0 + 0,
@@ -43673,7 +44518,7 @@ var app = (function (exports) {
     			}));
 
     			toggle_class(path, "healing-country", /*node*/ ctx[17]["Healing country"]);
-    			add_location(path, file$c, 155, 16, 6039);
+    			add_location(path, file$b, 155, 16, 6039);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -43709,7 +44554,7 @@ var app = (function (exports) {
     }
 
     // (107:4) {#each renderedNodes as node, i}
-    function create_each_block$6(ctx) {
+    function create_each_block$5(ctx) {
     	let g3;
     	let g2;
     	let g0;
@@ -43742,23 +44587,23 @@ var app = (function (exports) {
     			if (if_block3) if_block3.c();
     			g1 = svg_element("g");
     			text_1 = svg_element("text");
-    			attr_dev(circle, "class", "node-base svelte-s8vndr");
+    			attr_dev(circle, "class", "node-base svelte-yr9wu9");
     			attr_dev(circle, "r", circle_r_value = /*dims*/ ctx[0].nodeRadius);
     			toggle_class(circle, "node-color", !/*$ui*/ ctx[3].state.actionVis.nodes.base);
-    			add_location(circle, file$c, 121, 16, 4292);
+    			add_location(circle, file$b, 121, 16, 4292);
     			attr_dev(g0, "class", "node-scale-wrapper");
     			set_style(g0, "transform", "scale(1)");
-    			add_location(g0, file$c, 112, 12, 3744);
-    			attr_dev(text_1, "class", "label-text svelte-s8vndr");
-    			add_location(text_1, file$c, 168, 16, 6506);
-    			attr_dev(g1, "class", "label svelte-s8vndr");
-    			add_location(g1, file$c, 167, 12, 6470);
-    			attr_dev(g2, "class", "node-wrapper svelte-s8vndr");
-    			add_location(g2, file$c, 110, 8, 3704);
-    			attr_dev(g3, "class", "node-group svelte-s8vndr");
+    			add_location(g0, file$b, 112, 12, 3744);
+    			attr_dev(text_1, "class", "label-text svelte-yr9wu9");
+    			add_location(text_1, file$b, 168, 16, 6506);
+    			attr_dev(g1, "class", "label svelte-yr9wu9");
+    			add_location(g1, file$b, 167, 12, 6470);
+    			attr_dev(g2, "class", "node-wrapper svelte-yr9wu9");
+    			add_location(g2, file$b, 110, 8, 3704);
+    			attr_dev(g3, "class", "node-group svelte-yr9wu9");
     			attr_dev(g3, "index", /*i*/ ctx[19]);
     			attr_dev(g3, "style", g3_style_value = /*move*/ ctx[6](/*node*/ ctx[17].x, /*node*/ ctx[17].y));
-    			add_location(g3, file$c, 107, 4, 3516);
+    			add_location(g3, file$b, 107, 4, 3516);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g3, anchor);
@@ -43865,7 +44710,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$6.name,
+    		id: create_each_block$5.name,
     		type: "each",
     		source: "(107:4) {#each renderedNodes as node, i}",
     		ctx
@@ -43874,7 +44719,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$c(ctx) {
+    function create_fragment$b(ctx) {
     	let g;
     	let defs;
     	let linearGradient;
@@ -43891,7 +44736,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$6(get_each_context$6(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$5(get_each_context$5(ctx, each_value, i));
     	}
 
     	const block = {
@@ -43913,36 +44758,36 @@ var app = (function (exports) {
     			attr_dev(stop0, "offset", "0%");
     			set_style(stop0, "stop-color", "var(--heat)");
     			set_style(stop0, "stop-opacity", "1");
-    			add_location(stop0, file$c, 97, 8, 2968);
+    			add_location(stop0, file$b, 97, 8, 2968);
     			attr_dev(stop1, "offset", "33%");
     			set_style(stop1, "stop-color", "var(--heat)");
     			set_style(stop1, "stop-opacity", "1");
-    			add_location(stop1, file$c, 98, 8, 3043);
+    			add_location(stop1, file$b, 98, 8, 3043);
     			attr_dev(stop2, "offset", "33%");
     			set_style(stop2, "stop-color", "var(--flood)");
     			set_style(stop2, "stop-opacity", "1");
-    			add_location(stop2, file$c, 99, 8, 3119);
+    			add_location(stop2, file$b, 99, 8, 3119);
     			attr_dev(stop3, "offset", "67%");
     			set_style(stop3, "stop-color", "var(--flood)");
     			set_style(stop3, "stop-opacity", "1");
-    			add_location(stop3, file$c, 100, 8, 3196);
+    			add_location(stop3, file$b, 100, 8, 3196);
     			attr_dev(stop4, "offset", "67%");
     			set_style(stop4, "stop-color", "var(--drought)");
     			set_style(stop4, "stop-opacity", "1");
-    			add_location(stop4, file$c, 101, 8, 3273);
+    			add_location(stop4, file$b, 101, 8, 3273);
     			attr_dev(stop5, "offset", "100%");
     			set_style(stop5, "stop-color", "var(--drought)");
     			set_style(stop5, "stop-opacity", "1");
-    			add_location(stop5, file$c, 102, 8, 3352);
+    			add_location(stop5, file$b, 102, 8, 3352);
     			attr_dev(linearGradient, "id", "solids");
     			attr_dev(linearGradient, "x1", "0%");
     			attr_dev(linearGradient, "y1", "0%");
     			attr_dev(linearGradient, "x2", "100%");
     			attr_dev(linearGradient, "y2", "0%");
-    			add_location(linearGradient, file$c, 96, 8, 2897);
-    			add_location(defs, file$c, 95, 4, 2882);
+    			add_location(linearGradient, file$b, 96, 8, 2897);
+    			add_location(defs, file$b, 95, 4, 2882);
     			attr_dev(g, "id", "force-vis-container");
-    			add_location(g, file$c, 94, 0, 2832);
+    			add_location(g, file$b, 94, 0, 2832);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -43971,12 +44816,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$6(ctx, each_value, i);
+    					const child_ctx = get_each_context$5(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$6(child_ctx);
+    						each_blocks[i] = create_each_block$5(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g, null);
     					}
@@ -44013,7 +44858,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$c.name,
+    		id: create_fragment$b.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44026,7 +44871,7 @@ var app = (function (exports) {
     	this.classList.remove('selected');
     }
 
-    function instance$c($$self, $$props, $$invalidate) {
+    function instance$b($$self, $$props, $$invalidate) {
     	let simulation$1;
     	let drag$1;
     	let $data;
@@ -44193,13 +45038,13 @@ var app = (function (exports) {
     class Force extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$c, create_fragment$c, safe_not_equal, { dims: 0, nodes: 8, forces: 9 });
+    		init$1(this, options, instance$b, create_fragment$b, safe_not_equal, { dims: 0, nodes: 8, forces: 9 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Force",
     			options,
-    			id: create_fragment$c.name
+    			id: create_fragment$b.name
     		});
     	}
 
@@ -44229,9 +45074,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Intro.svelte generated by Svelte v3.48.0 */
-    const file$b = "src/components/byPage/actions/vis/Intro.svelte";
+    const file$a = "src/components/byPage/actions/vis/Intro.svelte";
 
-    function create_fragment$b(ctx) {
+    function create_fragment$a(ctx) {
     	let g1;
     	let g0;
     	let text0;
@@ -44252,19 +45097,19 @@ var app = (function (exports) {
     			text2 = svg_element("text");
     			t1 = text$1("actions");
     			attr_dev(text0, "class", "number svelte-1jzgmc5");
-    			add_location(text0, file$b, 18, 8, 609);
+    			add_location(text0, file$a, 18, 8, 609);
     			attr_dev(text1, "y", "200");
     			attr_dev(text1, "class", "svelte-1jzgmc5");
-    			add_location(text1, file$b, 21, 8, 703);
+    			add_location(text1, file$a, 21, 8, 703);
     			attr_dev(text2, "y", "300");
     			attr_dev(text2, "class", "svelte-1jzgmc5");
-    			add_location(text2, file$b, 22, 8, 744);
+    			add_location(text2, file$a, 22, 8, 744);
     			attr_dev(g0, "class", "container svelte-1jzgmc5");
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.5 + "px)");
     			toggle_class(g0, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
-    			add_location(g0, file$b, 15, 4, 440);
+    			add_location(g0, file$a, 15, 4, 440);
     			attr_dev(g1, "id", "intro-vis-container");
-    			add_location(g1, file$b, 14, 0, 398);
+    			add_location(g1, file$a, 14, 0, 398);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44305,7 +45150,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$b.name,
+    		id: create_fragment$a.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44314,7 +45159,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$b($$self, $$props, $$invalidate) {
+    function instance$a($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -44360,13 +45205,13 @@ var app = (function (exports) {
     class Intro extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$b, create_fragment$b, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$a, create_fragment$a, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Intro",
     			options,
-    			id: create_fragment$b.name
+    			id: create_fragment$a.name
     		});
     	}
 
@@ -44380,9 +45225,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Hazard.svelte generated by Svelte v3.48.0 */
-    const file$a = "src/components/byPage/actions/vis/Hazard.svelte";
+    const file$9 = "src/components/byPage/actions/vis/Hazard.svelte";
 
-    function get_each_context$5(ctx, list, i) {
+    function get_each_context$4(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[6] = list[i];
     	child_ctx[8] = i;
@@ -44390,7 +45235,7 @@ var app = (function (exports) {
     }
 
     // (26:12) {#each hazards as hazard, i }
-    function create_each_block$5(ctx) {
+    function create_each_block$4(ctx) {
     	let path0;
     	let path0_d_value;
     	let path1;
@@ -44436,46 +45281,46 @@ var app = (function (exports) {
     				endAngle: /*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) + 2 * Math.PI / /*hazards*/ ctx[3].length
     			}));
 
-    			add_location(path0, file$a, 26, 16, 935);
+    			add_location(path0, file$9, 26, 16, 935);
     			attr_dev(path1, "class", "hazard-icon " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-1btrzsd");
     			attr_dev(path1, "d", icons[slugify(/*hazard*/ ctx[6].Hazard)]);
     			set_style(path1, "transform", "translate( " + (/*dims*/ ctx[0].width * 0.3 + 200) * Math.cos(/*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) - Math.PI / 4) + "px, " + (/*dims*/ ctx[0].width * 0.3 + 200) * Math.sin(/*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) - Math.PI / 4) + "px ) scale(2.5) rotate(" + (45 * /*i*/ ctx[8] * 2 + 45) + "deg)");
-    			add_location(path1, file$a, 34, 16, 1337);
+    			add_location(path1, file$9, 34, 16, 1337);
     			attr_dev(path2, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-labelPath"));
     			attr_dev(path2, "class", "label-path svelte-1btrzsd");
     			attr_dev(path2, "d", path2_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 + 75));
     			set_style(path2, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path2, file$a, 41, 16, 1849);
+    			add_location(path2, file$9, 41, 16, 1849);
     			attr_dev(textPath0, "class", "hazard-label " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-1btrzsd");
     			attr_dev(textPath0, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-labelPath");
     			attr_dev(textPath0, "startOffset", "50%");
-    			add_location(textPath0, file$a, 43, 20, 2081);
+    			add_location(textPath0, file$9, 43, 20, 2081);
     			attr_dev(text0, "class", "svelte-1btrzsd");
-    			add_location(text0, file$a, 42, 16, 2054);
+    			add_location(text0, file$9, 42, 16, 2054);
     			attr_dev(path3, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-event-labelPath"));
     			attr_dev(path3, "class", "label-path svelte-1btrzsd");
     			attr_dev(path3, "d", path3_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 - 35));
     			set_style(path3, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path3, file$a, 46, 16, 2312);
+    			add_location(path3, file$9, 46, 16, 2312);
     			attr_dev(textPath1, "class", "event-label " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-1btrzsd");
     			attr_dev(textPath1, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-event-labelPath");
     			attr_dev(textPath1, "startOffset", "50%");
-    			add_location(textPath1, file$a, 48, 20, 2550);
+    			add_location(textPath1, file$9, 48, 20, 2550);
     			attr_dev(text1, "class", "svelte-1btrzsd");
-    			add_location(text1, file$a, 47, 16, 2523);
+    			add_location(text1, file$9, 47, 16, 2523);
     			attr_dev(path4, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-actionCount-labelPath"));
     			attr_dev(path4, "class", "label-path svelte-1btrzsd");
     			attr_dev(path4, "d", path4_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 + arcWidth * 0.5));
     			set_style(path4, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path4, file$a, 55, 16, 2961);
+    			add_location(path4, file$9, 55, 16, 2961);
     			html_tag.a = t;
     			attr_dev(textPath2, "class", "actionCount-label svelte-1btrzsd");
     			attr_dev(textPath2, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-actionCount-labelPath");
     			attr_dev(textPath2, "startOffset", "50%");
-    			add_location(textPath2, file$a, 57, 20, 3266);
+    			add_location(textPath2, file$9, 57, 20, 3266);
     			attr_dev(text2, "class", "svelte-1btrzsd");
     			toggle_class(text2, "hidden", /*$ui*/ ctx[2].state.actionVis.scene === 0);
-    			add_location(text2, file$a, 56, 16, 3190);
+    			add_location(text2, file$9, 56, 16, 3190);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -44539,7 +45384,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$5.name,
+    		id: create_each_block$4.name,
     		type: "each",
     		source: "(26:12) {#each hazards as hazard, i }",
     		ctx
@@ -44548,7 +45393,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$a(ctx) {
+    function create_fragment$9(ctx) {
     	let g2;
     	let g1;
     	let g0;
@@ -44558,7 +45403,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$5(get_each_context$5(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$4(get_each_context$4(ctx, each_value, i));
     	}
 
     	const block = {
@@ -44573,13 +45418,13 @@ var app = (function (exports) {
 
     			attr_dev(g0, "class", "node-arcs-wrapper svelte-1btrzsd");
     			toggle_class(g0, "rotate", /*$ui*/ ctx[2].state.actionVis.scene > 1);
-    			add_location(g0, file$a, 24, 8, 797);
+    			add_location(g0, file$9, 24, 8, 797);
     			attr_dev(g1, "class", "node-arcs svelte-1btrzsd");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.5 + "px)");
     			toggle_class(g1, "coloured", /*$ui*/ ctx[2].state.actionVis.scene > 1);
-    			add_location(g1, file$a, 21, 4, 622);
+    			add_location(g1, file$9, 21, 4, 622);
     			attr_dev(g2, "id", "hazard-vis-container");
-    			add_location(g2, file$a, 19, 0, 555);
+    			add_location(g2, file$9, 19, 0, 555);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44600,12 +45445,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$5(ctx, each_value, i);
+    					const child_ctx = get_each_context$4(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$5(child_ctx);
+    						each_blocks[i] = create_each_block$4(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g0, null);
     					}
@@ -44647,7 +45492,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$a.name,
+    		id: create_fragment$9.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44658,7 +45503,7 @@ var app = (function (exports) {
 
     const arcWidth = 50;
 
-    function instance$a($$self, $$props, $$invalidate) {
+    function instance$9($$self, $$props, $$invalidate) {
     	let $data;
     	let $ui;
     	validate_store(data, 'data');
@@ -44713,13 +45558,13 @@ var app = (function (exports) {
     class Hazard extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$a, create_fragment$a, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$9, create_fragment$9, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Hazard",
     			options,
-    			id: create_fragment$a.name
+    			id: create_fragment$9.name
     		});
     	}
 
@@ -44797,9 +45642,9 @@ var app = (function (exports) {
     };
 
     /* src/components/byPage/actions/vis/Scale.svelte generated by Svelte v3.48.0 */
-    const file$9 = "src/components/byPage/actions/vis/Scale.svelte";
+    const file$8 = "src/components/byPage/actions/vis/Scale.svelte";
 
-    function get_each_context$4(ctx, list, i) {
+    function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[2] = list[i];
     	child_ctx[4] = i;
@@ -44894,7 +45739,7 @@ var app = (function (exports) {
     }
 
     // (19:8) {#each scaleData as obj, i}
-    function create_each_block$4(ctx) {
+    function create_each_block$3(ctx) {
     	let g0;
     	let path;
     	let path_d_value;
@@ -44923,19 +45768,19 @@ var app = (function (exports) {
     			if_block.c();
     			attr_dev(path, "class", "map-layer svelte-10i0qbs");
     			attr_dev(path, "d", path_d_value = mapShapes[/*obj*/ ctx[2].Scale].path(mapShapes[/*obj*/ ctx[2].Scale].shape));
-    			add_location(path, file$9, 20, 12, 816);
+    			add_location(path, file$8, 20, 12, 816);
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[0].width * 0.25 + "px, " + (/*obj*/ ctx[2].yPos * /*dims*/ ctx[0].height + 30) + "px)");
-    			add_location(g0, file$9, 19, 8, 713);
+    			add_location(g0, file$8, 19, 8, 713);
     			attr_dev(text0, "class", text0_class_value = "scale-label " + slugify(/*obj*/ ctx[2].Scale) + " svelte-10i0qbs");
     			attr_dev(text0, "x", "0");
     			attr_dev(text0, "dy", "-10");
-    			add_location(text0, file$9, 23, 12, 1023);
+    			add_location(text0, file$8, 23, 12, 1023);
     			attr_dev(text1, "class", text1_class_value = "action-label " + slugify(/*obj*/ ctx[2].Scale) + " svelte-10i0qbs");
     			attr_dev(text1, "x", "0");
     			attr_dev(text1, "dy", "20");
-    			add_location(text1, file$9, 24, 12, 1129);
+    			add_location(text1, file$8, 24, 12, 1129);
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.25 + "px, " + /*dims*/ ctx[0].height * /*obj*/ ctx[2].yPos + "px)");
-    			add_location(g1, file$9, 22, 8, 927);
+    			add_location(g1, file$8, 22, 8, 927);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g0, anchor);
@@ -44989,7 +45834,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$4.name,
+    		id: create_each_block$3.name,
     		type: "each",
     		source: "(19:8) {#each scaleData as obj, i}",
     		ctx
@@ -44998,7 +45843,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$9(ctx) {
+    function create_fragment$8(ctx) {
     	let g1;
     	let t;
     	let g0;
@@ -45008,7 +45853,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$4(get_each_context$4(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$3(get_each_context$3(ctx, each_value, i));
     	}
 
     	const block = {
@@ -45022,9 +45867,9 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g0, "class", "scale-group svelte-10i0qbs");
-    			add_location(g0, file$9, 17, 4, 645);
+    			add_location(g0, file$8, 17, 4, 645);
     			attr_dev(g1, "id", "scale-vis-container");
-    			add_location(g1, file$9, 15, 0, 516);
+    			add_location(g1, file$8, 15, 0, 516);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45045,12 +45890,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$4(ctx, each_value, i);
+    					const child_ctx = get_each_context$3(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$4(child_ctx);
+    						each_blocks[i] = create_each_block$3(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g0, null);
     					}
@@ -45080,7 +45925,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$9.name,
+    		id: create_fragment$8.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45089,7 +45934,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$9($$self, $$props, $$invalidate) {
+    function instance$8($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Scale', slots, []);
     	let { dims = {} } = $$props;
@@ -45132,13 +45977,13 @@ var app = (function (exports) {
     class Scale extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$9, create_fragment$9, safe_not_equal, { dims: 0, scaleData: 1 });
+    		init$1(this, options, instance$8, create_fragment$8, safe_not_equal, { dims: 0, scaleData: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Scale",
     			options,
-    			id: create_fragment$9.name
+    			id: create_fragment$8.name
     		});
     	}
 
@@ -45160,9 +46005,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Approach.svelte generated by Svelte v3.48.0 */
-    const file$8 = "src/components/byPage/actions/vis/Approach.svelte";
+    const file$7 = "src/components/byPage/actions/vis/Approach.svelte";
 
-    function create_fragment$8(ctx) {
+    function create_fragment$7(ctx) {
     	let g6;
     	let g4;
     	let g1;
@@ -45288,94 +46133,94 @@ var app = (function (exports) {
     			attr_dev(path0, "class", "approach-shape risk svelte-hs4gma");
     			attr_dev(path0, "d", path0_d_value = triangle(/*dims*/ ctx[0].width * 0.333, 'down'));
     			set_style(path0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + /*approachData*/ ctx[1][0].standard.y + "px)");
-    			add_location(path0, file$8, 44, 12, 1689);
+    			add_location(path0, file$7, 44, 12, 1689);
     			attr_dev(text0, "class", "risk label-main svelte-hs4gma");
     			set_style(text0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y - /*dims*/ ctx[0].height * 0.175) + "px)");
-    			add_location(text0, file$8, 46, 12, 1893);
+    			add_location(text0, file$7, 46, 12, 1893);
     			attr_dev(g0, "class", "risk-label-group risk svelte-hs4gma");
     			set_style(g0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y - /*dims*/ ctx[0].height * 0.175) + "px)");
-    			add_location(g0, file$8, 49, 12, 2104);
+    			add_location(g0, file$7, 49, 12, 2104);
     			attr_dev(g1, "class", "approach-group risk-group svelte-hs4gma");
     			toggle_class(g1, "reset", /*$ui*/ ctx[2].state.actionVis.scene > 0);
-    			add_location(g1, file$8, 43, 8, 1590);
+    			add_location(g1, file$7, 43, 8, 1590);
     			attr_dev(path1, "class", "approach-shape resilience svelte-hs4gma");
     			attr_dev(path1, "d", path1_d_value = triangle(/*dims*/ ctx[0].width * 0.333, 'up'));
     			set_style(path1, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + /*approachData*/ ctx[1][1].standard.y + "px)");
-    			add_location(path1, file$8, 52, 12, 2386);
+    			add_location(path1, file$7, 52, 12, 2386);
     			attr_dev(text1, "class", "resilience label-main svelte-hs4gma");
     			set_style(text1, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + (/*approachData*/ ctx[1][1].standard.y + /*dims*/ ctx[0].height * 0.175) + "px)");
-    			add_location(text1, file$8, 54, 12, 2591);
+    			add_location(text1, file$7, 54, 12, 2591);
     			attr_dev(g2, "class", "resilience-label-group resilience svelte-hs4gma");
     			set_style(g2, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y + /*dims*/ ctx[0].height * 0.175) + "px)");
-    			add_location(g2, file$8, 57, 12, 2815);
+    			add_location(g2, file$7, 57, 12, 2815);
     			attr_dev(g3, "class", "approach-group resilience-group svelte-hs4gma");
     			toggle_class(g3, "reset", /*$ui*/ ctx[2].state.actionVis.scene > 0);
-    			add_location(g3, file$8, 51, 8, 2281);
+    			add_location(g3, file$7, 51, 8, 2281);
     			attr_dev(g4, "class", "svelte-hs4gma");
     			toggle_class(g4, "hidden", /*$ui*/ ctx[2].state.actionVis.scene === 2);
-    			add_location(g4, file$8, 42, 4, 1529);
+    			add_location(g4, file$7, 42, 4, 1529);
     			html_tag.a = t2;
     			attr_dev(tspan0, "class", "label-number svelte-hs4gma");
-    			add_location(tspan0, file$8, 63, 12, 3199);
+    			add_location(tspan0, file$7, 63, 12, 3199);
     			attr_dev(tspan1, "class", "label svelte-hs4gma");
     			attr_dev(tspan1, "x", "0");
     			attr_dev(tspan1, "dy", "60");
-    			add_location(tspan1, file$8, 64, 12, 3330);
+    			add_location(tspan1, file$7, 64, 12, 3330);
     			attr_dev(tspan2, "class", "label svelte-hs4gma");
     			attr_dev(tspan2, "x", "0");
     			attr_dev(tspan2, "dy", "60");
-    			add_location(tspan2, file$8, 65, 12, 3397);
+    			add_location(tspan2, file$7, 65, 12, 3397);
     			set_style(text2, "transform", "translate(" + /*approachData*/ ctx[1][1].wide.x + "px, " + (/*approachData*/ ctx[1][1].wide.y + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text2, "class", "svelte-hs4gma");
-    			add_location(text2, file$8, 62, 8, 3071);
+    			add_location(text2, file$7, 62, 8, 3071);
     			html_tag_1.a = t8;
     			attr_dev(tspan3, "class", "label-number svelte-hs4gma");
-    			add_location(tspan3, file$8, 68, 12, 3605);
+    			add_location(tspan3, file$7, 68, 12, 3605);
     			attr_dev(tspan4, "class", "label svelte-hs4gma");
     			attr_dev(tspan4, "x", "0");
     			attr_dev(tspan4, "dy", "60");
-    			add_location(tspan4, file$8, 69, 12, 3728);
+    			add_location(tspan4, file$7, 69, 12, 3728);
     			attr_dev(tspan5, "class", "label svelte-hs4gma");
     			attr_dev(tspan5, "x", "0");
     			attr_dev(tspan5, "dy", "60");
-    			add_location(tspan5, file$8, 70, 12, 3792);
+    			add_location(tspan5, file$7, 70, 12, 3792);
     			set_style(text3, "transform", "translate(" + /*approachData*/ ctx[1][0].wide.x + "px, " + (/*approachData*/ ctx[1][0].wide.y + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text3, "class", "svelte-hs4gma");
-    			add_location(text3, file$8, 67, 8, 3478);
+    			add_location(text3, file$7, 67, 8, 3478);
     			html_tag_2.a = t14;
     			attr_dev(tspan6, "class", "label-number svelte-hs4gma");
-    			add_location(tspan6, file$8, 73, 12, 4020);
+    			add_location(tspan6, file$7, 73, 12, 4020);
     			attr_dev(tspan7, "class", "label svelte-hs4gma");
     			attr_dev(tspan7, "x", "0");
     			attr_dev(tspan7, "dy", "60");
-    			add_location(tspan7, file$8, 74, 12, 4159);
+    			add_location(tspan7, file$7, 74, 12, 4159);
     			attr_dev(tspan8, "class", "label svelte-hs4gma");
     			attr_dev(tspan8, "x", "0");
     			attr_dev(tspan8, "dy", "60");
-    			add_location(tspan8, file$8, 75, 12, 4229);
+    			add_location(tspan8, file$7, 75, 12, 4229);
     			set_style(text4, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + ((/*approachData*/ ctx[1][0].wide.y + /*approachData*/ ctx[1][1].wide.y) * 0.5 + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text4, "class", "svelte-hs4gma");
-    			add_location(text4, file$8, 72, 8, 3866);
+    			add_location(text4, file$7, 72, 8, 3866);
     			html_tag_3.a = t20;
     			attr_dev(tspan9, "class", "label-number svelte-hs4gma");
-    			add_location(tspan9, file$8, 78, 12, 4439);
+    			add_location(tspan9, file$7, 78, 12, 4439);
     			attr_dev(tspan10, "class", "label-small svelte-hs4gma");
     			attr_dev(tspan10, "x", "0");
     			attr_dev(tspan10, "dy", "30");
-    			add_location(tspan10, file$8, 79, 12, 4559);
+    			add_location(tspan10, file$7, 79, 12, 4559);
     			attr_dev(tspan11, "class", "label-small svelte-hs4gma");
     			attr_dev(tspan11, "x", "0");
     			attr_dev(tspan11, "dy", "30");
-    			add_location(tspan11, file$8, 80, 12, 4651);
+    			add_location(tspan11, file$7, 80, 12, 4651);
     			set_style(text5, "transform", "translate(" + /*approachData*/ ctx[1][2].wide.x + "px, " + (/*approachData*/ ctx[1][2].wide.y + /*dims*/ ctx[0].height * 0.1) + "px)");
     			attr_dev(text5, "class", "svelte-hs4gma");
-    			add_location(text5, file$8, 77, 8, 4313);
+    			add_location(text5, file$7, 77, 8, 4313);
     			attr_dev(g5, "class", "svelte-hs4gma");
     			toggle_class(g5, "hidden", /*$ui*/ ctx[2].state.actionVis.scene !== 2);
-    			add_location(g5, file$8, 61, 4, 3010);
+    			add_location(g5, file$7, 61, 4, 3010);
     			attr_dev(g6, "id", "approach-vis-container");
     			attr_dev(g6, "class", "svelte-hs4gma");
-    			add_location(g6, file$8, 41, 0, 1484);
+    			add_location(g6, file$7, 41, 0, 1484);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45527,7 +46372,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$8.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45536,7 +46381,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$8($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -45605,13 +46450,13 @@ var app = (function (exports) {
     class Approach extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$8, create_fragment$8, safe_not_equal, { dims: 0, approachData: 1 });
+    		init$1(this, options, instance$7, create_fragment$7, safe_not_equal, { dims: 0, approachData: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Approach",
     			options,
-    			id: create_fragment$8.name
+    			id: create_fragment$7.name
     		});
     	}
 
@@ -45633,17 +46478,17 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/FocusArea.svelte generated by Svelte v3.48.0 */
-    const file$7 = "src/components/byPage/actions/vis/FocusArea.svelte";
+    const file$6 = "src/components/byPage/actions/vis/FocusArea.svelte";
 
-    function get_each_context$3(ctx, list, i) {
+    function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[5] = list[i];
     	child_ctx[7] = i;
     	return child_ctx;
     }
 
-    // (37:12) {#each  sortedFocus.sort( (a,b) => a.Alias < b.Alias) as obj, i}
-    function create_each_block$3(ctx) {
+    // (61:12) {#each  sortedFocus.sort( (a,b) => a.Alias < b.Alias) as obj, i}
+    function create_each_block$2(ctx) {
     	let g;
     	let text0;
     	let raw0_value = /*obj*/ ctx[5]["Alias"] + "";
@@ -45663,20 +46508,20 @@ var app = (function (exports) {
     			html_tag = new HtmlTag(true);
     			t = text$1(" actions related to");
     			path = svg_element("path");
-    			attr_dev(text0, "class", "focus-area-label svelte-1e5f3te");
+    			attr_dev(text0, "class", "focus-area-label svelte-1nvbawx");
     			attr_dev(text0, "name", /*obj*/ ctx[5]["Focus area"]);
     			attr_dev(text0, "index", /*i*/ ctx[7]);
-    			add_location(text0, file$7, 38, 16, 2014);
+    			add_location(text0, file$6, 62, 16, 2992);
     			html_tag.a = t;
-    			attr_dev(text1, "class", "focus-area-action-label " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1e5f3te");
-    			attr_dev(text1, "dy", "-60");
-    			add_location(text1, file$7, 41, 16, 2193);
-    			attr_dev(path, "class", "icon " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1e5f3te");
+    			attr_dev(text1, "class", "focus-area-action-label " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1nvbawx");
+    			attr_dev(text1, "dy", "-80");
+    			add_location(text1, file$6, 65, 16, 3171);
+    			attr_dev(path, "class", "icon " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1nvbawx");
     			attr_dev(path, "d", icons[slugify(/*obj*/ ctx[5]["Alias"])]);
-    			set_style(path, "transform", "translate(" + 0 + "px, " + -200 + "px) scale(3)");
-    			add_location(path, file$7, 42, 16, 2363);
+    			set_style(path, "transform", "translate(" + 0 + "px, " + -250 + "px) scale(3)");
+    			add_location(path, file$6, 66, 16, 3341);
     			set_style(g, "transform", "translate(" + 0 + "px, " + 100 * (/*i*/ ctx[7] - (/*sortedFocus*/ ctx[1].length - 1) * 0.5) + "px)");
-    			add_location(g, file$7, 37, 12, 1906);
+    			add_location(g, file$6, 61, 12, 2884);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -45702,33 +46547,34 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$3.name,
+    		id: create_each_block$2.name,
     		type: "each",
-    		source: "(37:12) {#each  sortedFocus.sort( (a,b) => a.Alias < b.Alias) as obj, i}",
+    		source: "(61:12) {#each  sortedFocus.sort( (a,b) => a.Alias < b.Alias) as obj, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$7(ctx) {
-    	let g2;
+    function create_fragment$6(ctx) {
+    	let g3;
     	let g1;
     	let g0;
     	let text_1;
     	let t;
-    	let g2_intro;
-    	let each_value = /*sortedFocus*/ ctx[1].sort(func$1);
+    	let g2;
+    	let g3_intro;
+    	let each_value = /*sortedFocus*/ ctx[1].sort(func);
     	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$3(get_each_context$3(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
     	}
 
     	const block = {
     		c: function create() {
-    			g2 = svg_element("g");
+    			g3 = svg_element("g");
     			g1 = svg_element("g");
     			g0 = svg_element("g");
     			text_1 = svg_element("text");
@@ -45738,23 +46584,27 @@ var app = (function (exports) {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(text_1, "class", "instruction svelte-1e5f3te");
+    			g2 = svg_element("g");
+    			attr_dev(text_1, "class", "instruction svelte-1nvbawx");
     			attr_dev(text_1, "y", -100 * /*sortedFocus*/ ctx[1].length * 0.5 - 50);
-    			add_location(text_1, file$7, 35, 12, 1697);
-    			attr_dev(g0, "class", "selector-wrapper svelte-1e5f3te");
-    			add_location(g0, file$7, 34, 8, 1654);
+    			add_location(text_1, file$6, 59, 12, 2676);
+    			attr_dev(g0, "class", "selector-wrapper svelte-1nvbawx");
+    			add_location(g0, file$6, 58, 8, 2633);
     			attr_dev(g1, "class", "selector-container");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
-    			add_location(g1, file$7, 33, 4, 1535);
-    			attr_dev(g2, "id", "focus-area-vis-container");
-    			add_location(g2, file$7, 32, 0, 1484);
+    			add_location(g1, file$6, 57, 4, 2514);
+    			attr_dev(g2, "class", "focus-area-description-container");
+    			set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.575 + "px)");
+    			add_location(g2, file$6, 71, 4, 3549);
+    			attr_dev(g3, "id", "focus-area-vis-container");
+    			add_location(g3, file$6, 56, 0, 2463);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, g2, anchor);
-    			append_dev(g2, g1);
+    			insert_dev(target, g3, anchor);
+    			append_dev(g3, g1);
     			append_dev(g1, g0);
     			append_dev(g0, text_1);
     			append_dev(text_1, t);
@@ -45762,20 +46612,22 @@ var app = (function (exports) {
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(g0, null);
     			}
+
+    			append_dev(g3, g2);
     		},
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*sortedFocus, slugify, icons, selectFocus*/ 6) {
-    				each_value = /*sortedFocus*/ ctx[1].sort(func$1);
+    				each_value = /*sortedFocus*/ ctx[1].sort(func);
     				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$3(ctx, each_value, i);
+    					const child_ctx = get_each_context$2(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$3(child_ctx);
+    						each_blocks[i] = create_each_block$2(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g0, null);
     					}
@@ -45791,25 +46643,29 @@ var app = (function (exports) {
     			if (dirty & /*dims*/ 1) {
     				set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
     			}
+
+    			if (dirty & /*dims*/ 1) {
+    				set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.575 + "px)");
+    			}
     		},
     		i: function intro(local) {
-    			if (!g2_intro) {
+    			if (!g3_intro) {
     				add_render_callback(() => {
-    					g2_intro = create_in_transition(g2, fade, {});
-    					g2_intro.start();
+    					g3_intro = create_in_transition(g3, fade, {});
+    					g3_intro.start();
     				});
     			}
     		},
     		o: noop$4,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g2);
+    			if (detaching) detach_dev(g3);
     			destroy_each(each_blocks, detaching);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$7.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45818,9 +46674,9 @@ var app = (function (exports) {
     	return block;
     }
 
-    const func$1 = (a, b) => a.Alias < b.Alias;
+    const func = (a, b) => a.Alias < b.Alias;
 
-    function instance$7($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -45858,7 +46714,16 @@ var app = (function (exports) {
     		selectAll(`.focus-area-action-label.${slugify(focus)}, .icon.${slugify(focus)}`).classed('selected', true);
     		select('.instruction').classed('hidden', true);
     		select('.selector-wrapper').style("transform", `translate(0px, ${100 * ((sortedFocus.length - 1) * 0.5 - index)}px)`);
+    		selectAll('.focus-area-description').classed('hidden', true);
+    		select(`.focus-area-description.${slugify(focus)}`).classed('hidden', false);
     	}
+
+    	// Add text wrapped lables
+    	onMount(() => {
+    		const container = select('.focus-area-description-container');
+    		container.selectAll('.focus-area-description').data(sortedFocus).join('text').attr('class', d => `${slugify(d["Focus area"])} focus-area-description hidden`).attr('x', 0).attr('y', 0).attr('dy', 0).style('transition', 'all 300ms').style('pointer-events', 'none').style('font-size', 25).style('font-weight', 300).style('fill', 'var(--midGrey)').style('text-anchor', 'middle').text(d => d.Description).call(textWrap, dims.width * 0.65, 1.1, true);
+    	});
+
     	const writable_props = ['dims'];
 
     	Object.keys($$props).forEach(key => {
@@ -45870,13 +46735,15 @@ var app = (function (exports) {
     	};
 
     	$$self.$capture_state = () => ({
+    		onMount,
     		fade,
     		d3,
     		schema,
     		ui,
     		data,
-    		slugify,
     		icons,
+    		slugify,
+    		textWrap,
     		dims,
     		sortedFocus,
     		selectFocus,
@@ -45898,13 +46765,13 @@ var app = (function (exports) {
     class FocusArea extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$7, create_fragment$7, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$6, create_fragment$6, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "FocusArea",
     			options,
-    			id: create_fragment$7.name
+    			id: create_fragment$6.name
     		});
     	}
 
@@ -45918,23 +46785,23 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Screening.svelte generated by Svelte v3.48.0 */
-    const file$6 = "src/components/byPage/actions/vis/Screening.svelte";
+    const file$5 = "src/components/byPage/actions/vis/Screening.svelte";
 
-    function get_each_context$2(ctx, list, i) {
+    function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[5] = list[i];
-    	child_ctx[7] = i;
+    	child_ctx[4] = list[i];
+    	child_ctx[6] = i;
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[5] = list[i];
-    	child_ctx[7] = i;
+    	child_ctx[4] = list[i];
+    	child_ctx[6] = i;
     	return child_ctx;
     }
 
-    // (22:8) {#each $data.schema.adaptationScreens.data as lens, i}
+    // (20:8) {#each $data.schema.adaptationScreens.data as lens, i}
     function create_each_block_1(ctx) {
     	let g;
     	let circle;
@@ -45946,22 +46813,22 @@ var app = (function (exports) {
     			circle = svg_element("circle");
     			attr_dev(circle, "r", /*radius*/ ctx[3]);
     			attr_dev(circle, "class", "svelte-1jj4y8i");
-    			add_location(circle, file$6, 23, 12, 1004);
-    			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[5].Screen)) + " svelte-1jj4y8i"));
-    			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos + "px, " + /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos + "px)");
-    			add_location(g, file$6, 22, 8, 869);
+    			add_location(circle, file$5, 21, 12, 928);
+    			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[4].Screen)) + " svelte-1jj4y8i"));
+    			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos + "px)");
+    			add_location(g, file$5, 20, 8, 793);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
     			append_dev(g, circle);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && g_class_value !== (g_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[5].Screen)) + " svelte-1jj4y8i"))) {
+    			if (dirty & /*$data*/ 2 && g_class_value !== (g_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[4].Screen)) + " svelte-1jj4y8i"))) {
     				attr_dev(g, "class", g_class_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3) {
-    				set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos + "px, " + /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos + "px)");
+    				set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos + "px)");
     			}
     		},
     		d: function destroy(detaching) {
@@ -45973,14 +46840,14 @@ var app = (function (exports) {
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(22:8) {#each $data.schema.adaptationScreens.data as lens, i}",
+    		source: "(20:8) {#each $data.schema.adaptationScreens.data as lens, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (49:47) 
+    // (47:47) 
     function create_if_block_2$2(ctx) {
     	let path0;
     	let path0_id_value;
@@ -45990,12 +46857,12 @@ var app = (function (exports) {
     	let path1_d_value;
     	let text0;
     	let textPath0;
-    	let raw0_value = /*lens*/ ctx[5].Description + "";
+    	let raw0_value = /*lens*/ ctx[4].Description + "";
     	let textPath0_class_value;
     	let textPath0_href_value;
     	let text1;
     	let textPath1;
-    	let raw1_value = /*lens*/ ctx[5].Screen + "";
+    	let raw1_value = /*lens*/ ctx[4].Screen + "";
     	let textPath1_class_value;
     	let textPath1_href_value;
 
@@ -46007,40 +46874,40 @@ var app = (function (exports) {
     			textPath0 = svg_element("textPath");
     			text1 = svg_element("text");
     			textPath1 = svg_element("textPath");
-    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"));
+    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
     			attr_dev(path0, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path0, "d", path0_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 80
     			));
 
-    			add_location(path0, file$6, 49, 16, 2914);
-    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"));
+    			add_location(path0, file$5, 47, 16, 2838);
+    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path1, "d", path1_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			));
 
-    			add_location(path1, file$6, 50, 16, 3099);
-    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath");
+    			add_location(path1, file$5, 48, 16, 3023);
+    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "12.5%");
-    			add_location(textPath0, file$6, 52, 20, 3314);
-    			add_location(text0, file$6, 51, 16, 3287);
-    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath");
+    			add_location(textPath0, file$5, 50, 20, 3238);
+    			add_location(text0, file$5, 49, 16, 3211);
+    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "12.5%");
-    			add_location(textPath1, file$6, 55, 20, 3549);
-    			add_location(text1, file$6, 54, 16, 3522);
+    			add_location(textPath1, file$5, 53, 20, 3473);
+    			add_location(text1, file$5, 52, 16, 3446);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -46053,49 +46920,49 @@ var app = (function (exports) {
     			textPath1.innerHTML = raw1_value;
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"))) {
+    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"))) {
     				attr_dev(path0, "id", path0_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path0_d_value !== (path0_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 80
     			))) {
     				attr_dev(path0, "d", path0_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"))) {
+    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"))) {
     				attr_dev(path1, "id", path1_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path1_d_value !== (path1_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			))) {
     				attr_dev(path1, "d", path1_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[5].Description + "")) textPath0.innerHTML = raw0_value;
-    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[4].Description + "")) textPath0.innerHTML = raw0_value;
+    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath0, "class", textPath0_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath")) {
+    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath")) {
     				attr_dev(textPath0, "href", textPath0_href_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[5].Screen + "")) textPath1.innerHTML = raw1_value;
-    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[4].Screen + "")) textPath1.innerHTML = raw1_value;
+    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath1, "class", textPath1_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath")) {
+    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath1, "href", textPath1_href_value);
     			}
     		},
@@ -46111,14 +46978,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2$2.name,
     		type: "if",
-    		source: "(49:47) ",
+    		source: "(47:47) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (39:46) 
+    // (37:46) 
     function create_if_block_1$2(ctx) {
     	let path0;
     	let path0_id_value;
@@ -46128,12 +46995,12 @@ var app = (function (exports) {
     	let path1_d_value;
     	let text0;
     	let textPath0;
-    	let raw0_value = /*lens*/ ctx[5].Description + "";
+    	let raw0_value = /*lens*/ ctx[4].Description + "";
     	let textPath0_class_value;
     	let textPath0_href_value;
     	let text1;
     	let textPath1;
-    	let raw1_value = /*lens*/ ctx[5].Screen + "";
+    	let raw1_value = /*lens*/ ctx[4].Screen + "";
     	let textPath1_class_value;
     	let textPath1_href_value;
 
@@ -46145,40 +47012,40 @@ var app = (function (exports) {
     			textPath0 = svg_element("textPath");
     			text1 = svg_element("text");
     			textPath1 = svg_element("textPath");
-    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"));
+    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
     			attr_dev(path0, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path0, "d", path0_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 80
     			));
 
-    			add_location(path0, file$6, 39, 16, 2039);
-    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"));
+    			add_location(path0, file$5, 37, 16, 1963);
+    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path1, "d", path1_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			));
 
-    			add_location(path1, file$6, 40, 16, 2224);
-    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath");
+    			add_location(path1, file$5, 38, 16, 2148);
+    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "32.5%");
-    			add_location(textPath0, file$6, 42, 20, 2439);
-    			add_location(text0, file$6, 41, 16, 2412);
-    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath");
+    			add_location(textPath0, file$5, 40, 20, 2363);
+    			add_location(text0, file$5, 39, 16, 2336);
+    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "32.5%");
-    			add_location(textPath1, file$6, 46, 20, 2675);
-    			add_location(text1, file$6, 45, 16, 2648);
+    			add_location(textPath1, file$5, 44, 20, 2599);
+    			add_location(text1, file$5, 43, 16, 2572);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -46191,49 +47058,49 @@ var app = (function (exports) {
     			textPath1.innerHTML = raw1_value;
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"))) {
+    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"))) {
     				attr_dev(path0, "id", path0_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path0_d_value !== (path0_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 80
     			))) {
     				attr_dev(path0, "d", path0_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"))) {
+    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"))) {
     				attr_dev(path1, "id", path1_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path1_d_value !== (path1_d_value = circleAntiClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			))) {
     				attr_dev(path1, "d", path1_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[5].Description + "")) textPath0.innerHTML = raw0_value;
-    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[4].Description + "")) textPath0.innerHTML = raw0_value;
+    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath0, "class", textPath0_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath")) {
+    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath")) {
     				attr_dev(textPath0, "href", textPath0_href_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[5].Screen + "")) textPath1.innerHTML = raw1_value;
-    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[4].Screen + "")) textPath1.innerHTML = raw1_value;
+    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath1, "class", textPath1_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath")) {
+    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath1, "href", textPath1_href_value);
     			}
     		},
@@ -46249,14 +47116,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_1$2.name,
     		type: "if",
-    		source: "(39:46) ",
+    		source: "(37:46) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (29:12) {#if lens.lensPos === "top"}
+    // (27:12) {#if lens.lensPos === "top"}
     function create_if_block$2(ctx) {
     	let path0;
     	let path0_id_value;
@@ -46266,12 +47133,12 @@ var app = (function (exports) {
     	let path1_d_value;
     	let text0;
     	let textPath0;
-    	let raw0_value = /*lens*/ ctx[5].Description + "";
+    	let raw0_value = /*lens*/ ctx[4].Description + "";
     	let textPath0_class_value;
     	let textPath0_href_value;
     	let text1;
     	let textPath1;
-    	let raw1_value = /*lens*/ ctx[5].Screen + "";
+    	let raw1_value = /*lens*/ ctx[4].Screen + "";
     	let textPath1_class_value;
     	let textPath1_href_value;
 
@@ -46283,40 +47150,40 @@ var app = (function (exports) {
     			textPath0 = svg_element("textPath");
     			text1 = svg_element("text");
     			textPath1 = svg_element("textPath");
-    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"));
+    			attr_dev(path0, "id", path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"));
     			attr_dev(path0, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path0, "d", path0_d_value = circleClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 70
     			));
 
-    			add_location(path0, file$6, 29, 16, 1177);
-    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"));
+    			add_location(path0, file$5, 27, 16, 1101);
+    			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1jj4y8i");
 
     			attr_dev(path1, "d", path1_d_value = circleClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			));
 
-    			add_location(path1, file$6, 30, 16, 1358);
-    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath");
+    			add_location(path1, file$5, 28, 16, 1282);
+    			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "75%");
-    			add_location(textPath0, file$6, 32, 20, 1569);
-    			add_location(text0, file$6, 31, 16, 1542);
-    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i");
-    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath");
+    			add_location(textPath0, file$5, 30, 20, 1493);
+    			add_location(text0, file$5, 29, 16, 1466);
+    			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i");
+    			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "75%");
-    			add_location(textPath1, file$6, 35, 20, 1802);
-    			add_location(text1, file$6, 34, 16, 1775);
+    			add_location(textPath1, file$5, 33, 20, 1726);
+    			add_location(text1, file$5, 32, 16, 1699);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -46329,49 +47196,49 @@ var app = (function (exports) {
     			textPath1.innerHTML = raw1_value;
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath"))) {
+    			if (dirty & /*$data*/ 2 && path0_id_value !== (path0_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath"))) {
     				attr_dev(path0, "id", path0_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path0_d_value !== (path0_d_value = circleClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 70
     			))) {
     				attr_dev(path0, "d", path0_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath"))) {
+    			if (dirty & /*$data*/ 2 && path1_id_value !== (path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"))) {
     				attr_dev(path1, "id", path1_id_value);
     			}
 
     			if (dirty & /*dims, $data*/ 3 && path1_d_value !== (path1_d_value = circleClockwise(
     				{
-    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[5].xPos,
-    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[5].yPos
+    					x: /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos,
+    					y: /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos
     				},
     				/*radius*/ ctx[3] + 25
     			))) {
     				attr_dev(path1, "d", path1_d_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[5].Description + "")) textPath0.innerHTML = raw0_value;
-    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw0_value !== (raw0_value = /*lens*/ ctx[4].Description + "")) textPath0.innerHTML = raw0_value;
+    			if (dirty & /*$data*/ 2 && textPath0_class_value !== (textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath0, "class", textPath0_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensQuestionPath")) {
+    			if (dirty & /*$data*/ 2 && textPath0_href_value !== (textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath")) {
     				attr_dev(textPath0, "href", textPath0_href_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[5].Screen + "")) textPath1.innerHTML = raw1_value;
-    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[5].Screen) + " svelte-1jj4y8i")) {
+    			if (dirty & /*$data*/ 2 && raw1_value !== (raw1_value = /*lens*/ ctx[4].Screen + "")) textPath1.innerHTML = raw1_value;
+    			if (dirty & /*$data*/ 2 && textPath1_class_value !== (textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1jj4y8i")) {
     				attr_dev(textPath1, "class", textPath1_class_value);
     			}
 
-    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[5].Screen) + "-lensLabelPath")) {
+    			if (dirty & /*$data*/ 2 && textPath1_href_value !== (textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath")) {
     				attr_dev(textPath1, "href", textPath1_href_value);
     			}
     		},
@@ -46387,21 +47254,21 @@ var app = (function (exports) {
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(29:12) {#if lens.lensPos === \\\"top\\\"}",
+    		source: "(27:12) {#if lens.lensPos === \\\"top\\\"}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (28:8) {#each $data.schema.adaptationScreens.data as lens, i}
-    function create_each_block$2(ctx) {
+    // (26:8) {#each $data.schema.adaptationScreens.data as lens, i}
+    function create_each_block$1(ctx) {
     	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*lens*/ ctx[5].lensPos === "top") return create_if_block$2;
-    		if (/*lens*/ ctx[5].lensPos === "left") return create_if_block_1$2;
-    		if (/*lens*/ ctx[5].lensPos === "right") return create_if_block_2$2;
+    		if (/*lens*/ ctx[4].lensPos === "top") return create_if_block$2;
+    		if (/*lens*/ ctx[4].lensPos === "left") return create_if_block_1$2;
+    		if (/*lens*/ ctx[4].lensPos === "right") return create_if_block_2$2;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -46440,16 +47307,16 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$2.name,
+    		id: create_each_block$1.name,
     		type: "each",
-    		source: "(28:8) {#each $data.schema.adaptationScreens.data as lens, i}",
+    		source: "(26:8) {#each $data.schema.adaptationScreens.data as lens, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$6(ctx) {
+    function create_fragment$5(ctx) {
     	let g2;
     	let g1;
     	let each0_anchor;
@@ -46477,7 +47344,7 @@ var app = (function (exports) {
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
+    		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
     	}
 
     	const block = {
@@ -46504,28 +47371,28 @@ var app = (function (exports) {
     			t2 = text$1(" actions expected to be");
     			text2 = svg_element("text");
     			t3 = text$1("robust, viable and flexible");
-    			attr_dev(path, "d", "M0,0 v" + -/*radius*/ ctx[3] * 0.33 + " l" + /*radius*/ ctx[3] * 0.5 + ", " + -/*radius*/ ctx[3] * 0.5 + " h" + /*radius*/ ctx[3] * 0.5);
+    			attr_dev(path, "d", "M0,0 v" + -/*radius*/ ctx[3] * 0.33 + " q" + 0 + ", " + -/*radius*/ ctx[3] * 0.5 + " " + /*radius*/ ctx[3] * 0.5 + ", " + -/*radius*/ ctx[3] * 0.5 + " h" + /*radius*/ ctx[3] * 0.5);
     			attr_dev(path, "class", "svelte-1jj4y8i");
-    			add_location(path, file$6, 61, 12, 3859);
+    			add_location(path, file$5, 59, 12, 3783);
     			attr_dev(text0, "class", "no-regrets-label svelte-1jj4y8i");
     			attr_dev(text0, "x", /*radius*/ ctx[3] + 5);
     			attr_dev(text0, "y", -0.833 * /*radius*/ ctx[3]);
-    			add_location(text0, file$6, 62, 12, 3957);
+    			add_location(text0, file$5, 60, 12, 3902);
     			attr_dev(text1, "class", "no-regrets-number svelte-1jj4y8i");
     			attr_dev(text1, "x", /*radius*/ ctx[3] + 5);
     			attr_dev(text1, "y", -0.833 * /*radius*/ ctx[3] + 35);
-    			add_location(text1, file$6, 63, 12, 4068);
+    			add_location(text1, file$5, 61, 12, 4013);
     			attr_dev(text2, "class", "no-regrets-number svelte-1jj4y8i");
     			attr_dev(text2, "x", /*radius*/ ctx[3] + 5);
     			attr_dev(text2, "y", -0.833 * /*radius*/ ctx[3] + 65);
-    			add_location(text2, file$6, 64, 12, 4220);
+    			add_location(text2, file$5, 62, 12, 4165);
     			attr_dev(g0, "class", "no-regrets-group svelte-1jj4y8i");
     			toggle_class(g0, "hidden", /*$ui*/ ctx[2].state.actionVis.scene !== 2);
-    			add_location(g0, file$6, 60, 8, 3767);
+    			add_location(g0, file$5, 58, 8, 3691);
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.425 + "px)");
-    			add_location(g1, file$6, 20, 4, 716);
+    			add_location(g1, file$5, 18, 4, 640);
     			attr_dev(g2, "id", "screening-vis-container");
-    			add_location(g2, file$6, 19, 0, 670);
+    			add_location(g2, file$5, 17, 0, 594);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46585,12 +47452,12 @@ var app = (function (exports) {
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$2(ctx, each_value, i);
+    					const child_ctx = get_each_context$1(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block$2(child_ctx);
+    						each_blocks[i] = create_each_block$1(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(g1, g0);
     					}
@@ -46631,7 +47498,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$6.name,
+    		id: create_fragment$5.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46640,7 +47507,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$6($$self, $$props, $$invalidate) {
+    function instance$5($$self, $$props, $$invalidate) {
     	let $data;
     	let $ui;
     	validate_store(data, 'data');
@@ -46657,12 +47524,6 @@ var app = (function (exports) {
     	} } = $$props;
 
     	const radius = dims.width * 0.25;
-
-    	const noRegretslabel = {
-    		x: dims.width * 0.75,
-    		y: dims.width * 0.25
-    	};
-
     	const writable_props = ['dims'];
 
     	Object.keys($$props).forEach(key => {
@@ -46684,7 +47545,6 @@ var app = (function (exports) {
     		circleAntiClockwise,
     		dims,
     		radius,
-    		noRegretslabel,
     		$data,
     		$ui
     	});
@@ -46703,13 +47563,13 @@ var app = (function (exports) {
     class Screening extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$6, create_fragment$6, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$5, create_fragment$5, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Screening",
     			options,
-    			id: create_fragment$6.name
+    			id: create_fragment$5.name
     		});
     	}
 
@@ -46723,11 +47583,12 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Rating.svelte generated by Svelte v3.48.0 */
-    const file$5 = "src/components/byPage/actions/vis/Rating.svelte";
+    const file$4 = "src/components/byPage/actions/vis/Rating.svelte";
 
-    function create_fragment$5(ctx) {
-    	let g7;
-    	let g6;
+    function create_fragment$4(ctx) {
+    	let g11;
+    	let g10;
+    	let g3;
     	let g0;
     	let path0;
     	let text0;
@@ -46736,122 +47597,186 @@ var app = (function (exports) {
     	let path1;
     	let text1;
     	let raw1_value = /*ratingData*/ ctx[0].forRating.name + "";
-    	let g5;
     	let g2;
     	let path2;
     	let text2;
-    	let raw2_value = /*ratingData*/ ctx[0].twoCriteria.name + "";
-    	let g3;
+    	let raw2_value = /*ratingData*/ ctx[0].discard.name + "";
+    	let g9;
+    	let g4;
     	let path3;
     	let text3;
-    	let raw3_value = /*ratingData*/ ctx[0].oneCriteria.name + "";
-    	let g4;
+    	let raw3_value = /*ratingData*/ ctx[0].noRegrets.name + "";
+    	let g5;
     	let path4;
     	let text4;
-    	let raw4_value = /*ratingData*/ ctx[0].zeroCriteria.name + "";
-    	let g7_intro;
+    	let raw4_value = /*ratingData*/ ctx[0].twoCriteria.name + "";
+    	let g6;
+    	let path5;
+    	let text5;
+    	let raw5_value = /*ratingData*/ ctx[0].oneCriteria.name + "";
+    	let g7;
+    	let path6;
+    	let text6;
+    	let raw6_value = /*ratingData*/ ctx[0].zeroCriteria.name + "";
+    	let g8;
+    	let path7;
+    	let text7;
+    	let raw7_value = /*ratingData*/ ctx[0].discard.name + "";
+    	let g11_intro;
 
     	const block = {
     		c: function create() {
-    			g7 = svg_element("g");
-    			g6 = svg_element("g");
+    			g11 = svg_element("g");
+    			g10 = svg_element("g");
+    			g3 = svg_element("g");
     			g0 = svg_element("g");
     			path0 = svg_element("path");
     			text0 = svg_element("text");
     			g1 = svg_element("g");
     			path1 = svg_element("path");
     			text1 = svg_element("text");
-    			g5 = svg_element("g");
     			g2 = svg_element("g");
     			path2 = svg_element("path");
     			text2 = svg_element("text");
-    			g3 = svg_element("g");
+    			g9 = svg_element("g");
+    			g4 = svg_element("g");
     			path3 = svg_element("path");
     			text3 = svg_element("text");
-    			g4 = svg_element("g");
+    			g5 = svg_element("g");
     			path4 = svg_element("path");
     			text4 = svg_element("text");
+    			g6 = svg_element("g");
+    			path5 = svg_element("path");
+    			text5 = svg_element("text");
+    			g7 = svg_element("g");
+    			path6 = svg_element("path");
+    			text6 = svg_element("text");
+    			g8 = svg_element("g");
+    			path7 = svg_element("path");
+    			text7 = svg_element("text");
     			attr_dev(path0, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path0, "class", "svelte-1ab5qz9");
-    			add_location(path0, file$5, 20, 12, 742);
+    			add_location(path0, file$4, 20, 16, 809);
     			attr_dev(text0, "x", markerWidth + 10);
     			attr_dev(text0, "class", "svelte-1ab5qz9");
-    			add_location(text0, file$5, 21, 12, 790);
+    			add_location(text0, file$4, 21, 16, 861);
     			attr_dev(g0, "class", "no-regrets scale-group svelte-1ab5qz9");
     			set_style(g0, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].noRegrets.y + "px)");
-    			add_location(g0, file$5, 19, 8, 628);
+    			add_location(g0, file$4, 19, 12, 691);
     			attr_dev(path1, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path1, "class", "svelte-1ab5qz9");
-    			add_location(path1, file$5, 25, 12, 1046);
+    			add_location(path1, file$4, 24, 16, 1079);
     			attr_dev(text1, "x", markerWidth + 10);
     			attr_dev(text1, "class", "svelte-1ab5qz9");
-    			add_location(text1, file$5, 26, 12, 1094);
+    			add_location(text1, file$4, 25, 16, 1131);
     			attr_dev(g1, "class", "for-rating scale-group svelte-1ab5qz9");
     			set_style(g1, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].forRating.y + "px)");
-    			toggle_class(g1, "hidden", /*$ui*/ ctx[1].state.actionVis.scene !== 0);
-    			add_location(g1, file$5, 24, 8, 883);
+    			add_location(g1, file$4, 23, 12, 961);
     			attr_dev(path2, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path2, "class", "svelte-1ab5qz9");
-    			add_location(path2, file$5, 31, 16, 1374);
+    			add_location(path2, file$4, 28, 16, 1345);
     			attr_dev(text2, "x", markerWidth + 10);
     			attr_dev(text2, "class", "svelte-1ab5qz9");
-    			add_location(text2, file$5, 32, 16, 1426);
-    			attr_dev(g2, "class", "two-criteria scale-group svelte-1ab5qz9");
-    			set_style(g2, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].twoCriteria.y + "px)");
-    			add_location(g2, file$5, 30, 12, 1252);
+    			add_location(text2, file$4, 29, 16, 1397);
+    			attr_dev(g2, "class", "discard scale-group svelte-1ab5qz9");
+    			set_style(g2, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
+    			add_location(g2, file$4, 27, 12, 1232);
+    			attr_dev(g3, "class", "svelte-1ab5qz9");
+    			toggle_class(g3, "hidden", /*$ui*/ ctx[1].state.actionVis.scene !== 0);
+    			add_location(g3, file$4, 18, 8, 627);
     			attr_dev(path3, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path3, "class", "svelte-1ab5qz9");
-    			add_location(path3, file$5, 35, 16, 1651);
+    			add_location(path3, file$4, 35, 16, 1688);
     			attr_dev(text3, "x", markerWidth + 10);
     			attr_dev(text3, "class", "svelte-1ab5qz9");
-    			add_location(text3, file$5, 36, 16, 1703);
-    			attr_dev(g3, "class", "one-criteria scale-group svelte-1ab5qz9");
-    			set_style(g3, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].oneCriteria.y + "px)");
-    			add_location(g3, file$5, 34, 12, 1529);
+    			add_location(text3, file$4, 36, 16, 1740);
+    			attr_dev(g4, "class", "no-regrets scale-group svelte-1ab5qz9");
+    			set_style(g4, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].noRegrets.y + "px)");
+    			add_location(g4, file$4, 34, 12, 1570);
     			attr_dev(path4, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path4, "class", "svelte-1ab5qz9");
-    			add_location(path4, file$5, 39, 16, 1930);
+    			add_location(path4, file$4, 39, 16, 1962);
     			attr_dev(text4, "x", markerWidth + 10);
     			attr_dev(text4, "class", "svelte-1ab5qz9");
-    			add_location(text4, file$5, 40, 16, 1982);
-    			attr_dev(g4, "class", "zero-criteria scale-group svelte-1ab5qz9");
-    			set_style(g4, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].zeroCriteria.y + "px)");
-    			add_location(g4, file$5, 38, 12, 1806);
-    			attr_dev(g5, "class", "svelte-1ab5qz9");
-    			toggle_class(g5, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
-    			add_location(g5, file$5, 29, 8, 1188);
-    			attr_dev(g6, "class", "rating-scale-group");
-    			add_location(g6, file$5, 18, 4, 587);
-    			attr_dev(g7, "id", "rating-vis-container");
-    			add_location(g7, file$5, 16, 0, 543);
+    			add_location(text4, file$4, 40, 16, 2014);
+    			attr_dev(g5, "class", "two-criteria scale-group svelte-1ab5qz9");
+    			set_style(g5, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].twoCriteria.y + "px)");
+    			add_location(g5, file$4, 38, 12, 1840);
+    			attr_dev(path5, "d", "M5, 0 h" + markerWidth);
+    			attr_dev(path5, "class", "svelte-1ab5qz9");
+    			add_location(path5, file$4, 43, 16, 2239);
+    			attr_dev(text5, "x", markerWidth + 10);
+    			attr_dev(text5, "class", "svelte-1ab5qz9");
+    			add_location(text5, file$4, 44, 16, 2291);
+    			attr_dev(g6, "class", "one-criteria scale-group svelte-1ab5qz9");
+    			set_style(g6, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].oneCriteria.y + "px)");
+    			add_location(g6, file$4, 42, 12, 2117);
+    			attr_dev(path6, "d", "M5, 0 h" + markerWidth);
+    			attr_dev(path6, "class", "svelte-1ab5qz9");
+    			add_location(path6, file$4, 47, 16, 2518);
+    			attr_dev(text6, "x", markerWidth + 10);
+    			attr_dev(text6, "class", "svelte-1ab5qz9");
+    			add_location(text6, file$4, 48, 16, 2570);
+    			attr_dev(g7, "class", "zero-criteria scale-group svelte-1ab5qz9");
+    			set_style(g7, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].zeroCriteria.y + "px)");
+    			add_location(g7, file$4, 46, 12, 2394);
+    			attr_dev(path7, "d", "M5, 0 h" + markerWidth);
+    			attr_dev(path7, "class", "svelte-1ab5qz9");
+    			add_location(path7, file$4, 51, 16, 2787);
+    			attr_dev(text7, "x", markerWidth + 10);
+    			attr_dev(text7, "class", "svelte-1ab5qz9");
+    			add_location(text7, file$4, 52, 16, 2839);
+    			attr_dev(g8, "class", "exclude scale-group svelte-1ab5qz9");
+    			set_style(g8, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
+    			add_location(g8, file$4, 50, 12, 2674);
+    			attr_dev(g9, "class", "svelte-1ab5qz9");
+    			toggle_class(g9, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
+    			add_location(g9, file$4, 33, 8, 1506);
+    			attr_dev(g10, "class", "rating-scale-group");
+    			add_location(g10, file$4, 17, 4, 586);
+    			attr_dev(g11, "id", "rating-vis-container");
+    			add_location(g11, file$4, 15, 0, 542);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, g7, anchor);
-    			append_dev(g7, g6);
-    			append_dev(g6, g0);
+    			insert_dev(target, g11, anchor);
+    			append_dev(g11, g10);
+    			append_dev(g10, g3);
+    			append_dev(g3, g0);
     			append_dev(g0, path0);
     			append_dev(g0, text0);
     			text0.innerHTML = raw0_value;
-    			append_dev(g6, g1);
+    			append_dev(g3, g1);
     			append_dev(g1, path1);
     			append_dev(g1, text1);
     			text1.innerHTML = raw1_value;
-    			append_dev(g6, g5);
-    			append_dev(g5, g2);
+    			append_dev(g3, g2);
     			append_dev(g2, path2);
     			append_dev(g2, text2);
     			text2.innerHTML = raw2_value;
-    			append_dev(g5, g3);
-    			append_dev(g3, path3);
-    			append_dev(g3, text3);
+    			append_dev(g10, g9);
+    			append_dev(g9, g4);
+    			append_dev(g4, path3);
+    			append_dev(g4, text3);
     			text3.innerHTML = raw3_value;
-    			append_dev(g5, g4);
-    			append_dev(g4, path4);
-    			append_dev(g4, text4);
+    			append_dev(g9, g5);
+    			append_dev(g5, path4);
+    			append_dev(g5, text4);
     			text4.innerHTML = raw4_value;
+    			append_dev(g9, g6);
+    			append_dev(g6, path5);
+    			append_dev(g6, text5);
+    			text5.innerHTML = raw5_value;
+    			append_dev(g9, g7);
+    			append_dev(g7, path6);
+    			append_dev(g7, text6);
+    			text6.innerHTML = raw6_value;
+    			append_dev(g9, g8);
+    			append_dev(g8, path7);
+    			append_dev(g8, text7);
+    			text7.innerHTML = raw7_value;
     		},
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*ratingData*/ 1 && raw0_value !== (raw0_value = /*ratingData*/ ctx[0].noRegrets.name + "")) text0.innerHTML = raw0_value;
@@ -46864,46 +47789,61 @@ var app = (function (exports) {
     				set_style(g1, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].forRating.y + "px)");
     			}
 
-    			if (dirty & /*$ui*/ 2) {
-    				toggle_class(g1, "hidden", /*$ui*/ ctx[1].state.actionVis.scene !== 0);
-    			}
-
-    			if (dirty & /*ratingData*/ 1 && raw2_value !== (raw2_value = /*ratingData*/ ctx[0].twoCriteria.name + "")) text2.innerHTML = raw2_value;
+    			if (dirty & /*ratingData*/ 1 && raw2_value !== (raw2_value = /*ratingData*/ ctx[0].discard.name + "")) text2.innerHTML = raw2_value;
     			if (dirty & /*ratingData*/ 1) {
-    				set_style(g2, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].twoCriteria.y + "px)");
-    			}
-
-    			if (dirty & /*ratingData*/ 1 && raw3_value !== (raw3_value = /*ratingData*/ ctx[0].oneCriteria.name + "")) text3.innerHTML = raw3_value;
-    			if (dirty & /*ratingData*/ 1) {
-    				set_style(g3, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].oneCriteria.y + "px)");
-    			}
-
-    			if (dirty & /*ratingData*/ 1 && raw4_value !== (raw4_value = /*ratingData*/ ctx[0].zeroCriteria.name + "")) text4.innerHTML = raw4_value;
-    			if (dirty & /*ratingData*/ 1) {
-    				set_style(g4, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].zeroCriteria.y + "px)");
+    				set_style(g2, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
     			}
 
     			if (dirty & /*$ui*/ 2) {
-    				toggle_class(g5, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
+    				toggle_class(g3, "hidden", /*$ui*/ ctx[1].state.actionVis.scene !== 0);
+    			}
+
+    			if (dirty & /*ratingData*/ 1 && raw3_value !== (raw3_value = /*ratingData*/ ctx[0].noRegrets.name + "")) text3.innerHTML = raw3_value;
+    			if (dirty & /*ratingData*/ 1) {
+    				set_style(g4, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].noRegrets.y + "px)");
+    			}
+
+    			if (dirty & /*ratingData*/ 1 && raw4_value !== (raw4_value = /*ratingData*/ ctx[0].twoCriteria.name + "")) text4.innerHTML = raw4_value;
+    			if (dirty & /*ratingData*/ 1) {
+    				set_style(g5, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].twoCriteria.y + "px)");
+    			}
+
+    			if (dirty & /*ratingData*/ 1 && raw5_value !== (raw5_value = /*ratingData*/ ctx[0].oneCriteria.name + "")) text5.innerHTML = raw5_value;
+    			if (dirty & /*ratingData*/ 1) {
+    				set_style(g6, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].oneCriteria.y + "px)");
+    			}
+
+    			if (dirty & /*ratingData*/ 1 && raw6_value !== (raw6_value = /*ratingData*/ ctx[0].zeroCriteria.name + "")) text6.innerHTML = raw6_value;
+    			if (dirty & /*ratingData*/ 1) {
+    				set_style(g7, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].zeroCriteria.y + "px)");
+    			}
+
+    			if (dirty & /*ratingData*/ 1 && raw7_value !== (raw7_value = /*ratingData*/ ctx[0].discard.name + "")) text7.innerHTML = raw7_value;
+    			if (dirty & /*ratingData*/ 1) {
+    				set_style(g8, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
+    			}
+
+    			if (dirty & /*$ui*/ 2) {
+    				toggle_class(g9, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
     			}
     		},
     		i: function intro(local) {
-    			if (!g7_intro) {
+    			if (!g11_intro) {
     				add_render_callback(() => {
-    					g7_intro = create_in_transition(g7, fade, {});
-    					g7_intro.start();
+    					g11_intro = create_in_transition(g11, fade, {});
+    					g11_intro.start();
     				});
     			}
     		},
     		o: noop$4,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g7);
+    			if (detaching) detach_dev(g11);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$5.name,
+    		id: create_fragment$4.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46914,7 +47854,7 @@ var app = (function (exports) {
 
     const markerWidth = 25;
 
-    function instance$5($$self, $$props, $$invalidate) {
+    function instance$4($$self, $$props, $$invalidate) {
     	let $ui;
     	validate_store(ui, 'ui');
     	component_subscribe($$self, ui, $$value => $$invalidate(1, $ui = $$value));
@@ -46963,13 +47903,13 @@ var app = (function (exports) {
     class Rating extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$5, create_fragment$5, safe_not_equal, { dims: 2, ratingData: 0 });
+    		init$1(this, options, instance$4, create_fragment$4, safe_not_equal, { dims: 2, ratingData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Rating",
     			options,
-    			id: create_fragment$5.name
+    			id: create_fragment$4.name
     		});
     	}
 
@@ -46991,7 +47931,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/ActionVis.svelte generated by Svelte v3.48.0 */
-    const file$4 = "src/components/byPage/actions/ActionVis.svelte";
+    const file$3 = "src/components/byPage/actions/ActionVis.svelte";
 
     // (525:64) 
     function create_if_block_7(ctx) {
@@ -47357,7 +48297,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$4(ctx) {
+    function create_fragment$3(ctx) {
     	let section;
     	let div;
     	let figure;
@@ -47435,13 +48375,13 @@ var app = (function (exports) {
     			create_component(force.$$.fragment);
     			if (if_block1) if_block1.c();
     			attr_dev(svg, "viewBox", `0 0 ${/*dims*/ ctx[3].width} ${/*dims*/ ctx[3].height}`);
-    			attr_dev(svg, "class", "svelte-akxit");
-    			add_location(svg, file$4, 510, 12, 28653);
-    			attr_dev(figure, "class", "svelte-akxit");
-    			add_location(figure, file$4, 509, 8, 28632);
-    			add_location(div, file$4, 508, 4, 28596);
-    			attr_dev(section, "class", "svelte-akxit");
-    			add_location(section, file$4, 506, 0, 28555);
+    			attr_dev(svg, "class", "svelte-1v25lzs");
+    			add_location(svg, file$3, 510, 12, 28467);
+    			attr_dev(figure, "class", "svelte-1v25lzs");
+    			add_location(figure, file$3, 509, 8, 28446);
+    			add_location(div, file$3, 508, 4, 28410);
+    			attr_dev(section, "class", "svelte-1v25lzs");
+    			add_location(section, file$3, 506, 0, 28369);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47576,7 +48516,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$3.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47585,7 +48525,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let collisionType;
     	let forceCollide;
     	let focus;
@@ -47658,12 +48598,26 @@ var app = (function (exports) {
     		noRegrets: { name: "No regrets", y: 0.1 * dims.height },
     		forRating: {
     			name: "Actions for consideration",
-    			y: 0.65 * dims.height
+    			y: 0.5 * dims.height
     		},
-    		twoCriteria: { name: "Tier one", y: 0.35 * dims.height },
-    		oneCriteria: { name: "Tier two", y: 0.6 * dims.height },
+    		discard: {
+    			name: "Limited adaptation benefit",
+    			y: 0.85 * dims.height
+    		},
+    		twoCriteria: {
+    			name: "Higher priority",
+    			y: 0.35 * dims.height
+    		},
+    		oneCriteria: {
+    			name: "Lower priority",
+    			y: 0.6 * dims.height
+    		},
     		zeroCriteria: {
-    			name: "No adaptation benefit",
+    			name: "Uncertain adaptation benefit",
+    			y: 0.75 * dims.height
+    		},
+    		discardCriteria: {
+    			name: "Limited adaptation benefit",
     			y: 0.85 * dims.height
     		}
     	};
@@ -48108,9 +49062,16 @@ var app = (function (exports) {
     							["x", centerForce.x],
     							[
     								"y",
-    								y$1().y(d => d["Screening outcome"] === "=> No regrets"
-    								? ratingData.noRegrets.y
-    								: ratingData.forRating.y)
+    								y$1().y(d => {
+    									switch (d["Screening outcome"]) {
+    										case "=> No regrets":
+    											return ratingData.noRegrets.y;
+    										case "=> Discard":
+    											return ratingData.discard.y;
+    										default:
+    											return ratingData.forRating.y;
+    									}
+    								})
     							]
     						];
     					case "cluster-adaptation-criteria":
@@ -48126,23 +49087,23 @@ var app = (function (exports) {
     									}
 
     									if (screen.Flexible === 'Yes' && screen.Robust === "Yes" && screen.Viable === "Yes") {
-    										return dims.width * 0.5;
+    										return dims.width * 0.65;
     									} else if (screen.Flexible === 'Yes' && screen.Viable === "Yes") {
-    										return dims.width * 0.7;
+    										return dims.width * 0.8;
     									} else if (screen.Flexible === 'Yes' && screen.Robust === "Yes") {
-    										return dims.width * 0.5;
+    										return dims.width * 0.65;
     									} else if (screen.Viable === 'Yes' && screen.Robust === "Yes") {
-    										return dims.width * 0.3;
+    										return dims.width * 0.5;
     									} else if (screen.Flexible === 'Yes') {
-    										return dims.width * 0.7;
+    										return dims.width * 0.8;
     									} else if (screen.Viable === 'Yes') {
-    										return dims.width * 0.5;
+    										return dims.width * 0.65;
     									} else if (screen.Robust === 'Yes') {
-    										return dims.width * 0.3;
-    									} else {
     										return dims.width * 0.5;
+    									} else {
+    										return dims.width * 0.65;
     									}
-    								}).strength(0.05)
+    								}).strength(0.15)
     							],
     							[
     								"y",
@@ -48176,7 +49137,7 @@ var app = (function (exports) {
     					case "cluster-rating":
     						return [
     							["collide", forceCollide],
-    							["x", centerForce.x.strength(0.15)],
+    							["x", x$2().x(dims.width * 0.65).strength(0.15)],
     							[
     								"y",
     								y$1().y(d => {
@@ -48188,6 +49149,8 @@ var app = (function (exports) {
 
     									if (screen.Flexible === 'Yes' && screen.Robust === "Yes" && screen.Viable === "Yes") {
     										return ratingData.noRegrets.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1);
+    									} else if (screen.Flexible === 'No' || screen.Robust === "No" || screen.Viable === "No") {
+    										return ratingData.discard.y;
     									} else if (screen.Flexible === 'Yes' && screen.Viable === "Yes") {
     										return ratingData.twoCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1);
     									} else if (screen.Flexible === 'Yes' && screen.Robust === "Yes") {
@@ -48197,7 +49160,7 @@ var app = (function (exports) {
     									} else if (screen.Flexible === 'Yes') {
     										return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1);
     									} else if (screen.Viable === 'Yes') {
-    										return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.);
+    										return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1);
     									} else if (screen.Robust === 'Yes') {
     										return ratingData.oneCriteria.y - (d["Average hazard rating"] / 5 * dims.height * 0.2 - dims.height * 0.1);
     									} else {
@@ -48240,365 +49203,11 @@ var app = (function (exports) {
     class ActionVis extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$4, create_fragment$4, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ActionVis",
-    			options,
-    			id: create_fragment$4.name
-    		});
-    	}
-    }
-
-    function flip(node, { from, to }, params = {}) {
-        const style = getComputedStyle(node);
-        const transform = style.transform === 'none' ? '' : style.transform;
-        const [ox, oy] = style.transformOrigin.split(' ').map(parseFloat);
-        const dx = (from.left + from.width * ox / to.width) - (to.left + ox);
-        const dy = (from.top + from.height * oy / to.height) - (to.top + oy);
-        const { delay = 0, duration = (d) => Math.sqrt(d) * 120, easing = cubicOut$1 } = params;
-        return {
-            delay,
-            duration: is_function(duration) ? duration(Math.sqrt(dx * dx + dy * dy)) : duration,
-            easing,
-            css: (t, u) => {
-                const x = u * dx;
-                const y = u * dy;
-                const sx = t + u * from.width / to.width;
-                const sy = t + u * from.height / to.height;
-                return `transform: ${transform} translate(${x}px, ${y}px) scale(${sx}, ${sy});`;
-            }
-        };
-    }
-
-    /* src/components/byPage/actions/Table.svelte generated by Svelte v3.48.0 */
-
-    const { console: console_1$1 } = globals;
-    const file$3 = "src/components/byPage/actions/Table.svelte";
-
-    function get_each_context$1(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[11] = list[i];
-    	return child_ctx;
-    }
-
-    // (58:2) {#each actions.filter(t => !t.done) as action (action.recordID)}
-    function create_each_block$1(key_1, ctx) {
-    	let label;
-    	let input;
-    	let t0;
-    	let t1_value = /*action*/ ctx[11].Name + "";
-    	let t1;
-    	let t2;
-    	let button;
-    	let t4;
-    	let label_intro;
-    	let label_outro;
-    	let rect;
-    	let stop_animation = noop$4;
-    	let current;
-    	let mounted;
-    	let dispose;
-
-    	function change_handler() {
-    		return /*change_handler*/ ctx[5](/*action*/ ctx[11]);
-    	}
-
-    	function click_handler() {
-    		return /*click_handler*/ ctx[6](/*action*/ ctx[11]);
-    	}
-
-    	const block = {
-    		key: key_1,
-    		first: null,
-    		c: function create() {
-    			label = element("label");
-    			input = element("input");
-    			t0 = space();
-    			t1 = text$1(t1_value);
-    			t2 = space();
-    			button = element("button");
-    			button.textContent = "remove";
-    			t4 = space();
-    			attr_dev(input, "type", "checkbox");
-    			attr_dev(input, "class", "svelte-10rslmz");
-    			add_location(input, file$3, 63, 4, 1336);
-    			attr_dev(button, "class", "svelte-10rslmz");
-    			add_location(button, file$3, 65, 4, 1417);
-    			attr_dev(label, "class", "svelte-10rslmz");
-    			add_location(label, file$3, 58, 3, 1221);
-    			this.first = label;
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, label, anchor);
-    			append_dev(label, input);
-    			append_dev(label, t0);
-    			append_dev(label, t1);
-    			append_dev(label, t2);
-    			append_dev(label, button);
-    			append_dev(label, t4);
-    			current = true;
-
-    			if (!mounted) {
-    				dispose = [
-    					listen_dev(input, "change", change_handler, false, false, false),
-    					listen_dev(button, "click", click_handler, false, false, false)
-    				];
-
-    				mounted = true;
-    			}
-    		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-    			if ((!current || dirty & /*actions*/ 1) && t1_value !== (t1_value = /*action*/ ctx[11].Name + "")) set_data_dev(t1, t1_value);
-    		},
-    		r: function measure() {
-    			rect = label.getBoundingClientRect();
-    		},
-    		f: function fix() {
-    			fix_position(label);
-    			stop_animation();
-    			add_transform(label, rect);
-    		},
-    		a: function animate() {
-    			stop_animation();
-    			stop_animation = create_animation(label, rect, flip, {});
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-
-    			add_render_callback(() => {
-    				if (label_outro) label_outro.end(1);
-    				label_intro = create_in_transition(label, /*receive*/ ctx[2], { key: /*action*/ ctx[11].recordID });
-    				label_intro.start();
-    			});
-
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			if (label_intro) label_intro.invalidate();
-    			label_outro = create_out_transition(label, /*send*/ ctx[1], { key: /*action*/ ctx[11].recordID });
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(label);
-    			if (detaching && label_outro) label_outro.end();
-    			mounted = false;
-    			run_all(dispose);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block$1.name,
-    		type: "each",
-    		source: "(58:2) {#each actions.filter(t => !t.done) as action (action.recordID)}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$3(ctx) {
-    	let div1;
-    	let div0;
-    	let h2;
-    	let t1;
-    	let each_blocks = [];
-    	let each_1_lookup = new Map();
-    	let current;
-    	let each_value = /*actions*/ ctx[0].filter(func);
-    	validate_each_argument(each_value);
-    	const get_key = ctx => /*action*/ ctx[11].recordID;
-    	validate_each_keys(ctx, each_value, get_each_context$1, get_key);
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		let child_ctx = get_each_context$1(ctx, each_value, i);
-    		let key = get_key(child_ctx);
-    		each_1_lookup.set(key, each_blocks[i] = create_each_block$1(key, child_ctx));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			div1 = element("div");
-    			div0 = element("div");
-    			h2 = element("h2");
-    			h2.textContent = "Actions";
-    			t1 = space();
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			attr_dev(h2, "class", "svelte-10rslmz");
-    			add_location(h2, file$3, 56, 2, 1134);
-    			attr_dev(div0, "class", "left");
-    			add_location(div0, file$3, 55, 1, 1113);
-    			attr_dev(div1, "class", "board svelte-10rslmz");
-    			add_location(div1, file$3, 53, 0, 1091);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div1, anchor);
-    			append_dev(div1, div0);
-    			append_dev(div0, h2);
-    			append_dev(div0, t1);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div0, null);
-    			}
-
-    			current = true;
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*actions, remove, mark*/ 25) {
-    				each_value = /*actions*/ ctx[0].filter(func);
-    				validate_each_argument(each_value);
-    				group_outros();
-    				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].r();
-    				validate_each_keys(ctx, each_value, get_each_context$1, get_key);
-    				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, div0, fix_and_outro_and_destroy_block, create_each_block$1, null, get_each_context$1);
-    				for (let i = 0; i < each_blocks.length; i += 1) each_blocks[i].a();
-    				check_outros();
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-
-    			for (let i = 0; i < each_value.length; i += 1) {
-    				transition_in(each_blocks[i]);
-    			}
-
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				transition_out(each_blocks[i]);
-    			}
-
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div1);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].d();
-    			}
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$3.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    const func = t => !t.done;
-
-    function instance$3($$self, $$props, $$invalidate) {
-    	let $data;
-    	validate_store(data, 'data');
-    	component_subscribe($$self, data, $$value => $$invalidate(8, $data = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Table', slots, []);
-
-    	const [send, receive] = crossfade({
-    		duration: d => Math.sqrt(d * 200),
-    		fallback(node, params) {
-    			const style = getComputedStyle(node);
-    			const transform = style.transform === 'none' ? '' : style.transform;
-
-    			return {
-    				duration: 600,
-    				easing: quintOut,
-    				css: t => `
-					transform: ${transform} scale(${t});
-					opacity: ${t}
-				`
-    			};
-    		}
-    	});
-
-    	const actionData = $data.actions;
-    	console.log($data.actions);
-    	let uid = 1;
-    	let actions = $data.actions;
-
-    	function add(input) {
-    		const action = {
-    			id: uid++,
-    			done: false,
-    			description: input.value
-    		};
-
-    		$$invalidate(0, actions = [action, ...actions]);
-    		input.value = '';
-    	}
-
-    	function remove(action) {
-    		$$invalidate(0, actions = actions.filter(t => t !== action));
-    	}
-
-    	function mark(action, done) {
-    		action.done = done;
-    		remove(action);
-    		$$invalidate(0, actions = actions.concat(action));
-    	}
-
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$1.warn(`<Table> was created with unknown prop '${key}'`);
-    	});
-
-    	const change_handler = action => mark(action, true);
-    	const click_handler = action => remove(action);
-
-    	$$self.$capture_state = () => ({
-    		ui,
-    		data,
-    		quintOut,
-    		crossfade,
-    		flip,
-    		send,
-    		receive,
-    		actionData,
-    		uid,
-    		actions,
-    		add,
-    		remove,
-    		mark,
-    		$data
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ('uid' in $$props) uid = $$props.uid;
-    		if ('actions' in $$props) $$invalidate(0, actions = $$props.actions);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	return [actions, send, receive, remove, mark, change_handler, click_handler];
-    }
-
-    class Table extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
     		init$1(this, options, instance$3, create_fragment$3, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
-    			tagName: "Table",
+    			tagName: "ActionVis",
     			options,
     			id: create_fragment$3.name
     		});
@@ -48615,7 +49224,7 @@ var app = (function (exports) {
     	return child_ctx;
     }
 
-    // (30:8) {#each options as option}
+    // (28:8) {#each options as option}
     function create_each_block(ctx) {
     	let input;
     	let input_id_value;
@@ -48642,10 +49251,10 @@ var app = (function (exports) {
     			input.value = input.__value;
     			attr_dev(input, "class", "svelte-3d9wqu");
     			/*$$binding_groups*/ ctx[4][0].push(input);
-    			add_location(input, file$2, 30, 12, 1082);
+    			add_location(input, file$2, 28, 12, 1080);
     			attr_dev(label, "for", label_for_value = `${/*option*/ ctx[8]}-${/*uniqueID*/ ctx[2]}`);
     			attr_dev(label, "class", "svelte-3d9wqu");
-    			add_location(label, file$2, 31, 12, 1178);
+    			add_location(label, file$2, 29, 12, 1176);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, input, anchor);
@@ -48694,7 +49303,7 @@ var app = (function (exports) {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(30:8) {#each options as option}",
+    		source: "(28:8) {#each options as option}",
     		ctx
     	});
 
@@ -48725,9 +49334,9 @@ var app = (function (exports) {
     			attr_dev(div0, "class", "group-container svelte-3d9wqu");
     			attr_dev(div0, "aria-labelledby", `label-${/*uniqueID*/ ctx[2]}`);
     			attr_dev(div0, "id", `group-${/*uniqueID*/ ctx[2]}`);
-    			add_location(div0, file$2, 27, 4, 848);
+    			add_location(div0, file$2, 25, 4, 846);
     			attr_dev(div1, "class", "s s--multi svelte-3d9wqu");
-    			add_location(div1, file$2, 26, 0, 819);
+    			add_location(div1, file$2, 24, 0, 817);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48911,229 +49520,231 @@ var app = (function (exports) {
     	let t23;
     	let li8;
     	let t25;
-    	let li9;
-    	let t27;
-    	let div43;
     	let div40;
+    	let div37;
     	let div9;
     	let div6;
     	let hr0;
-    	let t28;
+    	let t26;
     	let h20;
-    	let t30;
+    	let t28;
     	let p1;
-    	let t31;
+    	let t29;
     	let html_tag;
     	let raw0_value = /*$data*/ ctx[1].stats.actions.total + "";
-    	let t32;
+    	let t30;
     	let span2;
-    	let t34;
-    	let t35;
+    	let t32;
+    	let t33;
     	let div7;
     	let p2;
-    	let t36;
+    	let t34;
     	let html_tag_1;
     	let raw1_value = /*$data*/ ctx[1].stats.actions.total + "";
-    	let t37;
+    	let t35;
     	let em0;
-    	let t39;
-    	let t40;
+    	let t37;
+    	let t38;
     	let div8;
     	let p3;
-    	let t41;
+    	let t39;
     	let em1;
+    	let t41;
+    	let em2;
     	let t43;
-    	let t44;
+    	let em3;
+    	let t45;
     	let p4;
-    	let t46;
+    	let t47;
     	let div13;
     	let div10;
     	let hr1;
-    	let t47;
+    	let t48;
     	let h21;
-    	let t49;
-    	let p5;
     	let t50;
+    	let p5;
+    	let t51;
     	let strong0;
-    	let t52;
     	let t53;
+    	let t54;
     	let div11;
     	let p6;
-    	let t54;
-    	let strong1;
-    	let t56;
+    	let t55;
+    	let em4;
     	let t57;
+    	let strong1;
+    	let t59;
+    	let t60;
     	let div12;
     	let p7;
-    	let t58;
-    	let span3;
-    	let t60;
     	let t61;
+    	let span3;
+    	let t63;
+    	let t64;
     	let div17;
     	let div14;
     	let hr2;
-    	let t62;
+    	let t65;
     	let h22;
-    	let t64;
-    	let p8;
-    	let t66;
-    	let ul1;
-    	let li10;
     	let t67;
-    	let strong2;
+    	let p8;
     	let t69;
+    	let ul1;
+    	let li9;
     	let t70;
-    	let li11;
-    	let t71;
-    	let strong3;
+    	let strong2;
+    	let t72;
     	let t73;
+    	let li10;
+    	let t74;
+    	let strong3;
+    	let t76;
     	let p9;
-    	let t75;
+    	let t78;
     	let div15;
     	let p10;
-    	let t77;
+    	let t80;
     	let div16;
     	let p11;
-    	let t79;
+    	let t82;
     	let div20;
     	let div18;
     	let hr3;
-    	let t80;
-    	let h23;
-    	let t82;
-    	let p12;
     	let t83;
-    	let strong4;
+    	let h23;
     	let t85;
-    	let em2;
-    	let t87;
-    	let em3;
-    	let t89;
-    	let em4;
-    	let t91;
+    	let p12;
+    	let t86;
+    	let strong4;
+    	let t88;
     	let em5;
-    	let t93;
+    	let t90;
+    	let em6;
+    	let t92;
+    	let em7;
     	let t94;
+    	let em8;
+    	let t96;
+    	let t97;
     	let div19;
     	let p13;
-    	let t95;
-    	let strong5;
-    	let t97;
     	let t98;
-    	let div23;
+    	let strong5;
+    	let t100;
+    	let t101;
+    	let div24;
     	let div21;
     	let hr4;
-    	let t99;
+    	let t102;
     	let h24;
-    	let t101;
-    	let p14;
-    	let t103;
+    	let t104;
     	let div22;
-    	let p15;
-    	let t105;
-    	let div27;
-    	let div24;
-    	let hr5;
+    	let p14;
     	let t106;
-    	let h25;
-    	let t108;
-    	let div25;
-    	let p16;
-    	let t110;
-    	let p17;
-    	let t111;
+    	let p15;
+    	let t107;
     	let strong6;
+    	let t109;
+    	let em9;
+    	let t111;
+    	let em10;
     	let t113;
-    	let em6;
-    	let t115;
-    	let em7;
+    	let t114;
+    	let div23;
+    	let p16;
+    	let t116;
+    	let p17;
     	let t117;
-    	let t118;
-    	let div26;
-    	let p18;
+    	let em11;
+    	let t119;
     	let t120;
-    	let p19;
-    	let t121;
-    	let em8;
-    	let t123;
-    	let t124;
     	let switch_1;
     	let updating_value;
-    	let t125;
-    	let div29;
-    	let div28;
-    	let hr6;
-    	let t126;
-    	let h26;
-    	let t128;
-    	let p20;
+    	let t121;
+    	let div26;
+    	let div25;
+    	let hr5;
+    	let t122;
+    	let h25;
+    	let t124;
+    	let p18;
     	let strong7;
+    	let t126;
+    	let a0;
+    	let t128;
+    	let a1;
     	let t130;
     	let strong8;
     	let t132;
     	let t133;
-    	let p21;
+    	let p19;
     	let t134;
     	let strong9;
     	let t136;
-    	let div33;
-    	let div30;
-    	let hr7;
     	let t137;
-    	let h27;
-    	let t139;
-    	let div31;
-    	let p22;
-    	let t141;
-    	let p23;
-    	let t142;
+    	let p20;
+    	let t138;
     	let strong10;
-    	let t144;
-    	let strong11;
+    	let t140;
+    	let div30;
+    	let div27;
+    	let hr6;
+    	let t141;
+    	let h26;
+    	let t143;
+    	let div28;
+    	let p21;
+    	let t145;
+    	let p22;
     	let t146;
-    	let strong12;
+    	let strong11;
     	let t148;
-    	let strong13;
+    	let strong12;
     	let t150;
-    	let t151;
-    	let div32;
-    	let p24;
+    	let strong13;
     	let t152;
     	let strong14;
     	let t154;
     	let t155;
-    	let p25;
-    	let t157;
-    	let div37;
-    	let div34;
-    	let hr8;
+    	let div29;
+    	let p23;
+    	let t156;
+    	let strong15;
     	let t158;
-    	let h28;
+    	let t159;
+    	let p24;
     	let t160;
-    	let p26;
+    	let em12;
     	let t162;
-    	let div35;
-    	let p27;
+    	let t163;
+    	let div34;
+    	let div31;
+    	let hr7;
     	let t164;
-    	let div36;
+    	let h27;
+    	let t166;
+    	let p25;
+    	let t168;
+    	let div32;
+    	let p26;
+    	let t170;
+    	let div33;
+    	let p27;
+    	let t171;
+    	let em13;
+    	let t173;
     	let p28;
-    	let t165;
-    	let em9;
-    	let t167;
+    	let t175;
+    	let div36;
+    	let div35;
+    	let hr8;
+    	let t176;
+    	let h28;
+    	let t178;
     	let p29;
-    	let t169;
+    	let t180;
     	let div39;
     	let div38;
-    	let hr9;
-    	let t170;
-    	let h29;
-    	let t172;
-    	let p30;
-    	let t174;
-    	let p31;
-    	let t176;
-    	let div42;
-    	let div41;
     	let actionvis;
     	let current;
     	let mounted;
@@ -49174,7 +49785,7 @@ var app = (function (exports) {
     			t5 = space();
     			div2 = element("div");
     			p0 = element("p");
-    			p0.textContent = "There's a lot to consider when thinking about the actions we need prepare and adapt our community for the impacts of climate change. In this section we'll take a closer look at key actions that that area already happening in and around Hepburn, through a series of different adaptation lenses. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.";
+    			p0.textContent = "There's a lot to consider when thinking about the actions we need to take to prepare and adapt our community for climate change. In this section we'll take a closer look at key actions that area already happening in and around Hepburn, through a series of different adaptation 'lenses'. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.";
     			t7 = space();
     			div3 = element("div");
     			ul0 = element("ul");
@@ -49185,402 +49796,405 @@ var app = (function (exports) {
     			li1.textContent = "Hazards";
     			t11 = space();
     			li2 = element("li");
-    			li2.textContent = "Appraoch";
+    			li2.textContent = "Approach";
     			t13 = space();
     			li3 = element("li");
     			li3.textContent = "Scale";
     			t15 = space();
     			li4 = element("li");
-    			li4.textContent = "Other";
+    			li4.textContent = "Type";
     			t17 = space();
     			li5 = element("li");
-    			li5.textContent = "Type";
+    			li5.textContent = "Focus area";
     			t19 = space();
     			li6 = element("li");
-    			li6.textContent = "Focus area";
+    			li6.textContent = "Adaptation criteria";
     			t21 = space();
     			li7 = element("li");
-    			li7.textContent = "Adaptation criteria";
+    			li7.textContent = "Ranking";
     			t23 = space();
     			li8 = element("li");
-    			li8.textContent = "Ranking";
+    			li8.textContent = "Outro";
     			t25 = space();
-    			li9 = element("li");
-    			li9.textContent = "Outro";
-    			t27 = space();
-    			div43 = element("div");
     			div40 = element("div");
+    			div37 = element("div");
     			div9 = element("div");
     			div6 = element("div");
     			hr0 = element("hr");
-    			t28 = space();
+    			t26 = space();
     			h20 = element("h2");
     			h20.textContent = "Making sense of adaptation actions";
-    			t30 = space();
+    			t28 = space();
     			p1 = element("p");
-    			t31 = text$1("We've identified ");
+    			t29 = text$1("We've identified ");
     			html_tag = new HtmlTag(false);
-    			t32 = text$1(" actions (so far) that are helping Hepburn adapt to climate change. Let's start by representing each action as a little ");
+    			t30 = text$1(" actions (so far) that are helping Hepburn adapt to climate change. Let's start by representing each action as a little ");
     			span2 = element("span");
     			span2.textContent = "dot";
-    			t34 = text$1(" on the screen.");
-    			t35 = space();
+    			t32 = text$1(" on the screen.");
+    			t33 = space();
     			div7 = element("div");
     			p2 = element("p");
-    			t36 = text$1("This seems nice an orderly: ");
+    			t34 = text$1("This seems nice an orderly: ");
     			html_tag_1 = new HtmlTag(false);
-    			t37 = text$1(" actions ");
+    			t35 = text$1(" actions ");
     			em0 = element("em");
     			em0.textContent = "seems";
-    			t39 = text$1(" reasonable...or is it!? Adaptation actions vary wildy in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.");
-    			t40 = space();
+    			t37 = text$1(" reasonable...or is it!? Adaptation actions vary wildly in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.");
+    			t38 = space();
     			div8 = element("div");
     			p3 = element("p");
-    			t41 = text$1("So how can we see how these actions match up to ");
+    			t39 = text$1("So how can we see how these actions match up to ");
     			em1 = element("em");
     			em1.textContent = "our";
-    			t43 = text$1(" adaptation needs? How can we tell if what we're doing is effective? Are we doing enough? And are we doing enough in ther right places?");
-    			t44 = space();
+    			t41 = text$1(" adaptation needs? How can we tell if what we're doing is effective? Are we doing ");
+    			em2 = element("em");
+    			em2.textContent = "enough";
+    			t43 = text$1("? And are we doing enough in the ");
+    			em3 = element("em");
+    			em3.textContent = "right places?";
+    			t45 = space();
     			p4 = element("p");
-    			p4.textContent = "This guide will walk you through some key ways to look at Hepburn's adaptation actions. It won't definitively answer these questions - becuase 'adaptation' and our 'adaptive capacity' aren't quantifiable - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.";
-    			t46 = space();
+    			p4.textContent = "This guide walks you through some key ways to view Hepburn's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.";
+    			t47 = space();
     			div13 = element("div");
     			div10 = element("div");
     			hr1 = element("hr");
-    			t47 = space();
+    			t48 = space();
     			h21 = element("h2");
     			h21.textContent = "Actions vs climate hazards";
-    			t49 = space();
+    			t50 = space();
     			p5 = element("p");
-    			t50 = text$1("There are ");
+    			t51 = text$1("There are ");
     			strong0 = element("strong");
     			strong0.textContent = "four climate hazards";
-    			t52 = text$1(" facing Hepburn, each of which increases the likelihood of climate events that pose risks to the community.");
-    			t53 = space();
+    			t53 = text$1(" facing Hepburn, each of which increases the likelihood of climate events that pose risks to the community.");
+    			t54 = space();
     			div11 = element("div");
     			p6 = element("p");
-    			t54 = text$1("We want to see how our actions address each hazard. To begin with, we can count how many actions address each hazard. We can also try to position each action near the hazards they are trying to address. But what we quickly notice is that there are ");
+    			t55 = text$1("We want to see how our actions address each hazard. To begin with, we can ");
+    			em4 = element("em");
+    			em4.textContent = "count how many";
+    			t57 = text$1(" actions address each hazard. We could try to position each action near the hazards they are trying to address. But we quickly notice is that there are ");
     			strong1 = element("strong");
-    			strong1.textContent = "many actions that address multiple hazards";
-    			t56 = text$1(".");
-    			t57 = space();
+    			strong1.textContent = "actions that address multiple hazards";
+    			t59 = text$1(".");
+    			t60 = space();
     			div12 = element("div");
     			p7 = element("p");
-    			t58 = text$1("So how about we re-design our dots by putting some matching ");
+    			t61 = text$1("So how about we re-design our dots by putting some matching ");
     			span3 = element("span");
     			span3.textContent = "coloured arcs";
-    			t60 = text$1(" on our actions. Its a bit busy, but now we some idea about which actions address which hazards!");
-    			t61 = space();
+    			t63 = text$1(" around our actions. Its a bit busy, but now we can identify which actions address which hazards!");
+    			t64 = space();
     			div17 = element("div");
     			div14 = element("div");
     			hr2 = element("hr");
-    			t62 = space();
+    			t65 = space();
     			h22 = element("h2");
-    			h22.textContent = "Adaptive capacity and approaches";
-    			t64 = space();
+    			h22.textContent = "Adaptation approaches";
+    			t67 = space();
     			p8 = element("p");
-    			p8.textContent = "There are two broad approaches when in comes improving adaptive capacity:";
-    			t66 = space();
+    			p8.textContent = "There are two approaches when in comes to adaptation:";
+    			t69 = space();
     			ul1 = element("ul");
-    			li10 = element("li");
-    			t67 = text$1("We can ");
+    			li9 = element("li");
+    			t70 = text$1("We can ");
     			strong2 = element("strong");
     			strong2.textContent = "reduce risk";
-    			t69 = text$1("; and");
-    			t70 = space();
-    			li11 = element("li");
-    			t71 = text$1("We can ");
+    			t72 = text$1("; and");
+    			t73 = space();
+    			li10 = element("li");
+    			t74 = text$1("We can ");
     			strong3 = element("strong");
     			strong3.textContent = "increase resilience";
-    			t73 = space();
+    			t76 = space();
     			p9 = element("p");
-    			p9.textContent = "Each of these broad approaches contains a handful of more specific types or approaches, and our actions can take multiple approaches. What we want is good spread of actions so that we have a diversified approach to building of capacity to adapt.";
-    			t75 = space();
+    			p9.textContent = "Each of these  approaches contains a handful of more specific approaches, and our actions can take multiple approaches. What is obvious is that we want is good spread of actions so that our approach to adaptation is diverse.";
+    			t78 = space();
     			div15 = element("div");
     			p10 = element("p");
-    			p10.textContent = "We can try to position actions over these broad approaches, but we again run into the problem with actions that both reduce risk and increase resilience. There might also be somes actions that don't really fit either approach: usually because they're quite 'indirect' or 'high-level'.";
-    			t77 = space();
+    			p10.textContent = "We can try to position actions over these two approaches, but we again run into the problem with actions that both reduce risk and increase resilience. There might also be some actions that don't really fit either approach: usually because they're quite 'indirect' or 'high-level'.";
+    			t80 = space();
     			div16 = element("div");
     			p11 = element("p");
     			p11.textContent = "So to help us better identify the adaptation approach of each action, we're going to put little triangle symbols inside each action.";
-    			t79 = space();
+    			t82 = space();
     			div20 = element("div");
     			div18 = element("div");
     			hr3 = element("hr");
-    			t80 = space();
+    			t83 = space();
     			h23 = element("h2");
     			h23.textContent = "Actions scale";
-    			t82 = space();
+    			t85 = space();
     			p12 = element("p");
-    			t83 = text$1("The next lens we'll take to look at our actions through is their ");
+    			t86 = text$1("The next lens we'll look at our actions through concerns their ");
     			strong4 = element("strong");
     			strong4.textContent = "scale";
-    			t85 = text$1(". This is a classification of whether an action is specific to the ");
-    			em2 = element("em");
-    			em2.textContent = "local";
-    			t87 = text$1(" Hepburn area, or if the action operates at broader scale of say, the ");
-    			em3 = element("em");
-    			em3.textContent = "regional";
-    			t89 = text$1(" level (e.g. Grampians), the Victorian ");
-    			em4 = element("em");
-    			em4.textContent = "state";
-    			t91 = text$1(" level, or at a ");
+    			t88 = text$1(". This is a classification of whether an action is specific to the ");
     			em5 = element("em");
-    			em5.textContent = "national";
-    			t93 = text$1(" level.");
-    			t94 = space();
+    			em5.textContent = "local";
+    			t90 = text$1(" Hepburn area, or if the action operates at broader scale of either: a ");
+    			em6 = element("em");
+    			em6.textContent = "regional";
+    			t92 = text$1(" level (e.g. Grampians or Central Highlands), the Victorian ");
+    			em7 = element("em");
+    			em7.textContent = "state";
+    			t94 = text$1(" level, or at a ");
+    			em8 = element("em");
+    			em8.textContent = "national";
+    			t96 = text$1(" level.");
+    			t97 = space();
     			div19 = element("div");
     			p13 = element("p");
-    			t95 = text$1("How might we visualise scale? The obvious indicator for scale is size — we could adjust the overall size of each action. However ");
+    			t98 = text$1("How might we visualise scale? The obvious indicator for scale is size — maybe we could adjust the overall size of each action? However ");
     			strong5 = element("strong");
     			strong5.textContent = "we're interested in how these actions affect Hepburn";
-    			t97 = text$1(", so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a sublte, shadow-y ring around the actions that are beyond local scale and move on!");
-    			t98 = space();
-    			div23 = element("div");
+    			t100 = text$1(", so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!");
+    			t101 = space();
+    			div24 = element("div");
     			div21 = element("div");
     			hr4 = element("hr");
-    			t99 = space();
+    			t102 = space();
     			h24 = element("h2");
-    			h24.textContent = "Healing country";
-    			t101 = space();
-    			p14 = element("p");
-    			p14.textContent = "Placeholder section for and other action traits that might represented as a mark/symbol on the action. At this point the action 'dots' are becoming quite intricate and so only a simple mark at the center is proposed. This example is a simple small dot.";
-    			t103 = space();
+    			h24.textContent = "Types of actions";
+    			t104 = space();
     			div22 = element("div");
-    			p15 = element("p");
-    			p15.textContent = "Healing county is a candidate and may end up being the only one that uses this, in which case this section would be re-shaped to be about how to indicate actions that have a healing county component (and/or traditioanl owners consultation??). If included here, a legend entry would be created. Note that if other classifiers are included (with a different symbol)";
-    			t105 = space();
-    			div27 = element("div");
-    			div24 = element("div");
-    			hr5 = element("hr");
+    			p14 = element("p");
+    			p14.textContent = "Now that we can see some of the key characteristics of our actions, we can start to think about more sophisticated classifications that give us insight into how well coordinated our adaptation are.";
     			t106 = space();
-    			h25 = element("h2");
-    			h25.textContent = "Types of actions";
-    			t108 = space();
-    			div25 = element("div");
-    			p16 = element("p");
-    			p16.textContent = "Now that we can see some of the key characteristics of our actions, we can start to think about more sophisticated classifcations that give us insight into how well coordinated our adaptation are.";
-    			t110 = space();
-    			p17 = element("p");
-    			t111 = text$1("This diagram shows how actions of different ");
+    			p15 = element("p");
+    			t107 = text$1("This diagram shows how actions of different ");
     			strong6 = element("strong");
     			strong6.textContent = "types";
-    			t113 = text$1(" might be connected, and how the knowledge gained from more ");
-    			em6 = element("em");
-    			em6.textContent = "abstract";
-    			t115 = text$1(" actions, helps to inform more ");
-    			em7 = element("em");
-    			em7.textContent = "concrete";
-    			t117 = text$1(" responses to climate risk.");
-    			t118 = space();
-    			div26 = element("div");
-    			p18 = element("p");
-    			p18.textContent = "We could see how actions are distributed by type by positioning them on the diagram. This view helps us see what types of actions are taking place, and where more attention might be required.";
+    			t109 = text$1(" might be connected, and how the knowledge gained from more ");
+    			em9 = element("em");
+    			em9.textContent = "abstract";
+    			t111 = text$1(" actions, helps to inform more ");
+    			em10 = element("em");
+    			em10.textContent = "concrete";
+    			t113 = text$1(" responses to climate risk.");
+    			t114 = space();
+    			div23 = element("div");
+    			p16 = element("p");
+    			p16.textContent = "We could see how actions are distributed by type by positioning them on the diagram. This view helps us see what types of actions are taking place, and where more attention might be required.";
+    			t116 = space();
+    			p17 = element("p");
+    			t117 = text$1("We can also used these classifications to reveal how actions are distributed on a more focused action type spectrum between ");
+    			em11 = element("em");
+    			em11.textContent = "more abstract to more concrete";
+    			t119 = text$1(" using this switch below.");
     			t120 = space();
-    			p19 = element("p");
-    			t121 = text$1("We can also used these classifications to reveal how actions are distributed on a more focused action type spectrum between ");
-    			em8 = element("em");
-    			em8.textContent = "more abstract to more concrete";
-    			t123 = text$1(" using this switch below.");
-    			t124 = space();
     			create_component(switch_1.$$.fragment);
-    			t125 = space();
-    			div29 = element("div");
-    			div28 = element("div");
-    			hr6 = element("hr");
-    			t126 = space();
-    			h26 = element("h2");
-    			h26.textContent = "Actions in focus areas";
-    			t128 = space();
-    			p20 = element("p");
+    			t121 = space();
+    			div26 = element("div");
+    			div25 = element("div");
+    			hr5 = element("hr");
+    			t122 = space();
+    			h25 = element("h2");
+    			h25.textContent = "Adaptation focus areas";
+    			t124 = space();
+    			p18 = element("p");
     			strong7 = element("strong");
     			strong7.textContent = "Five focus areas";
-    			t130 = text$1(" have been identified for the Hepburn Shire from a series of studies and research of climate risks in the broader Grampians region. These  areas are another useful lens for assessing how well distributed our adapatation actions are across ");
+    			t126 = text$1(" have were identified through a ");
+    			a0 = element("a");
+    			a0.textContent = "climate adaptation situational analysis study";
+    			t128 = text$1(" for broader ");
+    			a1 = element("a");
+    			a1.textContent = "Grampians region";
+    			t130 = text$1(". These areas are another useful lens for assessing how well distributed our adaptation actions are across ");
     			strong8 = element("strong");
     			strong8.textContent = "areas that matter to Hepburn";
     			t132 = text$1(".");
     			t133 = space();
-    			p21 = element("p");
-    			t134 = text$1("Now of course, many actions address multiple focus areas - so we'll another way to show which actions gravitate to a given focus area. To do this, ");
+    			p19 = element("p");
+    			t134 = text$1("For Hepburn, we've added a sixth important focus area of ");
     			strong9 = element("strong");
-    			strong9.textContent = "you can tap on any of the focus area names to see which actions relate to that area.";
-    			t136 = space();
-    			div33 = element("div");
-    			div30 = element("div");
-    			hr7 = element("hr");
+    			strong9.textContent = "healing country";
+    			t136 = text$1(" to highlight the importance of actions that embrace the views and practices of Traditional Owners' to manage climate risk.");
     			t137 = space();
-    			h27 = element("h2");
-    			h27.textContent = "Key adaptation criteria";
-    			t139 = space();
-    			div31 = element("div");
-    			p22 = element("p");
-    			p22.textContent = "We've looked at different ways to classify and cluster actions that hopefully provides some insight into how they collectivley respond to our adapatation challenge. Now we're going to look at ways of evaluating and prioritising these actions.";
-    			t141 = space();
-    			p23 = element("p");
-    			t142 = text$1("We start by answering three simple questions of each action that are aligned to key ");
+    			p20 = element("p");
+    			t138 = text$1("Now of course, many actions address multiple focus areas - so we'll another way to show which actions gravitate to a given focus area. To do this, ");
     			strong10 = element("strong");
-    			strong10.textContent = "adapatation criteria";
-    			t144 = text$1(". These are questions that can be answered with a(n emapthic) \"yes\", or a \"no\" or \"unsure\". And they simply consider whether an action is ");
+    			strong10.textContent = "you can tap on any of the focus area names to see which actions relate to that area.";
+    			t140 = space();
+    			div30 = element("div");
+    			div27 = element("div");
+    			hr6 = element("hr");
+    			t141 = space();
+    			h26 = element("h2");
+    			h26.textContent = "Key adaptation criteria";
+    			t143 = space();
+    			div28 = element("div");
+    			p21 = element("p");
+    			p21.textContent = "We've looked at different ways to classify and cluster actions that hopefully provides some insight into how they collectively respond to our adaptation challenge. Now we're going to look at ways of evaluating and prioritising these actions.";
+    			t145 = space();
+    			p22 = element("p");
+    			t146 = text$1("We start by answering three simple questions of each action that are aligned to key ");
     			strong11 = element("strong");
-    			strong11.textContent = "robust";
-    			t146 = text$1(", ");
+    			strong11.textContent = "adaptation criteria";
+    			t148 = text$1(". These are questions that can be answered with a(n emphatic) \"yes\" or \"no\", or \"unsure\". These questions simply consider whether an action is ");
     			strong12 = element("strong");
-    			strong12.textContent = "flexible";
-    			t148 = text$1(" and/or ");
+    			strong12.textContent = "robust";
+    			t150 = text$1(", ");
     			strong13 = element("strong");
-    			strong13.textContent = "viable";
-    			t150 = text$1(".");
-    			t151 = space();
-    			div32 = element("div");
-    			p24 = element("p");
-    			t152 = text$1("Actions that meet all criteria are automatically considered as ");
+    			strong13.textContent = "flexible";
+    			t152 = text$1(" and/or ");
     			strong14 = element("strong");
-    			strong14.textContent = "no regrets actions";
-    			t154 = text$1(": there's is no reason to not do these actions, so we should implement and support them!");
+    			strong14.textContent = "viable";
+    			t154 = text$1(".");
     			t155 = space();
-    			p25 = element("p");
-    			p25.textContent = "The actions that aren't immediately screened (by these questions) to being no regrets, are the one's that we look at more closely...";
-    			t157 = space();
-    			div37 = element("div");
+    			div29 = element("div");
+    			p23 = element("p");
+    			t156 = text$1("Actions that meet all criteria are automatically classed as ");
+    			strong15 = element("strong");
+    			strong15.textContent = "no regrets actions";
+    			t158 = text$1(": there's no reason to not do these actions, so we should implement and support them!");
+    			t159 = space();
+    			p24 = element("p");
+    			t160 = text$1("Actions that answer \"no\" to ");
+    			em12 = element("em");
+    			em12.textContent = "any of the three criteria";
+    			t162 = text$1(" are considered to have limited adaptation benefit, or may lead to maladaptation. These actions are de-prioritised and essentially discarded from consideration. Next we'll look at How we might go further and prioritise these actions.");
+    			t163 = space();
     			div34 = element("div");
-    			hr8 = element("hr");
-    			t158 = space();
-    			h28 = element("h2");
-    			h28.textContent = "rating actions for climate change adaptation";
-    			t160 = space();
-    			p26 = element("p");
-    			p26.textContent = "We've separated our actions into two groups: those that are no regrets actions, and those that need a bit more consideration.";
-    			t162 = space();
-    			div35 = element("div");
-    			p27 = element("p");
-    			p27.textContent = "We can use our adaptation screening criteria further by creating tiers for those actions that met two, one or none of the criteria. Again, this is a imperfect way of stratifying actions but is relateively logical and robust: actions that meeti more key adapation criteria tend to float to the top.";
+    			div31 = element("div");
+    			hr7 = element("hr");
     			t164 = space();
-    			div36 = element("div");
+    			h27 = element("h2");
+    			h27.textContent = "Prioritising adaptation actions";
+    			t166 = space();
+    			p25 = element("p");
+    			p25.textContent = "We've separated our actions into three groups based on key adaptation criteria. So what next?";
+    			t168 = space();
+    			div32 = element("div");
+    			p26 = element("p");
+    			p26.textContent = "We can use our adaptation criteria further to create priority tiers for those actions that met two, one or none of the criteria. This is a imperfect way of stratifying actions but is relatively logical and robust: actions that expected to meet more key adaptation criteria float to the top.";
+    			t170 = space();
+    			div33 = element("div");
+    			p27 = element("p");
+    			t171 = text$1("Next, we'll differentiate actions by rating how effective they're expected to be at responding to climate hazards. We've rated each action on the (expected) efficacy of their response to each hazard that it addresses. This is a subjective (1 to 5) rating that accounts for the size and scope of the action: so it takes into consideration how ambitious the action is, and how much it might achieve against the hazards it addresses. We use this process to differentiate actions ");
+    			em13 = element("em");
+    			em13.textContent = "within their priority tiers.";
+    			t173 = space();
     			p28 = element("p");
-    			t165 = text$1("The last way we'll evaluate these action is by rating how effective they are at respondin to the climate hazards. We know that every action repond to at least one climate hazard, and so we've rated each action on the (expected) efficacy of their response to each cliamte hazard (and its associated climate events). This is a subjective 1 to 5 rating that accounts for the size and scope of the action, and so does take into consider how ambitious the action is, and how much it might achive. So to reiterate, these are subjective ratings that help us differentiate actions ");
-    			em9 = element("em");
-    			em9.textContent = "within thier tier.";
-    			t167 = space();
+    			p28.textContent = "What we're left with is a loosely prioritised a view of our adaptation actions!";
+    			t175 = space();
+    			div36 = element("div");
+    			div35 = element("div");
+    			hr8 = element("hr");
+    			t176 = space();
+    			h28 = element("h2");
+    			h28.textContent = "Beyond the adaptation lens";
+    			t178 = space();
     			p29 = element("p");
-    			p29.textContent = "***To add: screening for uintended consequnces and the role co-benefits in deciding if an action should be done. This might also link to other paradignms and movements (e.g. circular economy, doughnut economics, environmental economic, resilience etc.)";
-    			t169 = space();
+    			p29.textContent = "We've taken a look at our adaptation actions through various lenses and perspectives, and we've even tried to  assess and rank our actions....";
+    			t180 = space();
     			div39 = element("div");
     			div38 = element("div");
-    			hr9 = element("hr");
-    			t170 = space();
-    			h29 = element("h2");
-    			h29.textContent = "What next?";
-    			t172 = space();
-    			p30 = element("p");
-    			p30.textContent = "Placeholder outro section that would reinforce to the audience that the response to climate change adapation needs to be taken as a collection of actions, working together; and the importance of always revisiting this portfolio perspective of the actions, against the climate risks. This should raise questions about the usefulness of being too dogmatic around prioritisation; and might be.";
-    			t174 = space();
-    			p31 = element("p");
-    			p31.textContent = "Coordination is critical however understanding this perspective should hopefully help everyone understand how they can support, contribuute to, and develop new actions that help the community adapt to climate change. Making link to taking a deeper dive into the actions would be good (to to logically lead into the postcard section)";
-    			t176 = space();
-    			div42 = element("div");
-    			div41 = element("div");
     			create_component(actionvis.$$.fragment);
-    			attr_dev(div0, "class", "hero-logo__wrapper svelte-7ubueo");
-    			add_location(div0, file$1, 136, 12, 6244);
-    			attr_dev(div1, "class", "hero-logo svelte-7ubueo");
-    			add_location(div1, file$1, 135, 8, 6208);
-    			attr_dev(span0, "class", "title--mute svelte-7ubueo");
-    			add_location(span0, file$1, 139, 12, 6358);
-    			add_location(br0, file$1, 139, 60, 6406);
-    			add_location(br1, file$1, 140, 22, 6434);
-    			attr_dev(span1, "class", "title--highlight svelte-7ubueo");
-    			add_location(span1, file$1, 141, 12, 6452);
-    			attr_dev(h1, "class", "hero-content__title svelte-7ubueo");
-    			add_location(h1, file$1, 138, 8, 6313);
-    			add_location(p0, file$1, 144, 12, 6567);
-    			attr_dev(div2, "class", "hero-content__text svelte-7ubueo");
-    			add_location(div2, file$1, 143, 8, 6522);
-    			attr_dev(li0, "class", "select__item svelte-7ubueo");
+    			attr_dev(div0, "class", "hero-logo__wrapper svelte-2xkn88");
+    			add_location(div0, file$1, 133, 12, 6164);
+    			attr_dev(div1, "class", "hero-logo svelte-2xkn88");
+    			add_location(div1, file$1, 132, 8, 6128);
+    			attr_dev(span0, "class", "title--mute svelte-2xkn88");
+    			add_location(span0, file$1, 136, 12, 6278);
+    			add_location(br0, file$1, 136, 60, 6326);
+    			add_location(br1, file$1, 137, 22, 6354);
+    			attr_dev(span1, "class", "title--highlight svelte-2xkn88");
+    			add_location(span1, file$1, 138, 12, 6372);
+    			attr_dev(h1, "class", "hero-content__title svelte-2xkn88");
+    			add_location(h1, file$1, 135, 8, 6233);
+    			add_location(p0, file$1, 141, 12, 6487);
+    			attr_dev(div2, "class", "hero-content__text svelte-2xkn88");
+    			add_location(div2, file$1, 140, 8, 6442);
+    			attr_dev(li0, "class", "select__item svelte-2xkn88");
     			attr_dev(li0, "actname", "intro");
-    			add_location(li0, file$1, 149, 16, 7058);
-    			attr_dev(li1, "class", "select__item svelte-7ubueo");
+    			add_location(li0, file$1, 146, 16, 6971);
+    			attr_dev(li1, "class", "select__item svelte-2xkn88");
     			attr_dev(li1, "actname", "hazards");
-    			add_location(li1, file$1, 150, 16, 7157);
-    			attr_dev(li2, "class", "select__item svelte-7ubueo");
+    			add_location(li1, file$1, 147, 16, 7070);
+    			attr_dev(li2, "class", "select__item svelte-2xkn88");
     			attr_dev(li2, "actname", "approach");
-    			add_location(li2, file$1, 151, 16, 7253);
-    			attr_dev(li3, "class", "select__item svelte-7ubueo");
+    			add_location(li2, file$1, 148, 16, 7166);
+    			attr_dev(li3, "class", "select__item svelte-2xkn88");
     			attr_dev(li3, "actname", "scale");
-    			add_location(li3, file$1, 152, 16, 7351);
-    			attr_dev(li4, "class", "select__item svelte-7ubueo");
-    			attr_dev(li4, "actname", "other");
-    			add_location(li4, file$1, 153, 16, 7443);
-    			attr_dev(li5, "class", "select__item svelte-7ubueo");
-    			attr_dev(li5, "actname", "type");
-    			add_location(li5, file$1, 154, 16, 7535);
-    			attr_dev(li6, "class", "select__item svelte-7ubueo");
-    			attr_dev(li6, "actname", "focusArea");
-    			add_location(li6, file$1, 155, 16, 7625);
-    			attr_dev(li7, "class", "select__item svelte-7ubueo");
-    			attr_dev(li7, "actname", "screening");
-    			add_location(li7, file$1, 156, 16, 7726);
-    			attr_dev(li8, "class", "select__item svelte-7ubueo");
-    			attr_dev(li8, "actname", "rating");
-    			add_location(li8, file$1, 157, 16, 7836);
-    			attr_dev(li9, "class", "select__item svelte-7ubueo");
-    			attr_dev(li9, "actname", "outro");
-    			add_location(li9, file$1, 158, 16, 7931);
-    			add_location(ul0, file$1, 148, 12, 7037);
-    			attr_dev(div3, "class", "select svelte-7ubueo");
-    			add_location(div3, file$1, 147, 8, 7003);
-    			attr_dev(div4, "class", "hero-content svelte-7ubueo");
-    			add_location(div4, file$1, 133, 4, 6138);
+    			add_location(li3, file$1, 149, 16, 7264);
+    			attr_dev(li4, "class", "select__item svelte-2xkn88");
+    			attr_dev(li4, "actname", "type");
+    			add_location(li4, file$1, 150, 16, 7356);
+    			attr_dev(li5, "class", "select__item svelte-2xkn88");
+    			attr_dev(li5, "actname", "focusArea");
+    			add_location(li5, file$1, 151, 16, 7446);
+    			attr_dev(li6, "class", "select__item svelte-2xkn88");
+    			attr_dev(li6, "actname", "screening");
+    			add_location(li6, file$1, 152, 16, 7547);
+    			attr_dev(li7, "class", "select__item svelte-2xkn88");
+    			attr_dev(li7, "actname", "rating");
+    			add_location(li7, file$1, 153, 16, 7657);
+    			attr_dev(li8, "class", "select__item svelte-2xkn88");
+    			attr_dev(li8, "actname", "outro");
+    			add_location(li8, file$1, 154, 16, 7752);
+    			add_location(ul0, file$1, 145, 12, 6950);
+    			attr_dev(div3, "class", "select svelte-2xkn88");
+    			add_location(div3, file$1, 144, 8, 6916);
+    			attr_dev(div4, "class", "hero-content svelte-2xkn88");
+    			add_location(div4, file$1, 130, 4, 6058);
     			attr_dev(div5, "class", "hero-wrapper");
-    			add_location(div5, file$1, 132, 0, 6105);
-    			attr_dev(hr0, "class", "svelte-7ubueo");
-    			add_location(hr0, file$1, 170, 16, 8312);
-    			attr_dev(h20, "class", "svelte-7ubueo");
-    			add_location(h20, file$1, 171, 16, 8333);
-    			html_tag.a = t32;
-    			attr_dev(span2, "class", "action-dot svelte-7ubueo");
-    			add_location(span2, file$1, 172, 189, 8566);
-    			add_location(p1, file$1, 172, 16, 8393);
+    			add_location(div5, file$1, 129, 0, 6025);
+    			attr_dev(hr0, "class", "svelte-2xkn88");
+    			add_location(hr0, file$1, 166, 16, 8134);
+    			attr_dev(h20, "class", "svelte-2xkn88");
+    			add_location(h20, file$1, 167, 16, 8155);
+    			html_tag.a = t30;
+    			attr_dev(span2, "class", "action-dot svelte-2xkn88");
+    			add_location(span2, file$1, 168, 189, 8388);
+    			add_location(p1, file$1, 168, 16, 8215);
     			attr_dev(div6, "scene", "0");
     			attr_dev(div6, "force", "cluster-center");
-    			add_location(div6, file$1, 169, 12, 8257);
-    			html_tag_1.a = t37;
-    			add_location(em0, file$1, 175, 89, 8779);
-    			add_location(p2, file$1, 175, 16, 8706);
+    			add_location(div6, file$1, 165, 12, 8079);
+    			html_tag_1.a = t35;
+    			add_location(em0, file$1, 171, 89, 8601);
+    			add_location(p2, file$1, 171, 16, 8528);
     			attr_dev(div7, "scene", "1");
     			attr_dev(div7, "force", "ring-outer");
-    			add_location(div7, file$1, 174, 12, 8655);
-    			add_location(em1, file$1, 178, 67, 9144);
-    			add_location(p3, file$1, 178, 16, 9093);
-    			add_location(p4, file$1, 180, 16, 9329);
+    			add_location(div7, file$1, 170, 12, 8477);
+    			add_location(em1, file$1, 174, 67, 8967);
+    			add_location(em2, file$1, 174, 161, 9061);
+    			add_location(em3, file$1, 174, 209, 9109);
+    			add_location(p3, file$1, 174, 16, 8916);
+    			add_location(p4, file$1, 176, 16, 9169);
     			attr_dev(div8, "scene", "2");
     			attr_dev(div8, "act", "intro");
     			attr_dev(div8, "force", "arrow-down");
-    			add_location(div8, file$1, 177, 12, 9028);
+    			add_location(div8, file$1, 173, 12, 8851);
     			attr_dev(div9, "act", "intro");
-    			attr_dev(div9, "class", "act-narrative svelte-7ubueo");
-    			add_location(div9, file$1, 168, 8, 8201);
-    			attr_dev(hr1, "class", "svelte-7ubueo");
-    			add_location(hr1, file$1, 187, 16, 9945);
-    			attr_dev(h21, "class", "svelte-7ubueo");
-    			add_location(h21, file$1, 188, 16, 9966);
-    			add_location(strong0, file$1, 189, 29, 10031);
-    			add_location(p5, file$1, 189, 16, 10018);
+    			attr_dev(div9, "class", "act-narrative svelte-2xkn88");
+    			add_location(div9, file$1, 164, 8, 8023);
+    			attr_dev(hr1, "class", "svelte-2xkn88");
+    			add_location(hr1, file$1, 183, 16, 9769);
+    			attr_dev(h21, "class", "svelte-2xkn88");
+    			add_location(h21, file$1, 184, 16, 9790);
+    			add_location(strong0, file$1, 185, 29, 9855);
+    			add_location(p5, file$1, 185, 16, 9842);
     			attr_dev(div10, "act", "hazards");
     			attr_dev(div10, "scene", "0");
     			attr_dev(div10, "force", "cluster-center");
-    			add_location(div10, file$1, 186, 12, 9875);
-    			add_location(strong1, file$1, 193, 267, 10611);
-    			add_location(p6, file$1, 193, 16, 10360);
+    			add_location(div10, file$1, 182, 12, 9699);
+    			add_location(em4, file$1, 189, 93, 10261);
+    			add_location(strong1, file$1, 189, 268, 10436);
+    			add_location(p6, file$1, 189, 16, 10184);
     			attr_dev(div11, "scene", "1");
     			attr_dev(div11, "force", "cluster-hazard");
     			attr_dev(div11, "nodebase", "true");
     			attr_dev(div11, "nodearcs", "false");
     			attr_dev(div11, "nodeshapes", "false");
     			attr_dev(div11, "nodeshadow", "false");
-    			add_location(div11, file$1, 192, 12, 10228);
-    			attr_dev(span3, "class", "text-arcs svelte-7ubueo");
-    			add_location(span3, file$1, 197, 79, 10933);
-    			add_location(p7, file$1, 197, 16, 10870);
+    			add_location(div11, file$1, 188, 12, 10052);
+    			attr_dev(span3, "class", "text-arcs svelte-2xkn88");
+    			add_location(span3, file$1, 193, 79, 10753);
+    			add_location(p7, file$1, 193, 16, 10690);
     			attr_dev(div12, "act", "hazards");
     			attr_dev(div12, "scene", "2");
     			attr_dev(div12, "force", "cluster-center");
@@ -49588,34 +50202,34 @@ var app = (function (exports) {
     			attr_dev(div12, "nodearcs", "true");
     			attr_dev(div12, "nodeshapes", "false");
     			attr_dev(div12, "nodeshadow", "false");
-    			add_location(div12, file$1, 196, 12, 10724);
+    			add_location(div12, file$1, 192, 12, 10544);
     			attr_dev(div13, "act", "hazards");
-    			attr_dev(div13, "class", "act-narrative svelte-7ubueo");
+    			attr_dev(div13, "class", "act-narrative svelte-2xkn88");
     			attr_dev(div13, "legendhazards", "false");
-    			add_location(div13, file$1, 185, 8, 9792);
-    			attr_dev(hr2, "class", "svelte-7ubueo");
-    			add_location(hr2, file$1, 204, 16, 11296);
-    			attr_dev(h22, "class", "svelte-7ubueo");
-    			add_location(h22, file$1, 205, 16, 11317);
-    			add_location(p8, file$1, 206, 16, 11375);
-    			add_location(strong2, file$1, 208, 32, 11509);
-    			add_location(li10, file$1, 208, 20, 11497);
-    			add_location(strong3, file$1, 209, 32, 11580);
-    			add_location(li11, file$1, 209, 20, 11568);
-    			add_location(ul1, file$1, 207, 16, 11472);
-    			add_location(p9, file$1, 211, 16, 11660);
+    			add_location(div13, file$1, 181, 8, 9616);
+    			attr_dev(hr2, "class", "svelte-2xkn88");
+    			add_location(hr2, file$1, 200, 16, 11117);
+    			attr_dev(h22, "class", "svelte-2xkn88");
+    			add_location(h22, file$1, 201, 16, 11138);
+    			add_location(p8, file$1, 202, 16, 11185);
+    			add_location(strong2, file$1, 204, 32, 11299);
+    			add_location(li9, file$1, 204, 20, 11287);
+    			add_location(strong3, file$1, 205, 32, 11370);
+    			add_location(li10, file$1, 205, 20, 11358);
+    			add_location(ul1, file$1, 203, 16, 11262);
+    			add_location(p9, file$1, 207, 16, 11450);
     			attr_dev(div14, "scene", "0");
     			attr_dev(div14, "force", "diagonal-up");
-    			add_location(div14, file$1, 203, 12, 11242);
-    			add_location(p10, file$1, 215, 16, 12096);
+    			add_location(div14, file$1, 199, 12, 11063);
+    			add_location(p10, file$1, 211, 16, 11865);
     			attr_dev(div15, "scene", "1");
     			attr_dev(div15, "force", "cluster-approach");
     			attr_dev(div15, "nodebase", "false");
     			attr_dev(div15, "nodearcs", "true");
     			attr_dev(div15, "nodeshapes", "false");
     			attr_dev(div15, "nodeshadow", "false");
-    			add_location(div15, file$1, 214, 12, 11961);
-    			add_location(p11, file$1, 219, 16, 12595);
+    			add_location(div15, file$1, 210, 12, 11730);
+    			add_location(p11, file$1, 215, 16, 12361);
     			attr_dev(div16, "act", "approach");
     			attr_dev(div16, "scene", "2");
     			attr_dev(div16, "force", "cluster-approach-wide");
@@ -49623,22 +50237,22 @@ var app = (function (exports) {
     			attr_dev(div16, "nodearcs", "true");
     			attr_dev(div16, "nodeshapes", "true");
     			attr_dev(div16, "nodeshadow", "false");
-    			add_location(div16, file$1, 218, 12, 12439);
+    			add_location(div16, file$1, 214, 12, 12205);
     			attr_dev(div17, "act", "approach");
-    			attr_dev(div17, "class", "act-narrative svelte-7ubueo");
+    			attr_dev(div17, "class", "act-narrative svelte-2xkn88");
     			attr_dev(div17, "legendhazards", "0.5");
     			attr_dev(div17, "legendapproach", "false");
-    			add_location(div17, file$1, 202, 8, 11138);
-    			attr_dev(hr3, "class", "svelte-7ubueo");
-    			add_location(hr3, file$1, 227, 16, 13049);
-    			attr_dev(h23, "class", "svelte-7ubueo");
-    			add_location(h23, file$1, 228, 16, 13070);
-    			add_location(strong4, file$1, 229, 84, 13177);
-    			add_location(em2, file$1, 229, 173, 13266);
-    			add_location(em3, file$1, 229, 257, 13350);
-    			add_location(em4, file$1, 229, 313, 13406);
-    			add_location(em5, file$1, 229, 343, 13436);
-    			add_location(p12, file$1, 229, 16, 13109);
+    			add_location(div17, file$1, 198, 8, 10959);
+    			attr_dev(hr3, "class", "svelte-2xkn88");
+    			add_location(hr3, file$1, 222, 16, 12836);
+    			attr_dev(h23, "class", "svelte-2xkn88");
+    			add_location(h23, file$1, 223, 16, 12857);
+    			add_location(strong4, file$1, 224, 82, 12962);
+    			add_location(em5, file$1, 224, 171, 13051);
+    			add_location(em6, file$1, 224, 256, 13136);
+    			add_location(em7, file$1, 224, 333, 13213);
+    			add_location(em8, file$1, 224, 363, 13243);
+    			add_location(p12, file$1, 224, 16, 12896);
     			attr_dev(div18, "scene", "0");
     			attr_dev(div18, "force", "cluster-scale");
     			attr_dev(div18, "nodebase", "false");
@@ -49646,9 +50260,9 @@ var app = (function (exports) {
     			attr_dev(div18, "nodeshapes", "true");
     			attr_dev(div18, "nodeshadow", "false");
     			attr_dev(div18, "nodesymbol", "false");
-    			add_location(div18, file$1, 226, 12, 12898);
-    			add_location(strong5, file$1, 233, 154, 13802);
-    			add_location(p13, file$1, 233, 16, 13664);
+    			add_location(div18, file$1, 221, 12, 12685);
+    			add_location(strong5, file$1, 228, 160, 13615);
+    			add_location(p13, file$1, 228, 16, 13471);
     			attr_dev(div19, "scene", "1");
     			attr_dev(div19, "force", "cluster-scale");
     			attr_dev(div19, "nodebase", "false");
@@ -49656,140 +50270,129 @@ var app = (function (exports) {
     			attr_dev(div19, "nodeshapes", "true");
     			attr_dev(div19, "nodeshadow", "true");
     			attr_dev(div19, "nodesymbol", "false");
-    			add_location(div19, file$1, 232, 12, 13513);
+    			add_location(div19, file$1, 227, 12, 13320);
     			attr_dev(div20, "act", "scale");
-    			attr_dev(div20, "class", "act-narrative svelte-7ubueo");
+    			attr_dev(div20, "class", "act-narrative svelte-2xkn88");
     			attr_dev(div20, "legendhazards", "0.35");
     			attr_dev(div20, "legendapproach", "0.65");
-    			add_location(div20, file$1, 225, 8, 12797);
-    			attr_dev(hr4, "class", "svelte-7ubueo");
-    			add_location(hr4, file$1, 241, 16, 14305);
-    			attr_dev(h24, "class", "svelte-7ubueo");
-    			add_location(h24, file$1, 242, 16, 14326);
-    			add_location(p14, file$1, 243, 16, 14368);
+    			attr_dev(div20, "legendscale", "false");
+    			add_location(div20, file$1, 220, 8, 12562);
+    			attr_dev(hr4, "class", "svelte-2xkn88");
+    			add_location(hr4, file$1, 248, 16, 15252);
+    			attr_dev(h24, "class", "svelte-2xkn88");
+    			add_location(h24, file$1, 249, 16, 15273);
     			attr_dev(div21, "scene", "0");
-    			attr_dev(div21, "force", "cluster-center");
-    			add_location(div21, file$1, 240, 12, 14250);
-    			add_location(p15, file$1, 247, 16, 14827);
+    			attr_dev(div21, "force", "right-line");
+    			add_location(div21, file$1, 247, 12, 15198);
+    			add_location(p14, file$1, 252, 16, 15405);
+    			add_location(strong6, file$1, 253, 63, 15673);
+    			add_location(em9, file$1, 253, 145, 15755);
+    			add_location(em10, file$1, 253, 193, 15803);
+    			add_location(p15, file$1, 253, 16, 15626);
     			attr_dev(div22, "scene", "1");
-    			attr_dev(div22, "force", "cluster-center");
-    			attr_dev(div22, "nodebase", "false");
-    			attr_dev(div22, "nodearcs", "true");
-    			attr_dev(div22, "nodeshapes", "true");
-    			attr_dev(div22, "nodeshadow", "true");
-    			attr_dev(div22, "nodesymbol", "true");
-    			add_location(div22, file$1, 246, 12, 14676);
-    			attr_dev(div23, "act", "other");
-    			attr_dev(div23, "class", "act-narrative svelte-7ubueo");
-    			attr_dev(div23, "legendhazards", "0.25");
-    			attr_dev(div23, "legendapproach", "0.5");
-    			attr_dev(div23, "legendscale", "0.75");
-    			add_location(div23, file$1, 239, 8, 14131);
-    			attr_dev(hr5, "class", "svelte-7ubueo");
-    			add_location(hr5, file$1, 254, 16, 15368);
-    			attr_dev(h25, "class", "svelte-7ubueo");
-    			add_location(h25, file$1, 255, 16, 15389);
-    			attr_dev(div24, "scene", "0");
-    			attr_dev(div24, "force", "right-line");
-    			add_location(div24, file$1, 253, 12, 15314);
-    			add_location(p16, file$1, 258, 16, 15521);
-    			add_location(strong6, file$1, 259, 63, 15788);
-    			add_location(em6, file$1, 259, 145, 15870);
-    			add_location(em7, file$1, 259, 193, 15918);
-    			add_location(p17, file$1, 259, 16, 15741);
-    			attr_dev(div25, "scene", "1");
-    			attr_dev(div25, "force", "cluster-concrete-abstract-right");
-    			add_location(div25, file$1, 257, 12, 15446);
-    			add_location(p18, file$1, 262, 16, 16052);
-    			add_location(em8, file$1, 264, 143, 16395);
-    			add_location(p19, file$1, 264, 16, 16268);
-    			attr_dev(div26, "scene", "2");
-    			attr_dev(div26, "force", "cluster-type");
-    			add_location(div26, file$1, 261, 12, 15998);
-    			attr_dev(div27, "act", "type");
-    			attr_dev(div27, "class", "act-narrative svelte-7ubueo");
-    			add_location(div27, file$1, 252, 8, 15258);
-    			attr_dev(hr6, "class", "svelte-7ubueo");
-    			add_location(hr6, file$1, 272, 16, 16712);
-    			attr_dev(h26, "class", "svelte-7ubueo");
-    			add_location(h26, file$1, 273, 16, 16733);
-    			add_location(strong7, file$1, 274, 19, 16784);
-    			add_location(strong8, file$1, 274, 291, 17056);
-    			add_location(p20, file$1, 274, 16, 16781);
-    			add_location(strong9, file$1, 275, 166, 17274);
-    			add_location(p21, file$1, 275, 16, 17124);
-    			attr_dev(div28, "scene", "0");
-    			attr_dev(div28, "force", "ring-focusArea");
-    			add_location(div28, file$1, 271, 12, 16656);
-    			attr_dev(div29, "act", "focusArea");
-    			attr_dev(div29, "class", "act-narrative svelte-7ubueo");
-    			add_location(div29, file$1, 270, 8, 16595);
-    			attr_dev(hr7, "class", "svelte-7ubueo");
-    			add_location(hr7, file$1, 281, 16, 17542);
-    			attr_dev(h27, "class", "svelte-7ubueo");
-    			add_location(h27, file$1, 282, 16, 17563);
-    			attr_dev(div30, "scene", "0");
-    			attr_dev(div30, "force", "cluster-screening");
-    			add_location(div30, file$1, 280, 12, 17483);
-    			add_location(p22, file$1, 285, 16, 17685);
-    			add_location(strong10, file$1, 287, 103, 18055);
-    			add_location(strong11, file$1, 287, 278, 18230);
-    			add_location(strong12, file$1, 287, 303, 18255);
-    			add_location(strong13, file$1, 287, 336, 18288);
-    			add_location(p23, file$1, 287, 16, 17968);
-    			attr_dev(div31, "scene", "1");
-    			attr_dev(div31, "force", "cluster-screening");
-    			add_location(div31, file$1, 284, 12, 17627);
-    			add_location(strong14, file$1, 290, 82, 18472);
-    			add_location(p24, file$1, 290, 16, 18406);
-    			add_location(p25, file$1, 291, 16, 18616);
-    			attr_dev(div32, "scene", "2");
-    			attr_dev(div32, "force", "cluster-screening");
-    			add_location(div32, file$1, 289, 12, 18348);
-    			attr_dev(div33, "act", "screening");
-    			attr_dev(div33, "class", "act-narrative svelte-7ubueo");
-    			add_location(div33, file$1, 279, 8, 17423);
-    			attr_dev(hr8, "class", "svelte-7ubueo");
-    			add_location(hr8, file$1, 297, 16, 18928);
-    			attr_dev(h28, "class", "svelte-7ubueo");
-    			add_location(h28, file$1, 298, 16, 18949);
-    			add_location(p26, file$1, 299, 16, 19019);
-    			attr_dev(div34, "scene", "0");
-    			attr_dev(div34, "force", "cluster-noregets-vs-others");
-    			add_location(div34, file$1, 296, 12, 18861);
-    			add_location(p27, file$1, 303, 16, 19268);
-    			attr_dev(div35, "scene", "1");
-    			attr_dev(div35, "force", "cluster-adaptation-criteria");
-    			add_location(div35, file$1, 302, 12, 19200);
-    			add_location(em9, file$1, 307, 592, 20252);
-    			add_location(p28, file$1, 307, 16, 19676);
-    			add_location(p29, file$1, 309, 16, 20321);
-    			attr_dev(div36, "scene", "2");
-    			attr_dev(div36, "force", "cluster-rating");
-    			add_location(div36, file$1, 306, 12, 19621);
-    			attr_dev(div37, "act", "rating");
-    			attr_dev(div37, "class", "act-narrative svelte-7ubueo");
-    			add_location(div37, file$1, 295, 8, 18804);
-    			attr_dev(hr9, "class", "svelte-7ubueo");
-    			add_location(hr9, file$1, 316, 16, 20746);
-    			attr_dev(h29, "class", "svelte-7ubueo");
-    			add_location(h29, file$1, 317, 16, 20767);
-    			add_location(p30, file$1, 318, 16, 20803);
-    			add_location(p31, file$1, 319, 16, 21217);
-    			attr_dev(div38, "scene", "0");
-    			attr_dev(div38, "force", "ring-mid");
-    			add_location(div38, file$1, 315, 12, 20697);
-    			attr_dev(div39, "act", "outro");
-    			attr_dev(div39, "class", "act-narrative svelte-7ubueo");
-    			add_location(div39, file$1, 314, 8, 20641);
-    			attr_dev(div40, "class", "narrative-wrapper svelte-7ubueo");
-    			add_location(div40, file$1, 167, 4, 8159);
-    			attr_dev(div41, "class", "action-vis-wrapper svelte-7ubueo");
-    			add_location(div41, file$1, 329, 8, 21729);
-    			attr_dev(div42, "class", "vis-wrapper svelte-7ubueo");
-    			add_location(div42, file$1, 328, 4, 21693);
-    			attr_dev(div43, "class", "content-wrapper svelte-7ubueo");
-    			add_location(div43, file$1, 165, 0, 8088);
+    			attr_dev(div22, "force", "cluster-concrete-abstract-right");
+    			add_location(div22, file$1, 251, 12, 15330);
+    			add_location(p16, file$1, 256, 16, 15937);
+    			add_location(em11, file$1, 258, 143, 16280);
+    			add_location(p17, file$1, 258, 16, 16153);
+    			attr_dev(div23, "scene", "2");
+    			attr_dev(div23, "force", "cluster-type");
+    			add_location(div23, file$1, 255, 12, 15883);
+    			attr_dev(div24, "act", "type");
+    			attr_dev(div24, "class", "act-narrative svelte-2xkn88");
+    			attr_dev(div24, "legendhazards", "0.25");
+    			attr_dev(div24, "legendapproach", "0.5");
+    			attr_dev(div24, "legendscale", "0.75");
+    			add_location(div24, file$1, 246, 8, 15079);
+    			attr_dev(hr5, "class", "svelte-2xkn88");
+    			add_location(hr5, file$1, 266, 16, 16597);
+    			attr_dev(h25, "class", "svelte-2xkn88");
+    			add_location(h25, file$1, 267, 16, 16618);
+    			add_location(strong7, file$1, 268, 19, 16669);
+    			attr_dev(a0, "href", "https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf");
+    			attr_dev(a0, "target", "_blank");
+    			add_location(a0, file$1, 268, 84, 16734);
+    			attr_dev(a1, "href", "https://adaptgrampians.com.au/");
+    			attr_dev(a1, "target", "_blank");
+    			add_location(a1, file$1, 268, 305, 16955);
+    			add_location(strong8, file$1, 268, 491, 17141);
+    			add_location(p18, file$1, 268, 16, 16666);
+    			add_location(strong9, file$1, 269, 76, 17269);
+    			add_location(p19, file$1, 269, 16, 17209);
+    			add_location(strong10, file$1, 270, 166, 17595);
+    			add_location(p20, file$1, 270, 16, 17445);
+    			attr_dev(div25, "scene", "0");
+    			attr_dev(div25, "force", "ring-focusArea");
+    			add_location(div25, file$1, 265, 12, 16541);
+    			attr_dev(div26, "act", "focusArea");
+    			attr_dev(div26, "class", "act-narrative svelte-2xkn88");
+    			add_location(div26, file$1, 264, 8, 16480);
+    			attr_dev(hr6, "class", "svelte-2xkn88");
+    			add_location(hr6, file$1, 276, 16, 17863);
+    			attr_dev(h26, "class", "svelte-2xkn88");
+    			add_location(h26, file$1, 277, 16, 17884);
+    			attr_dev(div27, "scene", "0");
+    			attr_dev(div27, "force", "cluster-screening");
+    			add_location(div27, file$1, 275, 12, 17804);
+    			add_location(p21, file$1, 280, 16, 18006);
+    			add_location(strong11, file$1, 282, 103, 18375);
+    			add_location(strong12, file$1, 282, 282, 18554);
+    			add_location(strong13, file$1, 282, 307, 18579);
+    			add_location(strong14, file$1, 282, 340, 18612);
+    			add_location(p22, file$1, 282, 16, 18288);
+    			attr_dev(div28, "scene", "1");
+    			attr_dev(div28, "force", "cluster-screening");
+    			add_location(div28, file$1, 279, 12, 17948);
+    			add_location(strong15, file$1, 285, 79, 18793);
+    			add_location(p23, file$1, 285, 16, 18730);
+    			add_location(em12, file$1, 286, 47, 18965);
+    			add_location(p24, file$1, 286, 16, 18934);
+    			attr_dev(div29, "scene", "2");
+    			attr_dev(div29, "force", "cluster-screening");
+    			add_location(div29, file$1, 284, 12, 18672);
+    			attr_dev(div30, "act", "screening");
+    			attr_dev(div30, "class", "act-narrative svelte-2xkn88");
+    			add_location(div30, file$1, 274, 8, 17744);
+    			attr_dev(hr7, "class", "svelte-2xkn88");
+    			add_location(hr7, file$1, 292, 16, 19408);
+    			attr_dev(h27, "class", "svelte-2xkn88");
+    			add_location(h27, file$1, 293, 16, 19429);
+    			add_location(p25, file$1, 294, 16, 19486);
+    			attr_dev(div31, "scene", "0");
+    			attr_dev(div31, "force", "cluster-noregets-vs-others");
+    			add_location(div31, file$1, 291, 12, 19341);
+    			add_location(p26, file$1, 298, 16, 19703);
+    			attr_dev(div32, "scene", "1");
+    			attr_dev(div32, "force", "cluster-adaptation-criteria");
+    			add_location(div32, file$1, 297, 12, 19635);
+    			add_location(em13, file$1, 302, 495, 20583);
+    			add_location(p27, file$1, 302, 16, 20104);
+    			add_location(p28, file$1, 304, 16, 20659);
+    			attr_dev(div33, "scene", "2");
+    			attr_dev(div33, "force", "cluster-rating");
+    			add_location(div33, file$1, 301, 12, 20049);
+    			attr_dev(div34, "act", "rating");
+    			attr_dev(div34, "class", "act-narrative svelte-2xkn88");
+    			add_location(div34, file$1, 290, 8, 19284);
+    			attr_dev(hr8, "class", "svelte-2xkn88");
+    			add_location(hr8, file$1, 311, 16, 20911);
+    			attr_dev(h28, "class", "svelte-2xkn88");
+    			add_location(h28, file$1, 312, 16, 20932);
+    			add_location(p29, file$1, 313, 16, 20984);
+    			attr_dev(div35, "scene", "0");
+    			attr_dev(div35, "force", "ring-mid");
+    			add_location(div35, file$1, 310, 12, 20862);
+    			attr_dev(div36, "act", "outro");
+    			attr_dev(div36, "class", "act-narrative svelte-2xkn88");
+    			add_location(div36, file$1, 309, 8, 20806);
+    			attr_dev(div37, "class", "narrative-wrapper svelte-2xkn88");
+    			add_location(div37, file$1, 163, 4, 7981);
+    			attr_dev(div38, "class", "action-vis-wrapper svelte-2xkn88");
+    			add_location(div38, file$1, 329, 8, 22467);
+    			attr_dev(div39, "class", "vis-wrapper svelte-2xkn88");
+    			add_location(div39, file$1, 328, 4, 22431);
+    			attr_dev(div40, "class", "content-wrapper svelte-2xkn88");
+    			add_location(div40, file$1, 161, 0, 7909);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49831,228 +50434,230 @@ var app = (function (exports) {
     			append_dev(ul0, li7);
     			append_dev(ul0, t23);
     			append_dev(ul0, li8);
-    			append_dev(ul0, t25);
-    			append_dev(ul0, li9);
-    			insert_dev(target, t27, anchor);
-    			insert_dev(target, div43, anchor);
-    			append_dev(div43, div40);
-    			append_dev(div40, div9);
+    			insert_dev(target, t25, anchor);
+    			insert_dev(target, div40, anchor);
+    			append_dev(div40, div37);
+    			append_dev(div37, div9);
     			append_dev(div9, div6);
     			append_dev(div6, hr0);
-    			append_dev(div6, t28);
+    			append_dev(div6, t26);
     			append_dev(div6, h20);
-    			append_dev(div6, t30);
+    			append_dev(div6, t28);
     			append_dev(div6, p1);
-    			append_dev(p1, t31);
+    			append_dev(p1, t29);
     			html_tag.m(raw0_value, p1);
-    			append_dev(p1, t32);
+    			append_dev(p1, t30);
     			append_dev(p1, span2);
-    			append_dev(p1, t34);
-    			append_dev(div9, t35);
+    			append_dev(p1, t32);
+    			append_dev(div9, t33);
     			append_dev(div9, div7);
     			append_dev(div7, p2);
-    			append_dev(p2, t36);
+    			append_dev(p2, t34);
     			html_tag_1.m(raw1_value, p2);
-    			append_dev(p2, t37);
+    			append_dev(p2, t35);
     			append_dev(p2, em0);
-    			append_dev(p2, t39);
-    			append_dev(div9, t40);
+    			append_dev(p2, t37);
+    			append_dev(div9, t38);
     			append_dev(div9, div8);
     			append_dev(div8, p3);
-    			append_dev(p3, t41);
+    			append_dev(p3, t39);
     			append_dev(p3, em1);
+    			append_dev(p3, t41);
+    			append_dev(p3, em2);
     			append_dev(p3, t43);
-    			append_dev(div8, t44);
+    			append_dev(p3, em3);
+    			append_dev(div8, t45);
     			append_dev(div8, p4);
-    			append_dev(div40, t46);
-    			append_dev(div40, div13);
+    			append_dev(div37, t47);
+    			append_dev(div37, div13);
     			append_dev(div13, div10);
     			append_dev(div10, hr1);
-    			append_dev(div10, t47);
+    			append_dev(div10, t48);
     			append_dev(div10, h21);
-    			append_dev(div10, t49);
+    			append_dev(div10, t50);
     			append_dev(div10, p5);
-    			append_dev(p5, t50);
+    			append_dev(p5, t51);
     			append_dev(p5, strong0);
-    			append_dev(p5, t52);
-    			append_dev(div13, t53);
+    			append_dev(p5, t53);
+    			append_dev(div13, t54);
     			append_dev(div13, div11);
     			append_dev(div11, p6);
-    			append_dev(p6, t54);
+    			append_dev(p6, t55);
+    			append_dev(p6, em4);
+    			append_dev(p6, t57);
     			append_dev(p6, strong1);
-    			append_dev(p6, t56);
-    			append_dev(div13, t57);
+    			append_dev(p6, t59);
+    			append_dev(div13, t60);
     			append_dev(div13, div12);
     			append_dev(div12, p7);
-    			append_dev(p7, t58);
+    			append_dev(p7, t61);
     			append_dev(p7, span3);
-    			append_dev(p7, t60);
-    			append_dev(div40, t61);
-    			append_dev(div40, div17);
+    			append_dev(p7, t63);
+    			append_dev(div37, t64);
+    			append_dev(div37, div17);
     			append_dev(div17, div14);
     			append_dev(div14, hr2);
-    			append_dev(div14, t62);
+    			append_dev(div14, t65);
     			append_dev(div14, h22);
-    			append_dev(div14, t64);
+    			append_dev(div14, t67);
     			append_dev(div14, p8);
-    			append_dev(div14, t66);
+    			append_dev(div14, t69);
     			append_dev(div14, ul1);
+    			append_dev(ul1, li9);
+    			append_dev(li9, t70);
+    			append_dev(li9, strong2);
+    			append_dev(li9, t72);
+    			append_dev(ul1, t73);
     			append_dev(ul1, li10);
-    			append_dev(li10, t67);
-    			append_dev(li10, strong2);
-    			append_dev(li10, t69);
-    			append_dev(ul1, t70);
-    			append_dev(ul1, li11);
-    			append_dev(li11, t71);
-    			append_dev(li11, strong3);
-    			append_dev(div14, t73);
+    			append_dev(li10, t74);
+    			append_dev(li10, strong3);
+    			append_dev(div14, t76);
     			append_dev(div14, p9);
-    			append_dev(div17, t75);
+    			append_dev(div17, t78);
     			append_dev(div17, div15);
     			append_dev(div15, p10);
-    			append_dev(div17, t77);
+    			append_dev(div17, t80);
     			append_dev(div17, div16);
     			append_dev(div16, p11);
-    			append_dev(div40, t79);
-    			append_dev(div40, div20);
+    			append_dev(div37, t82);
+    			append_dev(div37, div20);
     			append_dev(div20, div18);
     			append_dev(div18, hr3);
-    			append_dev(div18, t80);
+    			append_dev(div18, t83);
     			append_dev(div18, h23);
-    			append_dev(div18, t82);
+    			append_dev(div18, t85);
     			append_dev(div18, p12);
-    			append_dev(p12, t83);
+    			append_dev(p12, t86);
     			append_dev(p12, strong4);
-    			append_dev(p12, t85);
-    			append_dev(p12, em2);
-    			append_dev(p12, t87);
-    			append_dev(p12, em3);
-    			append_dev(p12, t89);
-    			append_dev(p12, em4);
-    			append_dev(p12, t91);
+    			append_dev(p12, t88);
     			append_dev(p12, em5);
-    			append_dev(p12, t93);
-    			append_dev(div20, t94);
+    			append_dev(p12, t90);
+    			append_dev(p12, em6);
+    			append_dev(p12, t92);
+    			append_dev(p12, em7);
+    			append_dev(p12, t94);
+    			append_dev(p12, em8);
+    			append_dev(p12, t96);
+    			append_dev(div20, t97);
     			append_dev(div20, div19);
     			append_dev(div19, p13);
-    			append_dev(p13, t95);
+    			append_dev(p13, t98);
     			append_dev(p13, strong5);
-    			append_dev(p13, t97);
-    			append_dev(div40, t98);
-    			append_dev(div40, div23);
-    			append_dev(div23, div21);
+    			append_dev(p13, t100);
+    			append_dev(div37, t101);
+    			append_dev(div37, div24);
+    			append_dev(div24, div21);
     			append_dev(div21, hr4);
-    			append_dev(div21, t99);
+    			append_dev(div21, t102);
     			append_dev(div21, h24);
-    			append_dev(div21, t101);
-    			append_dev(div21, p14);
-    			append_dev(div23, t103);
-    			append_dev(div23, div22);
+    			append_dev(div24, t104);
+    			append_dev(div24, div22);
+    			append_dev(div22, p14);
+    			append_dev(div22, t106);
     			append_dev(div22, p15);
-    			append_dev(div40, t105);
-    			append_dev(div40, div27);
-    			append_dev(div27, div24);
-    			append_dev(div24, hr5);
-    			append_dev(div24, t106);
-    			append_dev(div24, h25);
-    			append_dev(div27, t108);
-    			append_dev(div27, div25);
-    			append_dev(div25, p16);
-    			append_dev(div25, t110);
-    			append_dev(div25, p17);
-    			append_dev(p17, t111);
-    			append_dev(p17, strong6);
-    			append_dev(p17, t113);
-    			append_dev(p17, em6);
-    			append_dev(p17, t115);
-    			append_dev(p17, em7);
+    			append_dev(p15, t107);
+    			append_dev(p15, strong6);
+    			append_dev(p15, t109);
+    			append_dev(p15, em9);
+    			append_dev(p15, t111);
+    			append_dev(p15, em10);
+    			append_dev(p15, t113);
+    			append_dev(div24, t114);
+    			append_dev(div24, div23);
+    			append_dev(div23, p16);
+    			append_dev(div23, t116);
+    			append_dev(div23, p17);
     			append_dev(p17, t117);
-    			append_dev(div27, t118);
-    			append_dev(div27, div26);
-    			append_dev(div26, p18);
-    			append_dev(div26, t120);
-    			append_dev(div26, p19);
-    			append_dev(p19, t121);
-    			append_dev(p19, em8);
-    			append_dev(p19, t123);
-    			append_dev(div26, t124);
-    			mount_component(switch_1, div26, null);
-    			append_dev(div40, t125);
-    			append_dev(div40, div29);
-    			append_dev(div29, div28);
-    			append_dev(div28, hr6);
-    			append_dev(div28, t126);
-    			append_dev(div28, h26);
-    			append_dev(div28, t128);
-    			append_dev(div28, p20);
-    			append_dev(p20, strong7);
-    			append_dev(p20, t130);
-    			append_dev(p20, strong8);
-    			append_dev(p20, t132);
-    			append_dev(div28, t133);
+    			append_dev(p17, em11);
+    			append_dev(p17, t119);
+    			append_dev(div23, t120);
+    			mount_component(switch_1, div23, null);
+    			append_dev(div37, t121);
+    			append_dev(div37, div26);
+    			append_dev(div26, div25);
+    			append_dev(div25, hr5);
+    			append_dev(div25, t122);
+    			append_dev(div25, h25);
+    			append_dev(div25, t124);
+    			append_dev(div25, p18);
+    			append_dev(p18, strong7);
+    			append_dev(p18, t126);
+    			append_dev(p18, a0);
+    			append_dev(p18, t128);
+    			append_dev(p18, a1);
+    			append_dev(p18, t130);
+    			append_dev(p18, strong8);
+    			append_dev(p18, t132);
+    			append_dev(div25, t133);
+    			append_dev(div25, p19);
+    			append_dev(p19, t134);
+    			append_dev(p19, strong9);
+    			append_dev(p19, t136);
+    			append_dev(div25, t137);
+    			append_dev(div25, p20);
+    			append_dev(p20, t138);
+    			append_dev(p20, strong10);
+    			append_dev(div37, t140);
+    			append_dev(div37, div30);
+    			append_dev(div30, div27);
+    			append_dev(div27, hr6);
+    			append_dev(div27, t141);
+    			append_dev(div27, h26);
+    			append_dev(div30, t143);
+    			append_dev(div30, div28);
     			append_dev(div28, p21);
-    			append_dev(p21, t134);
-    			append_dev(p21, strong9);
-    			append_dev(div40, t136);
-    			append_dev(div40, div33);
-    			append_dev(div33, div30);
-    			append_dev(div30, hr7);
-    			append_dev(div30, t137);
-    			append_dev(div30, h27);
-    			append_dev(div33, t139);
-    			append_dev(div33, div31);
-    			append_dev(div31, p22);
-    			append_dev(div31, t141);
-    			append_dev(div31, p23);
-    			append_dev(p23, t142);
-    			append_dev(p23, strong10);
-    			append_dev(p23, t144);
-    			append_dev(p23, strong11);
-    			append_dev(p23, t146);
-    			append_dev(p23, strong12);
-    			append_dev(p23, t148);
-    			append_dev(p23, strong13);
-    			append_dev(p23, t150);
-    			append_dev(div33, t151);
-    			append_dev(div33, div32);
-    			append_dev(div32, p24);
-    			append_dev(p24, t152);
-    			append_dev(p24, strong14);
-    			append_dev(p24, t154);
-    			append_dev(div32, t155);
-    			append_dev(div32, p25);
-    			append_dev(div40, t157);
-    			append_dev(div40, div37);
+    			append_dev(div28, t145);
+    			append_dev(div28, p22);
+    			append_dev(p22, t146);
+    			append_dev(p22, strong11);
+    			append_dev(p22, t148);
+    			append_dev(p22, strong12);
+    			append_dev(p22, t150);
+    			append_dev(p22, strong13);
+    			append_dev(p22, t152);
+    			append_dev(p22, strong14);
+    			append_dev(p22, t154);
+    			append_dev(div30, t155);
+    			append_dev(div30, div29);
+    			append_dev(div29, p23);
+    			append_dev(p23, t156);
+    			append_dev(p23, strong15);
+    			append_dev(p23, t158);
+    			append_dev(div29, t159);
+    			append_dev(div29, p24);
+    			append_dev(p24, t160);
+    			append_dev(p24, em12);
+    			append_dev(p24, t162);
+    			append_dev(div37, t163);
     			append_dev(div37, div34);
-    			append_dev(div34, hr8);
-    			append_dev(div34, t158);
-    			append_dev(div34, h28);
-    			append_dev(div34, t160);
-    			append_dev(div34, p26);
-    			append_dev(div37, t162);
-    			append_dev(div37, div35);
-    			append_dev(div35, p27);
-    			append_dev(div37, t164);
+    			append_dev(div34, div31);
+    			append_dev(div31, hr7);
+    			append_dev(div31, t164);
+    			append_dev(div31, h27);
+    			append_dev(div31, t166);
+    			append_dev(div31, p25);
+    			append_dev(div34, t168);
+    			append_dev(div34, div32);
+    			append_dev(div32, p26);
+    			append_dev(div34, t170);
+    			append_dev(div34, div33);
+    			append_dev(div33, p27);
+    			append_dev(p27, t171);
+    			append_dev(p27, em13);
+    			append_dev(div33, t173);
+    			append_dev(div33, p28);
+    			append_dev(div37, t175);
     			append_dev(div37, div36);
-    			append_dev(div36, p28);
-    			append_dev(p28, t165);
-    			append_dev(p28, em9);
-    			append_dev(div36, t167);
-    			append_dev(div36, p29);
-    			append_dev(div40, t169);
+    			append_dev(div36, div35);
+    			append_dev(div35, hr8);
+    			append_dev(div35, t176);
+    			append_dev(div35, h28);
+    			append_dev(div35, t178);
+    			append_dev(div35, p29);
+    			append_dev(div40, t180);
     			append_dev(div40, div39);
     			append_dev(div39, div38);
-    			append_dev(div38, hr9);
-    			append_dev(div38, t170);
-    			append_dev(div38, h29);
-    			append_dev(div38, t172);
-    			append_dev(div38, p30);
-    			append_dev(div38, t174);
-    			append_dev(div38, p31);
-    			append_dev(div43, t176);
-    			append_dev(div43, div42);
-    			append_dev(div42, div41);
-    			mount_component(actionvis, div41, null);
+    			mount_component(actionvis, div38, null);
     			current = true;
 
     			if (!mounted) {
@@ -50065,8 +50670,7 @@ var app = (function (exports) {
     					listen_dev(li5, "click", /*scrollTo*/ ctx[2], false, false, false),
     					listen_dev(li6, "click", /*scrollTo*/ ctx[2], false, false, false),
     					listen_dev(li7, "click", /*scrollTo*/ ctx[2], false, false, false),
-    					listen_dev(li8, "click", /*scrollTo*/ ctx[2], false, false, false),
-    					listen_dev(li9, "click", /*scrollTo*/ ctx[2], false, false, false)
+    					listen_dev(li8, "click", /*scrollTo*/ ctx[2], false, false, false)
     				];
 
     				mounted = true;
@@ -50101,8 +50705,8 @@ var app = (function (exports) {
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div5);
     			destroy_component(logo);
-    			if (detaching) detach_dev(t27);
-    			if (detaching) detach_dev(div43);
+    			if (detaching) detach_dev(t25);
+    			if (detaching) detach_dev(div40);
     			destroy_component(switch_1);
     			destroy_component(actionvis);
     			mounted = false;
@@ -50275,7 +50879,6 @@ var app = (function (exports) {
     		data,
     		Logo,
     		ActionVis,
-    		Table,
     		Switch,
     		scrollTo,
     		updateScene,
@@ -50337,7 +50940,7 @@ var app = (function (exports) {
     const { console: console_1 } = globals;
     const file = "src/App.svelte";
 
-    // (230:43) 
+    // (234:43) 
     function create_if_block_2(ctx) {
     	let postcards;
     	let current;
@@ -50369,14 +50972,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(230:43) ",
+    		source: "(234:43) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (229:41) 
+    // (233:41) 
     function create_if_block_1(ctx) {
     	let actions;
     	let current;
@@ -50408,14 +51011,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(229:41) ",
+    		source: "(233:41) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (228:8) {#if  $ui.page === 'adaptation'}
+    // (232:8) {#if  $ui.page === 'adaptation'}
     function create_if_block(ctx) {
     	let adaptation;
     	let current;
@@ -50447,7 +51050,7 @@ var app = (function (exports) {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(228:8) {#if  $ui.page === 'adaptation'}",
+    		source: "(232:8) {#if  $ui.page === 'adaptation'}",
     		ctx
     	});
 
@@ -50579,75 +51182,75 @@ var app = (function (exports) {
     			div18 = element("div");
     			div17 = element("div");
     			attr_dev(section0, "class", "chapters");
-    			add_location(section0, file, 226, 4, 9385);
+    			add_location(section0, file, 230, 4, 9579);
     			attr_dev(button, "class", "back svelte-bz99l2");
     			attr_dev(button, "aria-label", "Back to homepage");
-    			add_location(button, file, 233, 4, 9631);
+    			add_location(button, file, 237, 4, 9825);
     			attr_dev(h1, "class", "frame__title svelte-bz99l2");
-    			add_location(h1, file, 242, 28, 10026);
+    			add_location(h1, file, 246, 28, 10220);
     			attr_dev(div0, "class", "frame__links svelte-bz99l2");
-    			add_location(div0, file, 243, 28, 10141);
+    			add_location(div0, file, 247, 28, 10335);
     			attr_dev(div1, "class", "frame__title-wrapper svelte-bz99l2");
-    			add_location(div1, file, 241, 24, 9963);
+    			add_location(div1, file, 245, 24, 10157);
     			attr_dev(div2, "class", "frame svelte-bz99l2");
-    			add_location(div2, file, 240, 20, 9919);
+    			add_location(div2, file, 244, 20, 10113);
     			attr_dev(div3, "class", "hero__img svelte-bz99l2");
     			set_style(div3, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
-    			add_location(div3, file, 249, 28, 10360);
+    			add_location(div3, file, 253, 28, 10554);
     			attr_dev(a0, "class", "hero__menu-label svelte-bz99l2");
     			attr_dev(a0, "name", "adaptation");
-    			add_location(a0, file, 250, 28, 10535);
+    			add_location(a0, file, 254, 28, 10729);
     			attr_dev(div4, "class", "hero__menu-item");
-    			add_location(div4, file, 248, 24, 10302);
+    			add_location(div4, file, 252, 24, 10496);
     			attr_dev(div5, "class", "hero__img svelte-bz99l2");
     			set_style(div5, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
-    			add_location(div5, file, 253, 28, 10770);
+    			add_location(div5, file, 257, 28, 10964);
     			attr_dev(a1, "class", "hero__menu-label svelte-bz99l2");
     			attr_dev(a1, "name", "actions");
-    			add_location(a1, file, 254, 28, 10962);
+    			add_location(a1, file, 258, 28, 11156);
     			attr_dev(div6, "class", "hero__menu-item");
-    			add_location(div6, file, 252, 24, 10712);
+    			add_location(div6, file, 256, 24, 10906);
     			attr_dev(div7, "class", "hero__img svelte-bz99l2");
     			set_style(div7, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
-    			add_location(div7, file, 257, 28, 11194);
+    			add_location(div7, file, 261, 28, 11388);
     			attr_dev(a2, "class", "hero__menu-label svelte-bz99l2");
     			attr_dev(a2, "name", "postcards");
-    			add_location(a2, file, 258, 28, 11389);
+    			add_location(a2, file, 262, 28, 11583);
     			attr_dev(div8, "class", "hero__menu-item");
-    			add_location(div8, file, 256, 24, 11136);
+    			add_location(div8, file, 260, 24, 11330);
     			attr_dev(div9, "class", "hero__menu svelte-bz99l2");
-    			add_location(div9, file, 247, 20, 10253);
-    			add_location(br0, file, 263, 38, 11650);
+    			add_location(div9, file, 251, 20, 10447);
+    			add_location(br0, file, 267, 38, 11844);
     			attr_dev(span, "class", "highlight svelte-bz99l2");
-    			add_location(span, file, 264, 24, 11679);
-    			add_location(br1, file, 264, 67, 11722);
+    			add_location(span, file, 268, 24, 11873);
+    			add_location(br1, file, 268, 67, 11916);
     			attr_dev(h2, "class", "hero__title svelte-bz99l2");
-    			add_location(h2, file, 262, 20, 11587);
+    			add_location(h2, file, 266, 20, 11781);
     			attr_dev(div10, "class", "hero__container svelte-bz99l2");
-    			add_location(div10, file, 239, 16, 9869);
+    			add_location(div10, file, 243, 16, 10063);
     			attr_dev(div11, "class", "content__reverse");
-    			add_location(div11, file, 238, 12, 9822);
+    			add_location(div11, file, 242, 12, 10016);
     			attr_dev(div12, "class", "content__move svelte-bz99l2");
-    			add_location(div12, file, 237, 8, 9782);
+    			add_location(div12, file, 241, 8, 9976);
     			attr_dev(section1, "class", "homepage svelte-bz99l2");
-    			add_location(section1, file, 236, 4, 9747);
+    			add_location(section1, file, 240, 4, 9941);
     			attr_dev(div13, "class", "overlay__inner overlay__inner--color-1 svelte-bz99l2");
-    			add_location(div13, file, 274, 12, 11974);
+    			add_location(div13, file, 278, 12, 12168);
     			attr_dev(div14, "class", "overlay overlay--1 svelte-bz99l2");
-    			add_location(div14, file, 273, 8, 11929);
+    			add_location(div14, file, 277, 8, 12123);
     			attr_dev(div15, "class", "overlay__inner overlay__inner--color-2 svelte-bz99l2");
-    			add_location(div15, file, 277, 12, 12101);
+    			add_location(div15, file, 281, 12, 12295);
     			attr_dev(div16, "class", "overlay overlay--2 svelte-bz99l2");
-    			add_location(div16, file, 276, 8, 12056);
+    			add_location(div16, file, 280, 8, 12250);
     			attr_dev(div17, "class", "overlay__inner overlay__inner--color-3 svelte-bz99l2");
-    			add_location(div17, file, 280, 12, 12228);
+    			add_location(div17, file, 284, 12, 12422);
     			attr_dev(div18, "class", "overlay overlay--3 svelte-bz99l2");
-    			add_location(div18, file, 279, 8, 12183);
+    			add_location(div18, file, 283, 8, 12377);
     			attr_dev(section2, "class", "transitions svelte-bz99l2");
-    			add_location(section2, file, 272, 4, 11889);
+    			add_location(section2, file, 276, 4, 12083);
     			attr_dev(main, "id", "app-container");
     			attr_dev(main, "class", "svelte-bz99l2");
-    			add_location(main, file, 224, 0, 9300);
+    			add_location(main, file, 228, 0, 9494);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50863,7 +51466,7 @@ var app = (function (exports) {
     	let { queryParams = {} } = $$props;
 
     	// Store loaded action data and schema
-    	set_store_value(data, $data.actions = actionData["Adaptation actions"].filter(d => d["*** State ***"] === "Include"), $data);
+    	set_store_value(data, $data.actions = actionData["Adaptation actions"], $data);
 
     	set_store_value(data, $data.stakeholders = actionData["Stakeholders"], $data);
     	set_store_value(data, $data.references = actionData["References"], $data);
@@ -51054,9 +51657,13 @@ var app = (function (exports) {
 
     		// c. Animate back to home page menu
     		$$invalidate(1, showMenu = () => {
-    			$ui.el.app.classList.remove('overflow');
-    			$ui.el.homeContainer.classList.remove('content--hidden'); // Pointer events related class
-    			$ui.animation.pageToggleTimeline.reverse();
+    			if ($ui.state.postcards.view === 'postcard') {
+    				set_store_value(ui, $ui.state.postcards.view = 'table', $ui);
+    			} else {
+    				$ui.el.app.classList.remove('overflow');
+    				$ui.el.homeContainer.classList.remove('content--hidden'); // Pointer events related class
+    				$ui.animation.pageToggleTimeline.reverse();
+    			}
     		});
 
     		// d. Hover animation on the hero "enter" element
@@ -51087,6 +51694,8 @@ var app = (function (exports) {
 
     		// Set page view if set via query param
     		if (queryParams.get('page')) showPage(queryParams.get('page'));
+
+    		if (queryParams.get('postcards')) set_store_value(ui, $ui.state.postcards.view = queryParams.get('postcards'), $ui);
     	});
 
     	const writable_props = ['actionData', 'schemaData', 'climateData', 'queryParams'];
@@ -54970,7 +55579,6 @@ var app = (function (exports) {
                         }
                     }
                 }
-
 
                 /// Call initApp
                 if(tableName == dataTableNames[dataTableNames.length - 1]){
