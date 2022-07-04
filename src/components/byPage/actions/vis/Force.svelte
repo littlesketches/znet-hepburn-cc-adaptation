@@ -151,9 +151,10 @@
                 </g>
                 {/if}
 
-                <!-- Overaly symbol: Healing country marker-->
+                <!-- Overlay symbol: Unused circle marker n-->
                 {#if $ui.state.actionVis.nodes.symbols}
-                <path class ="symbol" class:healing-country="{node["Healing country"]}" 
+
+                <path class ="symbol" 
                     d ={arc({
                         innerRadius: dims.nodeRadius* 0  + 0,
                         outerRadius: dims.nodeArcRadius *0  + 8,

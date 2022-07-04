@@ -231,18 +231,6 @@
             </div>
         </div>
 
-        <!-- <div act = "other" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75>
-            <div scene = 0 force="cluster-center">
-                <hr>
-                <h2>Healing country </h2>
-                <p>Placeholder section for and other action traits that might represented as a mark/symbol on the action. At this point the action 'dots' are becoming quite intricate and so only a simple mark at the center is proposed. This example is a simple small dot.
-                </p>
-            </div>
-            <div scene = 1 force="cluster-center" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "true" nodeSymbol = "true" >
-                <p>Healing county is a candidate and may end up being the only one that uses this, in which case this section would be re-shaped to be about how to indicate actions that have a healing county component (and/or traditional owners consultation??). If included here, a legend entry would be created. Note that if other classifiers are included (with a different symbol)
-                </p>
-            </div>
-        </div> -->
 
         <div act = "type" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75 >
             <div scene = 0 force = "right-line" >
@@ -311,17 +299,19 @@
             <div scene = 0 force="ring-mid">
                 <hr>
                 <h2>Beyond the adaptation lens</h2>
-                <p>We've taken a look at our adaptation actions through various lenses and perspectives, and we've even tried to  assess and rank our actions.... 
-
-                <!-- *** Narrative to be drafted ***: need to question the usefulness of (fine grained) prioritisation and mention other considerations (timing, dependencies, competing actions, mutual exclusivity, synergies etc.). Discussion might also flow into understanding  unintended consequences and the role co-benefits in deciding if an action should be done. This might also link to other paradigms and movements (e.g. circular economy, doughnut economics, environmental economic, resilience etc.) -->
+                <p>We've taken a look at our adaptation actions as a <strong>collective</strong>, through a series lenses and perspectives. We've even tried to assess and rank our actions. But is that enough? Do we now know what to do to adapt to climate change?!
                 </p>
-
-                <!-- <p>Reinforce to the audience that the response to climate change adaptation needs to be taken as a collection of actions, working together; and the importance of always revisiting this portfolio perspective of the actions, against the climate risks.
-                <p>
-                Coordination is critical however understanding this perspective should hopefully help everyone understand how they can support, contribute to, and develop new actions that help the community adapt to climate change. Making link to taking a deeper dive into the actions would be good (to to logically lead into the postcard section)
-                </p> -->
+                <p>Well unfortunately, like all complex challenges, there are (yet) <strong>more characteristics that need to be considered</strong> that can be equally sophisticated and obtuse. Areas that we haven't 'analysed' here include:
+                </p>
+                <ul>
+                    <li>action timing and dependencies and/or mutual exclusivity;</li>
+                    <li>synergies (and dis-synergies) of adaptation benefits;</li>
+                    <li>the roles of influence and responsibility; and</li>
+                    <li>idea that actions can have adaptation co-benefits and unintended consequences.</li>
+                </ul>  
+                <p>These last concepts are critical to remember as there can be many reasons to proceed or not proceed with an action that have nothing to do with climate change adaptation. Our challenge as a community is not to precisely account for each of these sophisticated characteristics. Instead, we can use our understanding of what makes for a good adaptation response to support and coordinate actions that we are confident will lead to comprehensive and practical adaptation benefits for our community.
+                </p>
             </div>
-
         </div>
     </div>
 

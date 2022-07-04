@@ -66,7 +66,7 @@
         {:else}
         <section class = "table-container" transition:fade>
             <h2>Table of adaptation actions</h2> 
-            <p><em>Tap on any action to open its summary postcard</em></p> 
+            <p class = "notes"><em>Tap on any action to open its summary postcard</em></p> 
             <ActionTable/>
         </section>
         {/if}
@@ -203,7 +203,8 @@
             padding:                10mm;
             page-break-after:       always;
         }
-        .select{
+        .select, 
+        .notes{
             display:                none
         }
         .hero-content__title {

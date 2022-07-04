@@ -560,6 +560,5 @@
         max-width:          100%;
         max-height:         calc(100vh - 4rem);
         overflow:           visible;
-        /* border:             0.5px grey solid; */
     }
 </style>

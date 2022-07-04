@@ -9,19 +9,18 @@ export const ui = writable({
             act:                'intro',
             scene:              0,
             nodes:  {
-                force:              'cluster-center',
-                focusArea:          null,
-                base:               true,
-                shadow:             false,
-                arcs:               false,
-                shapes:             false,
-                symbols:            false
+                force:          'cluster-center',
+                focusArea:      null,
+                base:           true,
+                shadow:         false,
+                arcs:           false,
+                shapes:         false,
+                symbols:        false
             },
             legend: {
                 hazards:        false,
                 approach:       false,
                 scale:          false
-
             }
         },
         postcards: {
