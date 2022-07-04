@@ -61,17 +61,17 @@
         padding:                    1rem 0;
     }
     .focusArea-icon{
-        fill:                        var(--foreground);  
+        fill:                        var(--pc-foreground);  
     }
     .strip-1a,
     .strip-1b{
-        background-color:           var(--foreground);
-        color:                      var(--brightGreen);
+        background-color:           var(--pc-foreground);
+        color:                      var(--pc-background);
     }
     .strip-2a,
     .strip-2b{
-        background-color:           var(--brightGreen);
-        color:                      var(--foreground);
+        background-color:           var(--pc-background);
+        color:                      var(--pc-foreground);
     }
     .strip-1a{ grid-area:           strip-1a; }
     .strip-2a{ grid-area:           strip-2a; }

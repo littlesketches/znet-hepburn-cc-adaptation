@@ -30,7 +30,7 @@
     section{
         grid-area:              title;
         display:                grid;
-        border-bottom:          5px solid var(--foreground);
+        border-bottom:          5px solid var(--pc-foreground);
         height:                 fit-content;
     }
     h1{
@@ -42,7 +42,7 @@
         text-transform:         uppercase;
         line-height:            1;
         padding-top:            5vh;                
-        color:                  var(--foreground);
+        color:                  var(--pc-foreground);
     }
     h1.three-line{
         font-size:              3vw;

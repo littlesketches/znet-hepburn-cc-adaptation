@@ -1,17 +1,16 @@
 <!-- IMAGE WITH EFFECTS -->
 <script>
     export let imgURL 
-
 </script>
 
 
 <!-- HTML COMPONENT MARKUP -->
 <section class ="img-wrapper">
-    <!-- <div class='img-container watercolor-effect before' style = "background-image:url({imgURL})"></div> -->
-    <!-- <div class='img-container pencil-effect'        style = "background-image:url( {imgURL}) , url({imgURL} )"></div>
+    <!-- <div class='img-container watercolor-effect before' style = "background-image:url({imgURL})"></div>
+    <div class='img-container pencil-effect'        style = "background-image:url( {imgURL}) , url({imgURL} )"></div>
     <div class='img-container watercolor-effect'        style = "background-image:url( {imgURL}) , url({imgURL} )"></div>
-    <div class='img-container watercolor-effect after'  style = "background-image:url( {imgURL})"></div>
-    <div class = "overlay"></div> -->
+    <div class='img-container watercolor-effect after'  style = "background-image:url( {imgURL})"></div> -->
+    <!-- <div class = "overlay"></div> -->
     <img src="{imgURL}">
 </section>
 
@@ -24,7 +23,7 @@
     /* Duotone */
     .img-wrapper {
         grid-area:           1 / 1 / 3 / 3;
-        background-color:    var(--brightGreen);
+        background-color:    var(--pc-background);
         display:             flex;
         flex:                1 1 100%;
         overflow:            hidden;
@@ -43,7 +42,7 @@
     }
 
     .img-wrapper::before {
-        background-color:    var(--foreground);
+        background-color:    var(--pc-foreground);
         bottom:              0;
         content:             '';
         height:              100%;
@@ -60,19 +59,19 @@
     /* IMAGE EFFECTS */
     .pencil-effect {
         background-size: cover;
-        /* background-blend-mode: difference;
+        background-blend-mode: difference;
         background-position: calc(50% - 1px) calc(50% - 1px), calc(50% + 1px) calc(50% + 1px);
         filter: brightness(2) invert(1) grayscale(1);
-        box-shadow: inset 0 0 0 1px black; */
+        box-shadow: inset 0 0 0 1px black;
     }
     .watercolor-effect {
         background-size: cover;
-        /* mix-blend-mode: multiply;
+        mix-blend-mode: multiply;
         background-position: calc(50% - 1px) calc(50% - 1px), calc(50% + 1px) calc(50% + 1px);
         filter:  sepia(0.1) brightness(1) blur(2px) contrast(2);
-        opacity: 1 */
+        opacity: 1
     }
-    /* .watercolor-effect.before {
+    .watercolor-effect.before {
         background-size: cover;
         background-blend-mode: difference;
         background-position: calc(50% - 1px) calc(50% - 1px), calc(50% + 1px) calc(50% + 1px);
@@ -85,8 +84,8 @@
         mix-blend-mode: multiply;
         background-blend-mode: multiply;
         filter: brightness(1.3) blur(2px) contrast(2) sepia(1);
-    } */
-    /* 
+    }
+    
     .watercolor-effect:before, .watercolor-effect:after {
         display: block;
         content: "";
@@ -109,5 +108,5 @@
         background-position: center;
         mix-blend-mode: multiply;
         filter: brightness(1.3) blur(2px) contrast(2);
-    } */
+    }
 </style>

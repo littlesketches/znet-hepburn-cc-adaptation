@@ -135,7 +135,7 @@
     }
     h4{
         color:                      var(--midGrey);
-        font-weight:                100;
+        font-weight:                300;
         font-size:                  1vw;
         margin-block-start:         0;
         margin-block-end:           0;
@@ -147,7 +147,7 @@
         display:                    grid;
     }
     .info-container:not(:last-of-type){
-        border-right:               solid 2px var(--foreground);
+        border-right:               solid 2px var(--pc-foreground);
     }
     .header{
         height:                     1.5rem;
@@ -180,7 +180,7 @@
     .response{
         display:                    flex;
         text-align:                 center;
-        color:                      var(--foreground);
+        color:                      var(--pc-foreground);
         font-size:                  1.25vw;
         font-weight:                700;
         line-height:                1;
@@ -195,7 +195,7 @@
 
     /* Action scale */
     .scale-icon{
-        fill:                   var(--brightGreen);
+        fill:                   var(--lightGreen);
         overflow:               visible;
     }
 

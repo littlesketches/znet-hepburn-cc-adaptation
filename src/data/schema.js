@@ -13,7 +13,7 @@ const schema = {
     },
     hazards: {
         data:           [],
-        fields:         ["Hazard","Trend", "Climate hazard (IPCC)",  "Linked hazard events", "Link climate variables", "Linked adaptation actions", "recordID"]
+        fields:         ["Hazard", "Alias", "Trend", "Climate hazard (IPCC)",  "Linked hazard events", "Link climate variables", "Linked adaptation actions", "recordID"]
     },
     climateVariables: {
         data:           [],

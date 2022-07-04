@@ -1,10 +1,9 @@
 <script>
-	import { fade }         from 'svelte/transition';
-    import * as d3          from 'd3'
-    import { ui, data }     from "../../../../data/stores.js";
-    import { icons, triangle  }       from "../../../../utils/icons.js"
+	import { fade }                 from 'svelte/transition';
+    import * as d3                  from 'd3'
+    import { ui, data }             from "../../../../data/stores.js";
+    import { icons, triangle  }     from "../../../../utils/icons.js"
     import { textWrap, slugify }    from "../../../../utils/helpers.js"
-
 
     export let dims     = {}                // SVG dimensions
 
@@ -18,15 +17,15 @@
 <g id ="legend-container"  transition:fade>
 
     <g style="transform: translate( 0px, {dims.height - 70}px)">
-        <!-- Hazards adddressed -->
+        <!-- Hazards addressed -->
         <g class = "legend-group" class:hidden="{!$ui.state.actionVis.legend.hazards}" style="transform: translate({dims.width * $ui.state.actionVis.legend.hazards}px, 0px)">
             <text class = "legend-title" style="transform: translate(0px, {-iconRadius - 20}px)">Hazards addressed</text>
-            <g style="transform: translate({-($data.schema.hazards.data.length -1) * 3 * 0.5 * iconRadius }px, 0px)">
-                {#each  $data.schema.hazards.data.map(d => d.Hazard) as hazard, i}
-                <g class = {slugify(hazard)} style="transform: translate({i * iconRadius * 3}px, {0}px)">
+            <g style="transform: translate({-($data.schema.hazards.data.length -1) * 3.25 * 0.5 * iconRadius }px, 0px)">
+                {#each  $data.schema.hazards.data as obj, i}
+                <g class = {slugify(obj.Hazard)} style="transform: translate({i * iconRadius * 3.25}px, {0}px)">
                     <circle r = {iconRadius} class = "hazard-circle "/>
-                    <path class = "hazard-icon" d = {icons[slugify(hazard)]}></path>
-                    <text class = "hazard-label" style="transform: translate(0px, {iconRadius + 25 }px)">{@html hazard}</text>
+                    <path class = "hazard-icon" d = {icons[slugify(obj.Hazard)]}></path>
+                    <text class = "hazard-label" style="transform: translate(0px, {iconRadius + 25 }px)">{@html obj.Alias}</text>
                 </g>
                 {/each}
             </g>
@@ -62,9 +61,9 @@
         <!-- Action scale -->
         <g class = "legend-group" class:hidden="{!$ui.state.actionVis.legend.scale}" style="transform: translate({dims.width * $ui.state.actionVis.legend.scale}px , 0px)">
             <text class = "legend-title" style="transform: translate(0px, {-iconRadius - 20}px)">Action scale </text>
-            <g style="transform: translate({-($data.schema.hazards.data.length -1) * 3 * 0.5 * iconRadius }px, 0px)">
+            <g style="transform: translate({-($data.schema.hazards.data.length -1) * 3.35 * 0.5 * iconRadius }px, 0px)">
                 {#each  $data.schema.actionScale.data.map(d => d.Scale) as scale, i}
-                <g class = {slugify(scale)} style="transform: translate({i * iconRadius * 3}px, {0}px)">
+                <g class = {slugify(scale)} style="transform: translate({i * iconRadius * 3.35}px, {0}px)">
                     <circle r = {$ui.vis.nodes.scales.radiusScale(scale)} class = "scale-circle "/>
                     <circle r = {dims.nodeRadius + 2.5} class = "scale-node"/>
                     <text class = "scale-label" style="transform: translate(0px, {iconRadius + 25 }px)">{@html scale}</text>

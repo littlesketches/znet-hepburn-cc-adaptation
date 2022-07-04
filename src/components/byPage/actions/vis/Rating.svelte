@@ -19,38 +19,38 @@
         <g class:hidden="{$ui.state.actionVis.scene !==0}">
             <g class = "no-regrets scale-group" style="transform:translate({50}px , {ratingData.noRegrets.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10} >{@html ratingData.noRegrets.name}</text>
+                <text x = {markerWidth + 10} y=15 >{@html ratingData.noRegrets.name}</text>
             </g>
             <g class = "for-rating scale-group" style="transform:translate({50}px , {ratingData.forRating.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.forRating.name}</text>
+                <text x = {markerWidth + 10}  y=15 >{@html ratingData.forRating.name}</text>
             </g>
             <g class = "discard scale-group" style="transform:translate({50}px , {ratingData.discard.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.discard.name}</text>
+                <text x = {markerWidth + 10}  y=15 >{@html ratingData.discard.name}</text>
             </g>
         </g>
 
         <g class:hidden="{$ui.state.actionVis.scene ===0}">
             <g class = "no-regrets scale-group" style="transform:translate({50}px , {ratingData.noRegrets.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10} >{@html ratingData.noRegrets.name}</text>
+                <text x = {markerWidth + 10}  y=15 >{@html ratingData.noRegrets.name}</text>
             </g>
             <g class = "two-criteria scale-group" style="transform:translate({50}px , {ratingData.twoCriteria.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.twoCriteria.name}</text>
+                <text x = {markerWidth + 10}   y=15 >{@html ratingData.twoCriteria.name}</text>
             </g>
             <g class = "one-criteria scale-group" style="transform:translate({50}px , {ratingData.oneCriteria.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.oneCriteria.name}</text>
+                <text x = {markerWidth + 10}   y=15 >{@html ratingData.oneCriteria.name}</text>
             </g>
             <g class = "zero-criteria scale-group" style="transform:translate({50}px , {ratingData.zeroCriteria.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.zeroCriteria.name}</text>
+                <text x = {markerWidth + 10}  y=15  >{@html ratingData.zeroCriteria.name}</text>
             </g>
             <g class = "exclude scale-group" style="transform:translate({50}px , {ratingData.discard.y}px)">
                 <path d = "M5, 0 h{markerWidth}" />
-                <text x = {markerWidth + 10}  >{@html ratingData.discard.name}</text>
+                <text x = {markerWidth + 10}   y=15 >{@html ratingData.discard.name}</text>
             </g>
         </g>
     </g>
@@ -68,15 +68,30 @@
     }
     .scale-group path{
         stroke:             var(--midGrey);
-        stroke-width:       5px;
+        stroke-width:       2px;
         fill:               none;
-
     }
     .scale-group text{
-        fill:                var(--midGrey);
-        dominant-baseline:  middle;
         font-size:          40px;
         font-weight:        700;
     }
-
+    .no-regrets text{
+        fill: var(--noRegrets)
+    }
+    .for-rating text{
+        fill: var(--forRating)
+    }
+    .one-criteria text{
+        fill: var(--oneCriteria)
+    }
+    .two-criteria text{
+        fill: var(--twoCriteria)
+    }
+    .exclude text,
+    .discard text{
+        fill: var(--discardCriteria)
+    }
+    .zero-criteria text{
+        fill: var(--zeroCriteria)
+    }
 </style>

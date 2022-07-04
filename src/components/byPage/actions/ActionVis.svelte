@@ -48,7 +48,7 @@
     ]
     const ratingData = {
         noRegrets: {
-            name: "No regrets",      y: 0.1 * dims.height
+            name: "No regrets",      y: 0.1 * dims.height, 
         },
         forRating: {
             name: "Actions for consideration",     y: 0.5 * dims.height
@@ -65,9 +65,6 @@
         zeroCriteria: {
             name: "Uncertain adaptation benefit",     y: 0.75 * dims.height
         },
-        discardCriteria: {
-            name: "Limited adaptation benefit",     y: 0.85 * dims.height
-        }
     }
     let schema
 
@@ -185,6 +182,7 @@
                         ["y",           d3.forceY().y( (d, i) =>  (dims.height - i / $data.actions.length * dims.height) * 0.8   ).strength(0.5)],
                         ["collide",     forceCollide],
                     ]
+
                 case "left-line":
                     return [
                         ["x",           d3.forceX().x(0).strength(2)],
@@ -369,7 +367,6 @@
                                             let value
                                             const screen = {}
                                             for( const obj of schema){ screen[obj.Screen] = d[obj.fieldName] }
-
                                             if( screen.Flexible === 'Yes' && screen.Robust === "Yes"  && screen.Viable === "Yes" ){
                                                 return dims.height * 0.45
                                             } else if( screen.Flexible === 'Yes'  && screen.Viable === "Yes" ){
@@ -436,8 +433,9 @@
                         ["y",           d3.forceY().y(d => {
                                             const screen = {}
                                             for( const obj of schema){ screen[obj.Screen] = d[obj.fieldName] }
-
-                                            if( screen.Flexible === 'Yes' && screen.Robust === "Yes"  && screen.Viable === "Yes" ){
+                                            if( screen.Flexible === 'No' || screen.Robust === "No" || screen.Viable === "No" ){
+                                                return ratingData.discard.y
+                                            } else if( screen.Flexible === 'Yes' && screen.Robust === "Yes"  && screen.Viable === "Yes" ){
                                                 return ratingData.noRegrets.y
                                             } else if( screen.Flexible === 'Yes'  && screen.Viable === "Yes" ){
                                                 return ratingData.twoCriteria.y

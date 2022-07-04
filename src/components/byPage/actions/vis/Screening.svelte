@@ -25,8 +25,8 @@
 
         {#each $data.schema.adaptationScreens.data as lens, i}
             {#if lens.lensPos === "top"}
-                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 70 )} />
-                <path id = "{slugify(lens.Screen)}-lensQuestionPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 25 )} />
+                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 45 )} />
+                <path id = "{slugify(lens.Screen)}-lensQuestionPath" class = "label-path" d={circleClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 15 )} />
                 <text>
                     <textPath class = 'lens-question-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensQuestionPath" startOffset="75%">{@html lens.Description}</textPath>
                 </text>
@@ -35,7 +35,7 @@
                 </text>
 
             {:else if lens.lensPos === "left"}
-                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 80 )} />
+                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 95 )} />
                 <path id = "{slugify(lens.Screen)}-lensQuestionPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 25 )} />
                 <text>
                     <textPath class = 'lens-question-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensQuestionPath" startOffset="32.5%">{@html lens.Description}</textPath>
@@ -45,7 +45,7 @@
                     <textPath class = 'lens-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensLabelPath" startOffset="32.5%">{@html lens.Screen}</textPath>
                 </text>
             {:else if lens.lensPos === "right"}
-                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 80 )} />
+                <path id = "{slugify(lens.Screen)}-lensLabelPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 95 )} />
                 <path id = "{slugify(lens.Screen)}-lensQuestionPath" class = "label-path" d={circleAntiClockwise({x: dims.width * lens.xPos, y: dims.height * lens.yPos}, radius + 25 )} />
                 <text>
                     <textPath class = 'lens-question-label {slugify(lens.Screen)}' href ="#{slugify(lens.Screen)}-lensQuestionPath" startOffset="12.5%">{@html lens.Description}</textPath>
@@ -58,9 +58,9 @@
 
         <g class = 'no-regrets-group' class:hidden="{$ui.state.actionVis.scene !== 2}">
             <path d = "M0,0 v{-radius * 0.33} q{0}, {-radius * 0.5} {radius * 0.5}, {-radius * 0.5} h{radius * 0.5}"/>
-            <text class = 'no-regrets-label' x="{radius + 5}" y="{-0.833 * radius}"> No regrets actions</text>
-            <text class = 'no-regrets-number' x="{radius + 5}" y="{-0.833 * radius + 35}">{$data.stats.actions.noRegrets} actions expected to be</text>
-            <text class = 'no-regrets-number' x="{radius + 5}" y="{-0.833 * radius + 65}">robust, viable and flexible</text>
+            <text class = 'no-regrets-label' x="{radius + 10}" y="{-0.833 * radius}"> No regrets actions</text>
+            <text class = 'no-regrets-number' x="{radius + 10}" y="{-0.833 * radius + 35}">{$data.stats.actions.noRegrets} actions expected to be</text>
+            <text class = 'no-regrets-number' x="{radius + 10}" y="{-0.833 * radius + 65}">robust, viable and flexible</text>
         </g>
     </g>
 </g>
@@ -87,7 +87,6 @@
     .lens-label{
         font-size:          80px;
         font-weight:        700;
-        dominant-baseline:  middle;
         text-anchor:        middle;
         text-transform:     uppercase;  
         fill:               var(--midGreen)
@@ -95,7 +94,6 @@
     .lens-question-label{
         font-size:          25px;
         font-weight:        500;
-        dominant-baseline:  middle;
         text-anchor:        middle;
     }
 

@@ -206,7 +206,6 @@
         opacity:                0.5;
     }
 
-
     circle.node-shadow {
         pointer-events:         none;
     }
@@ -231,12 +230,10 @@
         pointer-events:         none;
         font-size:              10px;
         font-weight:            700;
-        dominant-baseline:      middle;
         text-shadow:            #fff 1px 1px 0.5px, 
                                 #fff -1px -1px 0.5px; 
         transition:             0.5s all
     }
-
 
     .risk{                      fill:  var(--approach-bg);}
     .resilience{                fill:  var(--approach-bg); }

@@ -63,7 +63,7 @@
     }
     .scale-label.local,
     .action-label.local{
-        fill:                   var(--brightGreen);
+        fill:                   var(--midGreen);
     }
 
     .map-layer{
@@ -76,10 +76,7 @@
     .large{
         transform:              scale(4);
         transition:             all 800ms;
-        stroke:                 var(--brightGreen);
+        stroke:                 var(--midGreen);
         stroke-width:           0.75px;
-    }
-    .large path{
-        stroke-linejoin:    round;
     }
 </style>

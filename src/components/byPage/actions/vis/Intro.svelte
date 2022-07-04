@@ -19,10 +19,9 @@
         <text class = "number">
             {@html $data.stats.actions.total}
         </text>
-        <text y= "200">adaptation</text>
-        <text y= "300">actions</text>
+        <text y= "100">adaptation</text>
+        <text y= "200">actions</text>
     </g>
-
 </g>
 
 
@@ -35,13 +34,10 @@
     .container.hidden{
         opacity:    0;
     }
-    text{ 
-        pointer-events:     none;
-    }
     text{
+        pointer-events:     none;
         font-size:          100px;
         font-weight:        700;
-        dominant-baseline:  middle;
         text-anchor:        middle;
         fill:               var(--midGrey);
     }

@@ -39,12 +39,12 @@
                     ) scale(2.5) rotate({(45 * i * 2) + 45}deg)"
                 />
                 <!-- Hazard label -->
-                <path id = "{slugify(hazard.Hazard)}-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 + 75 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
+                <path id = "{slugify(hazard.Hazard)}-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 + 60 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
                 <text>
                     <textPath class = 'hazard-label {slugify(hazard.Hazard)}' href ="#{slugify(hazard.Hazard)}-labelPath" startOffset="50%">{@html hazard.Hazard}</textPath>
                 </text>
                 <!-- Events label -->
-                <path id = "{slugify(hazard.Hazard)}-event-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 - 35 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
+                <path id = "{slugify(hazard.Hazard)}-event-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 - 27.5 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
                 <text>
                     <textPath class = 'event-label {slugify(hazard.Hazard)}' href ="#{slugify(hazard.Hazard)}-event-labelPath" startOffset="50%">
                         {@html  hazard["Linked hazard events"].map(d => $data.schema.hazardEvents.data.filter( e => e.recordID === d)[0]["Hazard event"]).join(" | ")}
@@ -52,8 +52,7 @@
                 </text>
 
                 <!-- Action count label -->
-
-                <path id = "{slugify(hazard.Hazard)}-actionCount-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 + arcWidth * 0.5 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
+                <path id = "{slugify(hazard.Hazard)}-actionCount-labelPath" class = "label-path" d={circleClockwise({x: 0, y: 0}, dims.width * 0.3 + arcWidth * 0.5 - 10 )} style="transform:rotate({i * 360/hazards.length + 135}deg)"/>
                 <text class:hidden="{$ui.state.actionVis.scene === 0}">
                     <textPath class = 'actionCount-label' href ="#{slugify(hazard.Hazard)}-actionCount-labelPath" startOffset="50%">
                         {@html  hazard["Linked adaptation actions"].length} actions
@@ -70,7 +69,6 @@
 <!-- STYLING -->
 <style>
     text{
-        dominant-baseline:  middle;
         text-anchor:        middle;
     }
     .node-arcs-wrapper{
@@ -108,7 +106,6 @@
     .hazard-label{
         font-size:          60px;
         font-weight:        700;
-        dominant-baseline:  middle;
         text-anchor:        middle;
         text-transform:     uppercase;
     }

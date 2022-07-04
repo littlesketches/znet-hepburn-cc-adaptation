@@ -151,8 +151,8 @@
                 <li class = "select__item" on:click={scrollTo} actName = "type">Type</li>
                 <li class = "select__item" on:click={scrollTo} actName = "focusArea">Focus area</li>
                 <li class = "select__item" on:click={scrollTo} actName = "screening">Adaptation criteria</li>
-                <li class = "select__item" on:click={scrollTo} actName = "rating">Ranking</li>
-                <li class = "select__item" on:click={scrollTo} actName = "outro">Outro</li>
+                <li class = "select__item" on:click={scrollTo} actName = "rating">Rating</li>
+                <li class = "select__item" on:click={scrollTo} actName = "beyond">Beyond adaptation</li>
             </ul>
         </div>
     </div>
@@ -231,8 +231,7 @@
             </div>
         </div>
 
-
-        <div act = "type" class = "act-narrative"  legendHazards = 0.25  legendApproach = 0.5 legendScale = 0.75 >
+        <div act = "type" class = "act-narrative"  legendHazards = 0.2  legendApproach = 0.5 legendScale = 0.8 >
             <div scene = 0 force = "right-line" >
                 <hr>
                 <h2>Types of actions</h2>
@@ -295,7 +294,7 @@
             </div>
         </div>
 
-        <div act = "outro" class = "act-narrative">
+        <div act = "beyond" class = "act-narrative">
             <div scene = 0 force="ring-mid">
                 <hr>
                 <h2>Beyond the adaptation lens</h2>

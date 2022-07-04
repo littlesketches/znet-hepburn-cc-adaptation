@@ -43,7 +43,7 @@
 
                 let text
                 text = group.append('text').classed(`action-node-label `, true)
-                    .attr('x' , 0).attr('y',  0).attr('dy' , 0)
+                    .attr('x' , 0).attr('y',  5).attr('dy' , 0)
                     .text(d => d.Name)
                     .classed(d => d.Class, true)
                     .call(textWrap, dims.width * 0.2, 1.1, true)
@@ -78,31 +78,26 @@
 
 <!-- HTML COMPONENT MARKUP-->
 <g id ="type-vis-container" in:fade>
-    <!-- <g class = 'vis-wrapper' class:hidden="{$ui.state.actionVis.scene === 0}"> -->
-        <g class = "spectrum-group">
-            <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.05 : dims.height* 0.025}px)'>
-                <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Abstract</text> 
-                <text class = "spectrum-sub-label" dy="35" class:centered="{$ui.state.actionVis.scene === 3}">Builds capacity</text> 
-            </g>
-            <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.65 : dims.height* 0.85}px)'>
-                <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Concrete</text> 
-                <text class = "spectrum-sub-label"class:centered="{$ui.state.actionVis.scene === 3}" dy="35" >Responds to risk</text> 
-            </g>
+    <g class = "spectrum-group">
+        <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.05 : dims.height* 0.025}px)'>
+            <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Abstract</text> 
+            <text class = "spectrum-sub-label" dy="35" class:centered="{$ui.state.actionVis.scene === 3}">Builds capacity</text> 
         </g>
-        <g class = "flow-diagram"  class:hidden="{$ui.state.actionVis.scene === 3}"style='transform:translate({dims.width * 0.5}px, 0px)'>
-            <g class = 'connector-container'></g>
-            <g class = 'action-type-node-container'></g>
-            <g class = 'outcomes-label-container'></g>
+        <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.65 : dims.height* 0.85}px)'>
+            <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Concrete</text> 
+            <text class = "spectrum-sub-label"class:centered="{$ui.state.actionVis.scene === 3}" dy="35" >Responds to risk</text> 
         </g>
-    <!-- </g> -->
+    </g>
+    <g class = "flow-diagram"  class:hidden="{$ui.state.actionVis.scene === 3}"style='transform:translate({dims.width * 0.5}px, 0px)'>
+        <g class = 'connector-container'></g>
+        <g class = 'action-type-node-container'></g>
+        <g class = 'outcomes-label-container'></g>
+    </g>
 </g>
 
 
 <!-- STYLING -->
 <style>
-    .vis-wrapper{
-        transition:         all 1200ms;
-    }
     .none{
         display:            none;
     }
@@ -127,7 +122,6 @@
         font-weight:        300;
         fill:               var(--midGrey);
     }
-
 
     :global(rect.box){
         fill:               none;

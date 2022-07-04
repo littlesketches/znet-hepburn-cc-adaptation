@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 142 76">
+<script>
+    export let type = 'width'
+</script>
+
+<svg xmlns="http://www.w3.org/2000/svg" width={type === 'width' ? '100%' : null} height={type === 'height' ? '100%' : null} viewBox="0 0 142 76">
     <g class="logo-title">
         <path d="M.25 18.65v3.96h22.3L.25 61.84h30.79v-3.96H7.02l22.34-39.23H.25z" class="z"/>
         <path d="M41.43 28.28v33.56h-3.96V18.65h3.96v2.77c3.28-3.44 7.83-5.38 12.58-5.37 9.17-.41 16.94 6.69 17.36 15.86.02.35.02.69.01 1.04v28.9h-3.96V33.3c.05-3.55-1.39-6.96-3.98-9.39-5.21-5.16-13.6-5.19-18.85-.07a14.987 14.987 0 0 0-3.16 4.44"/>

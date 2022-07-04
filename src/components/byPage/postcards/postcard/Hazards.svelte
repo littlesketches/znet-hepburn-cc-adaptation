@@ -24,7 +24,7 @@
 <!-- HTML COMPONENT MARKUP -->
 <section class ="hazards-wrapper">
     <div class = "wedge"></div>
-    <h3>Action ratings vs climate hazards</h3>
+    <h3>Ratings vs climate hazards</h3>
     <div class ="hazards-container">
         {#each hazardList as hazard}
         <div class = "hazard-container {slugify(hazard)}">
@@ -57,17 +57,20 @@
     section{
         grid-area:              1 / 1 / 3 / 3;
         height:                 fit-content;
-        color:                  var(--foreground);
+        color:                  var(--pc-foreground);
         margin:                 var(--spacing);
         align-self:             end;
 
     }
     h3{
-        font-size:              1.25vw;
+        font-size:              1vw;
         margin-block-start:     0rem;
         margin-block-end:       0rem;
         padding-bottom:         0.75rem;
         text-align:             center;
+        font-weight:            300;
+        letter-spacing:         0.15vw;
+        text-transform:         uppercase;
         background-color:       rgba(255, 255, 255, 0.7);
     }
     .wedge{
@@ -101,7 +104,8 @@
         font-weight:            700;
         z-index:                10;
         line-height:            1;
-        text-transform:         uppercase;
+        /* text-transform:         uppercase;
+        letter-spacing:         0.1vw; */
     }
     .hazard-icon-wrapper{
         grid-area:              icon;
@@ -122,8 +126,8 @@
     }
 
     .hazard-icon{
-        fill:                   var(--foreground);
-        width:                  100%;
+        fill:                   var(--pc-foreground);
+        width:                  90%;
         height:                 100%;
     }
     .event{
@@ -134,10 +138,10 @@
         height:                 1vw;
         width:                  1vw;
         border-radius:          50%;
-        border:                 1px solid var(--foreground)   
+        border:                 1px solid var(--pc-foreground)   
     }
     .marker.filled{
-        background:             var(--foreground)
+        background:             var(--pc-foreground)
     }
     .marker:not(:last-of-type){
         margin-right:           0.2vw;

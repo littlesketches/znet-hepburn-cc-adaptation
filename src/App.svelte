@@ -3,11 +3,11 @@
 	import { onMount }          from 'svelte';
 	import { ui, data }         from './data/stores.js'	 
     import { gsap, Quad, Quint, Expo} from 'gsap'
-    import { tsv }              from 'd3'
     import { Revealer }         from './utils/revealers.js'
 	import Postcards 		    from './pages/Postcards.svelte'
 	import Adaptation 		    from './pages/Adaptation.svelte'
 	import Actions 		        from './pages/Actions.svelte'
+	import Logo 		        from './components/shared/Logo.svelte'
 
 	export let actionData;
 	export let schemaData;
@@ -245,7 +245,13 @@
                     <div class="frame">
                         <div class="frame__title-wrapper">
                             <h1 class="frame__title">Hepburn Shire &mdash;&mdash; guide to adaptation action </h1>
-                            <div class="frame__links"></div>
+                            <div class="frame__links"> </div>
+                        </div>
+                        <div class = "frame__logo-wrapper">
+                            <div class = 'logo-container'>
+                                <Logo type={'width'}/>
+                            </div>
+
                         </div>
                     </div>
 
@@ -366,11 +372,11 @@
         background:             var(--color-hero-bg);
     }
     .frame {
-        padding:        3rem 5vw;
-        text-align:     center;
-        position:       relative;
-        text-transform: lowercase;
-        color: var(--color-text-frame);
+        padding:                3rem 5vw;
+        text-align:             center;
+        position:               relative;
+        text-transform:         lowercase;
+        color:                  var(--color-text-frame);
     }
 
     .frame__title {
@@ -378,12 +384,13 @@
         margin: 0 0 1rem;
         font-weight: normal;
     }
-
-    .frame__links {
-        display: inline-block;
-        margin: 0 0 1rem;
+    .frame__logo-wrapper{
+        display:                flex;
+        grid-area:              1 / 2 / 2 / 3;
+        height:                 7.5vh;
+        align-content:          center;
+        justify-content:        flex-end;
     }
-
 
     .hero__container {
         position:               relative;

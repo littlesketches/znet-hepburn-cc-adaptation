@@ -44,15 +44,15 @@
         <g class = 'approach-group risk-group' class:reset="{$ui.state.actionVis.scene > 0}" >
             <path class=" approach-shape risk" d={triangle(dims.width * 0.333, 'down')}   
                 style = "transform: translate({approachData[0].standard.x}px, {approachData[0].standard.y}px)"/>
-            <text class = "risk label-main" style = "transform: translate({approachData[0].standard.x}px, {approachData[0].standard.y - dims.height * 0.175}px)">
+            <text class = "risk label-main" style = "transform: translate({approachData[0].standard.x}px, {approachData[0].standard.y - dims.height * 0.175 + 40}px)">
                 Reduce risks
             </text>
-            <g class='risk-label-group risk'  style = "transform: translate({approachData[0].standard.x}px, {approachData[0].standard.y - dims.height * 0.175}px)"></g>
+            <g class='risk-label-group risk'  style = "transform: translate({approachData[0].standard.x}px, {approachData[0].standard.y - dims.height * 0.175  + 30}px)"></g>
         </g>
         <g class = 'approach-group resilience-group' class:reset="{$ui.state.actionVis.scene > 0}" >
             <path class="approach-shape resilience" d={triangle(dims.width * 0.333, 'up')} 
                 style = "transform: translate({approachData[1].standard.x}px, {approachData[1].standard.y}px)"/>
-            <text class = "resilience label-main" style = "transform: translate({approachData[1].standard.x}px, {approachData[1].standard.y + dims.height * 0.175}px)">
+            <text class = "resilience label-main" style = "transform: translate({approachData[1].standard.x}px, {approachData[1].standard.y + dims.height * 0.175 + 20}px)">
                 Increase resilience
             </text>
             <g class='resilience-label-group resilience'  style = "transform: translate({approachData[1].standard.x}px, {approachData[0].standard.y + dims.height * 0.175}px)"></g>
@@ -91,6 +91,10 @@
         pointer-events:     none;
         transition:         all 800ms;
     }
+    text{
+        text-anchor:        middle;
+        fill:               var(--approach-bg);
+    }
     .hidden{
         opacity: 0;
     }
@@ -118,18 +122,11 @@
     .resilience{
         fill:               var(--resilience-bg);
     }
-
-    text{
-        text-anchor:        middle;
-        fill:               var(--approach-bg);
-    }
-
     .label,
     .label-main{
         font-weight:        700;
         text-anchor:        middle;
         text-transform:     uppercase;
-        dominant-baseline:  middle;
     }
     .label-main{
         font-size:          80px;
@@ -143,7 +140,6 @@
         font-weight:        400;
         text-anchor:        middle;
     }
-
     .label-small{
         font-size:          25px;
         font-weight:        500;
@@ -152,8 +148,4 @@
         font-size:          25px;
         font-weight:        500;
     }
-
-
-
-
 </style>

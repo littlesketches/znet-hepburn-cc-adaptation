@@ -47,7 +47,7 @@
             .style('fill', 'var(--midGrey)')
             .style('text-anchor', 'middle')
             .text(d => d.Description)
-            .call(textWrap, dims.width * 0.65, 1.1, true)
+            .call(textWrap, dims.width * 0.667, 1.25, true)
     })
 
 </script>
@@ -100,7 +100,7 @@
     }
     :global(.focus-area-label.selected){
         opacity:            1;
-        fill:               var(--brightGreen);
+        fill:               var(--focusArea);
     }
     .focus-area-action-label, 
     .icon{
@@ -108,7 +108,7 @@
         pointer-events:     none;
         font-size:          40px;
         font-weight:        700;
-        fill:               var(--brightGreen);
+        fill:               var(--focusArea);
     }
     .focus-area-label,
     .focus-area-action-label{
@@ -130,7 +130,7 @@
         font-size:          40px;
         font-weight:        700;
         text-anchor:        middle;
-        fill:               var(--brightGreen);
+        fill:               var(--focusArea);
         transition:         all 300ms;
         pointer-events:     none;
     }

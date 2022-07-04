@@ -62,7 +62,7 @@
         stroke-width:       4px;
     }
     .node.selected{
-        fill:               var(--brightGreen);
+        fill:               var(--lightGreen);
     }
 
 
