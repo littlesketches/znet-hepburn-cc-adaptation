@@ -51518,7 +51518,10 @@ var app = (function (exports) {
     		if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
     	}
 
-    	logo = new Logo({ props: { type: 'width' }, $$inline: true });
+    	logo = new Logo({
+    			props: { type: 'height' },
+    			$$inline: true
+    		});
 
     	const block = {
     		c: function create() {
@@ -51599,36 +51602,36 @@ var app = (function (exports) {
     			add_location(div4, file, 244, 20, 10133);
     			attr_dev(div5, "class", "hero__img svelte-17i1sst");
     			set_style(div5, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
-    			add_location(div5, file, 259, 28, 10816);
+    			add_location(div5, file, 259, 28, 10817);
     			attr_dev(a0, "class", "hero__menu-label svelte-17i1sst");
     			attr_dev(a0, "name", "adaptation");
-    			add_location(a0, file, 260, 28, 10991);
+    			add_location(a0, file, 260, 28, 10992);
     			attr_dev(div6, "class", "hero__menu-item");
-    			add_location(div6, file, 258, 24, 10758);
+    			add_location(div6, file, 258, 24, 10759);
     			attr_dev(div7, "class", "hero__img svelte-17i1sst");
     			set_style(div7, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
-    			add_location(div7, file, 263, 28, 11226);
+    			add_location(div7, file, 263, 28, 11227);
     			attr_dev(a1, "class", "hero__menu-label svelte-17i1sst");
     			attr_dev(a1, "name", "actions");
-    			add_location(a1, file, 264, 28, 11418);
+    			add_location(a1, file, 264, 28, 11419);
     			attr_dev(div8, "class", "hero__menu-item");
-    			add_location(div8, file, 262, 24, 11168);
+    			add_location(div8, file, 262, 24, 11169);
     			attr_dev(div9, "class", "hero__img svelte-17i1sst");
     			set_style(div9, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
-    			add_location(div9, file, 267, 28, 11650);
+    			add_location(div9, file, 267, 28, 11651);
     			attr_dev(a2, "class", "hero__menu-label svelte-17i1sst");
     			attr_dev(a2, "name", "postcards");
-    			add_location(a2, file, 268, 28, 11845);
+    			add_location(a2, file, 268, 28, 11846);
     			attr_dev(div10, "class", "hero__menu-item");
-    			add_location(div10, file, 266, 24, 11592);
+    			add_location(div10, file, 266, 24, 11593);
     			attr_dev(div11, "class", "hero__menu svelte-17i1sst");
-    			add_location(div11, file, 257, 20, 10709);
-    			add_location(br0, file, 273, 38, 12106);
+    			add_location(div11, file, 257, 20, 10710);
+    			add_location(br0, file, 273, 38, 12107);
     			attr_dev(span, "class", "highlight svelte-17i1sst");
-    			add_location(span, file, 274, 24, 12135);
-    			add_location(br1, file, 274, 67, 12178);
+    			add_location(span, file, 274, 24, 12136);
+    			add_location(br1, file, 274, 67, 12179);
     			attr_dev(h2, "class", "hero__title svelte-17i1sst");
-    			add_location(h2, file, 272, 20, 12043);
+    			add_location(h2, file, 272, 20, 12044);
     			attr_dev(div12, "class", "hero__container svelte-17i1sst");
     			add_location(div12, file, 243, 16, 10083);
     			attr_dev(div13, "class", "content__reverse");
@@ -51638,19 +51641,19 @@ var app = (function (exports) {
     			attr_dev(section1, "class", "homepage svelte-17i1sst");
     			add_location(section1, file, 240, 4, 9961);
     			attr_dev(div15, "class", "overlay__inner overlay__inner--color-1 svelte-17i1sst");
-    			add_location(div15, file, 284, 12, 12430);
+    			add_location(div15, file, 284, 12, 12431);
     			attr_dev(div16, "class", "overlay overlay--1 svelte-17i1sst");
-    			add_location(div16, file, 283, 8, 12385);
+    			add_location(div16, file, 283, 8, 12386);
     			attr_dev(div17, "class", "overlay__inner overlay__inner--color-2 svelte-17i1sst");
-    			add_location(div17, file, 287, 12, 12557);
+    			add_location(div17, file, 287, 12, 12558);
     			attr_dev(div18, "class", "overlay overlay--2 svelte-17i1sst");
-    			add_location(div18, file, 286, 8, 12512);
+    			add_location(div18, file, 286, 8, 12513);
     			attr_dev(div19, "class", "overlay__inner overlay__inner--color-3 svelte-17i1sst");
-    			add_location(div19, file, 290, 12, 12684);
+    			add_location(div19, file, 290, 12, 12685);
     			attr_dev(div20, "class", "overlay overlay--3 svelte-17i1sst");
-    			add_location(div20, file, 289, 8, 12639);
+    			add_location(div20, file, 289, 8, 12640);
     			attr_dev(section2, "class", "transitions svelte-17i1sst");
-    			add_location(section2, file, 282, 4, 12345);
+    			add_location(section2, file, 282, 4, 12346);
     			attr_dev(main, "id", "app-container");
     			attr_dev(main, "class", "svelte-17i1sst");
     			add_location(main, file, 228, 0, 9514);
