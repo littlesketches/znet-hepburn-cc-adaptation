@@ -20,7 +20,8 @@
 
 <!-- HTML COMPONENT MARKUP-->
 <figure class = "svg-container">
-    <svg class = "climate-hazards-vis" viewBox = '0 0 {dims.width} {dims.height}'>
+    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+        class = "climate-hazards-vis" viewBox = '0 0 {dims.width} {dims.height}'>
         <defs>
 
             <linearGradient id="gr-risk" x1="0" y1="0" x2="100%" y2="100%">

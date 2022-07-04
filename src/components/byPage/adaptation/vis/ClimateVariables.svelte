@@ -91,7 +91,8 @@
 
 <!-- HTML COMPONENT MARKUP-->
 <figure class = "svg-container">
-    <svg class = "climate-variables-vis" viewBox = '0 0 {dims.width} {dims.height}' width="100%">
+    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+        class = "climate-variables-vis" viewBox = '0 0 {dims.width} {dims.height}' width="100%">
         <defs>
             <linearGradient id="rcp" x1="0" y1="0" x2="100%" y2="100%">
                 <stop stop-color="#e21ffc" offset="10%"/>
@@ -210,7 +211,7 @@
         text-align:             center;
         width:                  100%;
         overflow:               hidden;
-        background:              radial-gradient(circle, rgba(15,73,85,1) 0%, rgba(29,1,36,1) 63%, rgba(2,0,36,1) 100%);
+        background:             radial-gradient(circle, rgba(15,73,85,1) 0%, rgba(29,1,36,1) 63%, rgba(2,0,36,1) 100%);
     }
     svg{ 
         overflow:               visible;

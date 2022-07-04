@@ -29,8 +29,8 @@
 
                 const bg = group.append('rect')
                     .style('fill', 'var(--bg-color)')
-                    .style('stroke',   d => d.Class ==='foundation' ? '#000' : 'none')
-                    .style('stroke-width',  '3px')
+                    .style('stroke',   d => d.Class ==='foundation' ? 'var(--lightGreen)' : 'none')
+                    .style('stroke-width',  '2px')
                     .style('border-radius',  '3px')
                     .style('rx',  '5px')
                     .style('ry',  '5px')
@@ -80,11 +80,11 @@
 <g id ="type-vis-container" in:fade>
     <g class = "spectrum-group">
         <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.05 : dims.height* 0.025}px)'>
-            <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Abstract</text> 
+            <text class = "spectrum-label abstract" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Abstract</text> 
             <text class = "spectrum-sub-label" dy="35" class:centered="{$ui.state.actionVis.scene === 3}">Builds capacity</text> 
         </g>
         <g style='transform:translate({$ui.state.actionVis.scene !== 3 ? 0 : dims.width * 0.5}px, {$ui.state.actionVis.scene !== 3 ? dims.height* 0.65 : dims.height* 0.85}px)'>
-            <text class = "spectrum-label" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Concrete</text> 
+            <text class = "spectrum-label concrete" class:centered="{$ui.state.actionVis.scene === 3}"><tspan class:none="{$ui.state.actionVis.scene !== 3}">More</tspan> Concrete</text> 
             <text class = "spectrum-sub-label"class:centered="{$ui.state.actionVis.scene === 3}" dy="35" >Responds to risk</text> 
         </g>
     </g>
@@ -112,6 +112,12 @@
         font-size:          50px;
         font-weight:        700;
         text-transform:     uppercase;
+
+    }
+    .concrete{
+        fill:               var(--midGreen);
+    }
+    .abstract{
         fill:               var(--brightGreen);
     }
     .centered{
@@ -123,15 +129,11 @@
         fill:               var(--midGrey);
     }
 
-    :global(rect.box){
-        fill:               none;
-        stroke:             var(--midGrey);
-        stroke-width:       3px;
-    }
+    :global(rect.box),
     :global(path.flow){
         fill:               none;
-        stroke:             var(--midGrey);
-        stroke-width:       1px;
+        stroke:             var(--lightGreen);
+        stroke-width:       2px;
         stroke-linejoin:    round;
         stroke-linecap:     round;
     }

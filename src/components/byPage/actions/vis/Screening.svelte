@@ -103,17 +103,16 @@
     }
     .no-regrets-group path{
         fill:               none;
-        stroke:             var(--foreground);
+        stroke:             var(--darkGreen);
         stroke-width:       10px;
-        /* mix-blend-mode:     screen; */
     }
     .no-regrets-label{
-        fill:               var(--foreground);
+        fill:               var(--darkGreen);
         font-size:          40px;
         font-weight:        700;
     }
     .no-regrets-number{
-        fill:               var(--foreground);
+        fill:               var(--darkGreen);
         font-size:          25px;
         font-weight:        500;
     }

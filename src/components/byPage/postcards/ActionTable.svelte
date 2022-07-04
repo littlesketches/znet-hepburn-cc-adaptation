@@ -87,7 +87,7 @@
         border-collapse:    collapse;
     }
 	th{
-        font-size:          1rem;
+        font-size:          0.8rem;
         text-align:         left;
         padding:            1.25rem 0.5rem;
         border-bottom:      5px solid var(--brightGreen);
@@ -106,16 +106,16 @@
         padding:            0.5rem;
     }
 
-    td.name,
-    td.leads,
-    td.hazards,
-    td.focusAreas{
-         width:             15%;
+    td.name,    th.name,
+    td.leads,   th.leads,
+    td.hazards, th.hazards,
+    td.focusAreas, th.focusAreas{
+         width:             20%;
     }
-    td.scale,
-    td.type,
-    td.status,
-    td.assessment{
+    td.scale,   th.scale,
+    td.type,    th.type,
+    td.status,  th.status, 
+    td.assessment, th.assessment{
          width:             5%;
     }
     td.status,
@@ -137,13 +137,13 @@
         align-content:      center;
     }
     .icon-container{
-        width:              3rem;
+        width:              2.5rem;
         display:            flex;
         flex-direction:     column;
         align-items:        center;
     }
     .icon-label{
-        font-size:          0.5rem;
+        font-size:          0.45rem;
         text-align:         center;
     }
 

@@ -24,7 +24,7 @@
             ||  (actionData["More info #3 URL"] && actionData["More info #3 description"])  
         }
         <div class ="further-info-container">
-            <h3>Further information</h3>
+            <h3>Find out more</h3>
             <ul>
             {#if actionData["More info #1 URL"] && actionData["More info #1 description"] }
                 <li><a href = {actionData["More info #1 URL"]}  target="_blank">{@html actionData["More info #1 description"]} </a></li>

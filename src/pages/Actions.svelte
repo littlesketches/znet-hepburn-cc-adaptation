@@ -109,7 +109,7 @@
         }
     })
 
-    // Seutp the flow diagram switch function
+    // Setup the flow diagram switch function
     let flowDiagramState = null;
     const flowDiagramOptions = ['Abstract to concrete', 'Action type flow']
     $: {
@@ -149,9 +149,9 @@
                 <li class = "select__item" on:click={scrollTo} actName = "approach">Approach</li>
                 <li class = "select__item" on:click={scrollTo} actName = "scale">Scale</li>
                 <li class = "select__item" on:click={scrollTo} actName = "type">Type</li>
-                <li class = "select__item" on:click={scrollTo} actName = "focusArea">Focus area</li>
+                <li class = "select__item" on:click={scrollTo} actName = "focusArea">Focus areas</li>
                 <li class = "select__item" on:click={scrollTo} actName = "screening">Adaptation criteria</li>
-                <li class = "select__item" on:click={scrollTo} actName = "rating">Rating</li>
+                <li class = "select__item" on:click={scrollTo} actName = "rating">Rating actions</li>
                 <li class = "select__item" on:click={scrollTo} actName = "beyond">Beyond adaptation</li>
             </ul>
         </div>
@@ -314,7 +314,7 @@
         </div>
     </div>
 
-    <!-- Visualsation pane content: the 'stage'-->
+    <!-- Visualisation pane content: the 'stage'-->
     <div class = "vis-wrapper">
         <div class = "action-vis-wrapper">
              <ActionVis/>
@@ -322,6 +322,13 @@
     </div>
 </div>
 
+<!-- Print content-->
+<div class = "print-wrapper">
+    <div class = "print-message">
+        <p>At the moment there is no "print to PDF-able" version of this content as it has been designed for digital media and features interactive content.</p>
+    </div>
+    
+</div>
 
 
 <!-- STYLES -->
@@ -339,6 +346,9 @@
     }
     .vis-wrapper{
         grid-column:            2;
+    }
+    .print-wrapper{
+        display:                none;
     }
     .action-vis-wrapper{
         position:               -webkit-sticky;
@@ -375,7 +385,6 @@
             'title title'
             'text select'
     }
-
     .hero-content__title {
         grid-area:              title;
         font-weight:            700;
@@ -402,7 +411,6 @@
     .hero-content__text {
         grid-area:              text;
     }
-
     .hero-logo{
         grid-area:              logo;
         align-self:             start;
@@ -427,8 +435,6 @@
         color:                  var(--foreground);
         font-weight:            700;
     }
-
-
 
     /* Typography */
     .action-dot,
@@ -464,6 +470,8 @@
     }
 
 
+
+
     @media screen and (min-width: 53em) {
         .hero-content {
             padding:                3rem 3rem 2rem;
@@ -482,20 +490,15 @@
         .hero-content__text {
             max-width: var(--min-col-width);
         }
-
         .select {
             text-align: right;
             margin-top: auto;
             align-self: end;
         }
-        .select__heading {
-            display: block;
-        }
         .select__item {
             display: block;
             margin: 0;
         }
-
         .content-wrapper{
             width:                  calc(100% - 6rem);
             padding:                2rem 0;
@@ -503,6 +506,31 @@
             display:                grid;
             column-gap:             4rem;
             grid-template-columns:  calc(33% - 2rem) calc(67% - 2rem);
+        }
+    }
+
+    .print-message{
+        display:            grid;
+        width:              100vw;
+        height:             calc(100vh - 6rem);
+        align-items:        center;
+        justify-items:      center;
+        padding:            0 20vw;
+        text-align:         center;
+
+    }
+
+    @media print{
+        .select,
+        .narrative-wrapper,
+        .vis-wrapper{
+            display:                none;
+        }
+        .print-wrapper{
+            display:                initial;
+        }
+        .hero-content__title {
+            font-size:              4.5rem;
         }
     }
 </style>
