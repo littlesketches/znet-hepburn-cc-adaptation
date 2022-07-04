@@ -905,19 +905,18 @@ var app = (function (exports) {
                 act:                'intro',
                 scene:              0,
                 nodes:  {
-                    force:              'cluster-center',
-                    focusArea:          null,
-                    base:               true,
-                    shadow:             false,
-                    arcs:               false,
-                    shapes:             false,
-                    symbols:            false
+                    force:          'cluster-center',
+                    focusArea:      null,
+                    base:           true,
+                    shadow:         false,
+                    arcs:           false,
+                    shapes:         false,
+                    symbols:        false
                 },
                 legend: {
                     hazards:        false,
                     approach:       false,
                     scale:          false
-
                 }
             },
             postcards: {
@@ -36368,32 +36367,32 @@ var app = (function (exports) {
     			div11.textContent = "Image style options";
     			t27 = space();
     			if_block.c();
-    			attr_dev(div0, "class", "hero-logo__wrapper svelte-2cdr40");
+    			attr_dev(div0, "class", "hero-logo__wrapper svelte-h0w60z");
     			add_location(div0, file$j, 21, 16, 844);
-    			attr_dev(div1, "class", "hero-logo svelte-2cdr40");
+    			attr_dev(div1, "class", "hero-logo svelte-h0w60z");
     			add_location(div1, file$j, 20, 12, 804);
-    			attr_dev(span0, "class", "title--mute svelte-2cdr40");
+    			attr_dev(span0, "class", "title--mute svelte-h0w60z");
     			add_location(span0, file$j, 24, 16, 970);
     			add_location(br0, file$j, 24, 58, 1012);
     			add_location(br1, file$j, 25, 33, 1051);
-    			attr_dev(span1, "class", "title--highlight svelte-2cdr40");
+    			attr_dev(span1, "class", "title--highlight svelte-h0w60z");
     			add_location(span1, file$j, 26, 16, 1073);
-    			attr_dev(h1, "class", "hero-content__title svelte-2cdr40");
+    			attr_dev(h1, "class", "hero-content__title svelte-h0w60z");
     			add_location(h1, file$j, 23, 12, 921);
     			add_location(em, file$j, 29, 84, 1270);
     			add_location(p, file$j, 29, 16, 1202);
-    			attr_dev(div2, "class", "hero-content__text svelte-2cdr40");
+    			attr_dev(div2, "class", "hero-content__text svelte-h0w60z");
     			add_location(div2, file$j, 28, 12, 1153);
-    			attr_dev(li0, "class", "select__item svelte-2cdr40");
+    			attr_dev(li0, "class", "select__item svelte-h0w60z");
     			add_location(li0, file$j, 34, 20, 1579);
-    			attr_dev(li1, "class", "select__item svelte-2cdr40");
+    			attr_dev(li1, "class", "select__item svelte-h0w60z");
     			add_location(li1, file$j, 35, 20, 1664);
     			add_location(ul, file$j, 33, 16, 1554);
-    			attr_dev(div3, "class", "select svelte-2cdr40");
+    			attr_dev(div3, "class", "select svelte-h0w60z");
     			add_location(div3, file$j, 32, 12, 1516);
-    			attr_dev(div4, "class", "hero-content svelte-2cdr40");
+    			attr_dev(div4, "class", "hero-content svelte-h0w60z");
     			add_location(div4, file$j, 18, 8, 726);
-    			attr_dev(div5, "class", "hero-wrapper svelte-2cdr40");
+    			attr_dev(div5, "class", "hero-wrapper svelte-h0w60z");
     			add_location(div5, file$j, 17, 4, 673);
     			add_location(h2, file$j, 45, 16, 1978);
     			add_location(div6, file$j, 47, 20, 2086);
@@ -36405,9 +36404,9 @@ var app = (function (exports) {
     			add_location(div11, file$j, 54, 20, 2416);
     			add_location(div12, file$j, 51, 16, 2283);
     			add_location(div13, file$j, 44, 12, 1956);
-    			attr_dev(section, "class", "option-container col-1-2 svelte-2cdr40");
+    			attr_dev(section, "class", "option-container col-1-2 svelte-h0w60z");
     			add_location(section, file$j, 43, 8, 1899);
-    			attr_dev(div14, "class", "content-wrapper svelte-2cdr40");
+    			attr_dev(div14, "class", "content-wrapper svelte-h0w60z");
     			add_location(div14, file$j, 42, 4, 1843);
     		},
     		m: function mount(target, anchor) {
@@ -36621,9 +36620,10 @@ var app = (function (exports) {
     			t3 = space();
     			create_component(actiontable.$$.fragment);
     			add_location(h2, file$j, 67, 12, 2838);
-    			add_location(em, file$j, 68, 15, 2891);
+    			add_location(em, file$j, 68, 31, 2907);
+    			attr_dev(p, "class", "notes svelte-h0w60z");
     			add_location(p, file$j, 68, 12, 2888);
-    			attr_dev(section, "class", "table-container svelte-2cdr40");
+    			attr_dev(section, "class", "table-container svelte-h0w60z");
     			add_location(section, file$j, 66, 8, 2774);
     		},
     		m: function mount(target, anchor) {
@@ -44517,8 +44517,7 @@ var app = (function (exports) {
     				endAngle: 2 * Math.PI
     			}));
 
-    			toggle_class(path, "healing-country", /*node*/ ctx[17]["Healing country"]);
-    			add_location(path, file$b, 155, 16, 6039);
+    			add_location(path, file$b, 156, 16, 6040);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -44531,10 +44530,6 @@ var app = (function (exports) {
     				endAngle: 2 * Math.PI
     			}))) {
     				attr_dev(path, "d", path_d_value);
-    			}
-
-    			if (dirty & /*renderedNodes*/ 2) {
-    				toggle_class(path, "healing-country", /*node*/ ctx[17]["Healing country"]);
     			}
     		},
     		d: function destroy(detaching) {
@@ -44595,9 +44590,9 @@ var app = (function (exports) {
     			set_style(g0, "transform", "scale(1)");
     			add_location(g0, file$b, 112, 12, 3744);
     			attr_dev(text_1, "class", "label-text svelte-yr9wu9");
-    			add_location(text_1, file$b, 168, 16, 6506);
+    			add_location(text_1, file$b, 169, 16, 6457);
     			attr_dev(g1, "class", "label svelte-yr9wu9");
-    			add_location(g1, file$b, 167, 12, 6470);
+    			add_location(g1, file$b, 168, 12, 6421);
     			attr_dev(g2, "class", "node-wrapper svelte-yr9wu9");
     			add_location(g2, file$b, 110, 8, 3704);
     			attr_dev(g3, "class", "node-group svelte-yr9wu9");
@@ -48375,12 +48370,12 @@ var app = (function (exports) {
     			create_component(force.$$.fragment);
     			if (if_block1) if_block1.c();
     			attr_dev(svg, "viewBox", `0 0 ${/*dims*/ ctx[3].width} ${/*dims*/ ctx[3].height}`);
-    			attr_dev(svg, "class", "svelte-1v25lzs");
+    			attr_dev(svg, "class", "svelte-191vh3m");
     			add_location(svg, file$3, 510, 12, 28467);
-    			attr_dev(figure, "class", "svelte-1v25lzs");
+    			attr_dev(figure, "class", "svelte-191vh3m");
     			add_location(figure, file$3, 509, 8, 28446);
     			add_location(div, file$3, 508, 4, 28410);
-    			attr_dev(section, "class", "svelte-1v25lzs");
+    			attr_dev(section, "class", "svelte-191vh3m");
     			add_location(section, file$3, 506, 0, 28369);
     		},
     		l: function claim(nodes) {
@@ -49742,7 +49737,26 @@ var app = (function (exports) {
     	let h28;
     	let t178;
     	let p29;
-    	let t180;
+    	let t179;
+    	let strong16;
+    	let t181;
+    	let t182;
+    	let p30;
+    	let t183;
+    	let strong17;
+    	let t185;
+    	let t186;
+    	let ul2;
+    	let li11;
+    	let t188;
+    	let li12;
+    	let t190;
+    	let li13;
+    	let t192;
+    	let li14;
+    	let t194;
+    	let p31;
+    	let t196;
     	let div39;
     	let div38;
     	let actionvis;
@@ -50089,8 +50103,33 @@ var app = (function (exports) {
     			h28.textContent = "Beyond the adaptation lens";
     			t178 = space();
     			p29 = element("p");
-    			p29.textContent = "We've taken a look at our adaptation actions through various lenses and perspectives, and we've even tried to  assess and rank our actions....";
-    			t180 = space();
+    			t179 = text$1("We've taken a look at our adaptation actions as a ");
+    			strong16 = element("strong");
+    			strong16.textContent = "collective";
+    			t181 = text$1(", through a series lenses and perspectives. We've even tried to assess and rank our actions. But is that enough? Do we now know what to do to adapt to climate change?!");
+    			t182 = space();
+    			p30 = element("p");
+    			t183 = text$1("Well unfortunately, like all complex challenges, there are (yet) ");
+    			strong17 = element("strong");
+    			strong17.textContent = "more characteristics that need to be considered";
+    			t185 = text$1(" that can be equally sophisticated and obtuse. Areas that we haven't 'analysed' here include:");
+    			t186 = space();
+    			ul2 = element("ul");
+    			li11 = element("li");
+    			li11.textContent = "action timing and dependencies and/or mutual exclusivity;";
+    			t188 = space();
+    			li12 = element("li");
+    			li12.textContent = "synergies (and dis-synergies) of adaptation benefits;";
+    			t190 = space();
+    			li13 = element("li");
+    			li13.textContent = "the roles of influence and responsibility; and";
+    			t192 = space();
+    			li14 = element("li");
+    			li14.textContent = "idea that actions can have adaptation co-benefits and unintended consequences.";
+    			t194 = space();
+    			p31 = element("p");
+    			p31.textContent = "These last concepts are critical to remember as there can be many reasons to proceed or not proceed with an action that have nothing to do with climate change adaptation. Our challenge as a community is not to precisely account for each of these sophisticated characteristics. Instead, we can use our understanding of what makes for a good adaptation response to support and coordinate actions that we are confident will lead to comprehensive and practical adaptation benefits for our community.";
+    			t196 = space();
     			div39 = element("div");
     			div38 = element("div");
     			create_component(actionvis.$$.fragment);
@@ -50278,119 +50317,128 @@ var app = (function (exports) {
     			attr_dev(div20, "legendscale", "false");
     			add_location(div20, file$1, 220, 8, 12562);
     			attr_dev(hr4, "class", "svelte-2xkn88");
-    			add_location(hr4, file$1, 248, 16, 15252);
+    			add_location(hr4, file$1, 236, 16, 14117);
     			attr_dev(h24, "class", "svelte-2xkn88");
-    			add_location(h24, file$1, 249, 16, 15273);
+    			add_location(h24, file$1, 237, 16, 14138);
     			attr_dev(div21, "scene", "0");
     			attr_dev(div21, "force", "right-line");
-    			add_location(div21, file$1, 247, 12, 15198);
-    			add_location(p14, file$1, 252, 16, 15405);
-    			add_location(strong6, file$1, 253, 63, 15673);
-    			add_location(em9, file$1, 253, 145, 15755);
-    			add_location(em10, file$1, 253, 193, 15803);
-    			add_location(p15, file$1, 253, 16, 15626);
+    			add_location(div21, file$1, 235, 12, 14063);
+    			add_location(p14, file$1, 240, 16, 14270);
+    			add_location(strong6, file$1, 241, 63, 14538);
+    			add_location(em9, file$1, 241, 145, 14620);
+    			add_location(em10, file$1, 241, 193, 14668);
+    			add_location(p15, file$1, 241, 16, 14491);
     			attr_dev(div22, "scene", "1");
     			attr_dev(div22, "force", "cluster-concrete-abstract-right");
-    			add_location(div22, file$1, 251, 12, 15330);
-    			add_location(p16, file$1, 256, 16, 15937);
-    			add_location(em11, file$1, 258, 143, 16280);
-    			add_location(p17, file$1, 258, 16, 16153);
+    			add_location(div22, file$1, 239, 12, 14195);
+    			add_location(p16, file$1, 244, 16, 14802);
+    			add_location(em11, file$1, 246, 143, 15145);
+    			add_location(p17, file$1, 246, 16, 15018);
     			attr_dev(div23, "scene", "2");
     			attr_dev(div23, "force", "cluster-type");
-    			add_location(div23, file$1, 255, 12, 15883);
+    			add_location(div23, file$1, 243, 12, 14748);
     			attr_dev(div24, "act", "type");
     			attr_dev(div24, "class", "act-narrative svelte-2xkn88");
     			attr_dev(div24, "legendhazards", "0.25");
     			attr_dev(div24, "legendapproach", "0.5");
     			attr_dev(div24, "legendscale", "0.75");
-    			add_location(div24, file$1, 246, 8, 15079);
+    			add_location(div24, file$1, 234, 8, 13944);
     			attr_dev(hr5, "class", "svelte-2xkn88");
-    			add_location(hr5, file$1, 266, 16, 16597);
+    			add_location(hr5, file$1, 254, 16, 15462);
     			attr_dev(h25, "class", "svelte-2xkn88");
-    			add_location(h25, file$1, 267, 16, 16618);
-    			add_location(strong7, file$1, 268, 19, 16669);
+    			add_location(h25, file$1, 255, 16, 15483);
+    			add_location(strong7, file$1, 256, 19, 15534);
     			attr_dev(a0, "href", "https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf");
     			attr_dev(a0, "target", "_blank");
-    			add_location(a0, file$1, 268, 84, 16734);
+    			add_location(a0, file$1, 256, 84, 15599);
     			attr_dev(a1, "href", "https://adaptgrampians.com.au/");
     			attr_dev(a1, "target", "_blank");
-    			add_location(a1, file$1, 268, 305, 16955);
-    			add_location(strong8, file$1, 268, 491, 17141);
-    			add_location(p18, file$1, 268, 16, 16666);
-    			add_location(strong9, file$1, 269, 76, 17269);
-    			add_location(p19, file$1, 269, 16, 17209);
-    			add_location(strong10, file$1, 270, 166, 17595);
-    			add_location(p20, file$1, 270, 16, 17445);
+    			add_location(a1, file$1, 256, 305, 15820);
+    			add_location(strong8, file$1, 256, 491, 16006);
+    			add_location(p18, file$1, 256, 16, 15531);
+    			add_location(strong9, file$1, 257, 76, 16134);
+    			add_location(p19, file$1, 257, 16, 16074);
+    			add_location(strong10, file$1, 258, 166, 16460);
+    			add_location(p20, file$1, 258, 16, 16310);
     			attr_dev(div25, "scene", "0");
     			attr_dev(div25, "force", "ring-focusArea");
-    			add_location(div25, file$1, 265, 12, 16541);
+    			add_location(div25, file$1, 253, 12, 15406);
     			attr_dev(div26, "act", "focusArea");
     			attr_dev(div26, "class", "act-narrative svelte-2xkn88");
-    			add_location(div26, file$1, 264, 8, 16480);
+    			add_location(div26, file$1, 252, 8, 15345);
     			attr_dev(hr6, "class", "svelte-2xkn88");
-    			add_location(hr6, file$1, 276, 16, 17863);
+    			add_location(hr6, file$1, 264, 16, 16728);
     			attr_dev(h26, "class", "svelte-2xkn88");
-    			add_location(h26, file$1, 277, 16, 17884);
+    			add_location(h26, file$1, 265, 16, 16749);
     			attr_dev(div27, "scene", "0");
     			attr_dev(div27, "force", "cluster-screening");
-    			add_location(div27, file$1, 275, 12, 17804);
-    			add_location(p21, file$1, 280, 16, 18006);
-    			add_location(strong11, file$1, 282, 103, 18375);
-    			add_location(strong12, file$1, 282, 282, 18554);
-    			add_location(strong13, file$1, 282, 307, 18579);
-    			add_location(strong14, file$1, 282, 340, 18612);
-    			add_location(p22, file$1, 282, 16, 18288);
+    			add_location(div27, file$1, 263, 12, 16669);
+    			add_location(p21, file$1, 268, 16, 16871);
+    			add_location(strong11, file$1, 270, 103, 17240);
+    			add_location(strong12, file$1, 270, 282, 17419);
+    			add_location(strong13, file$1, 270, 307, 17444);
+    			add_location(strong14, file$1, 270, 340, 17477);
+    			add_location(p22, file$1, 270, 16, 17153);
     			attr_dev(div28, "scene", "1");
     			attr_dev(div28, "force", "cluster-screening");
-    			add_location(div28, file$1, 279, 12, 17948);
-    			add_location(strong15, file$1, 285, 79, 18793);
-    			add_location(p23, file$1, 285, 16, 18730);
-    			add_location(em12, file$1, 286, 47, 18965);
-    			add_location(p24, file$1, 286, 16, 18934);
+    			add_location(div28, file$1, 267, 12, 16813);
+    			add_location(strong15, file$1, 273, 79, 17658);
+    			add_location(p23, file$1, 273, 16, 17595);
+    			add_location(em12, file$1, 274, 47, 17830);
+    			add_location(p24, file$1, 274, 16, 17799);
     			attr_dev(div29, "scene", "2");
     			attr_dev(div29, "force", "cluster-screening");
-    			add_location(div29, file$1, 284, 12, 18672);
+    			add_location(div29, file$1, 272, 12, 17537);
     			attr_dev(div30, "act", "screening");
     			attr_dev(div30, "class", "act-narrative svelte-2xkn88");
-    			add_location(div30, file$1, 274, 8, 17744);
+    			add_location(div30, file$1, 262, 8, 16609);
     			attr_dev(hr7, "class", "svelte-2xkn88");
-    			add_location(hr7, file$1, 292, 16, 19408);
+    			add_location(hr7, file$1, 280, 16, 18273);
     			attr_dev(h27, "class", "svelte-2xkn88");
-    			add_location(h27, file$1, 293, 16, 19429);
-    			add_location(p25, file$1, 294, 16, 19486);
+    			add_location(h27, file$1, 281, 16, 18294);
+    			add_location(p25, file$1, 282, 16, 18351);
     			attr_dev(div31, "scene", "0");
     			attr_dev(div31, "force", "cluster-noregets-vs-others");
-    			add_location(div31, file$1, 291, 12, 19341);
-    			add_location(p26, file$1, 298, 16, 19703);
+    			add_location(div31, file$1, 279, 12, 18206);
+    			add_location(p26, file$1, 286, 16, 18568);
     			attr_dev(div32, "scene", "1");
     			attr_dev(div32, "force", "cluster-adaptation-criteria");
-    			add_location(div32, file$1, 297, 12, 19635);
-    			add_location(em13, file$1, 302, 495, 20583);
-    			add_location(p27, file$1, 302, 16, 20104);
-    			add_location(p28, file$1, 304, 16, 20659);
+    			add_location(div32, file$1, 285, 12, 18500);
+    			add_location(em13, file$1, 290, 495, 19448);
+    			add_location(p27, file$1, 290, 16, 18969);
+    			add_location(p28, file$1, 292, 16, 19524);
     			attr_dev(div33, "scene", "2");
     			attr_dev(div33, "force", "cluster-rating");
-    			add_location(div33, file$1, 301, 12, 20049);
+    			add_location(div33, file$1, 289, 12, 18914);
     			attr_dev(div34, "act", "rating");
     			attr_dev(div34, "class", "act-narrative svelte-2xkn88");
-    			add_location(div34, file$1, 290, 8, 19284);
+    			add_location(div34, file$1, 278, 8, 18149);
     			attr_dev(hr8, "class", "svelte-2xkn88");
-    			add_location(hr8, file$1, 311, 16, 20911);
+    			add_location(hr8, file$1, 299, 16, 19776);
     			attr_dev(h28, "class", "svelte-2xkn88");
-    			add_location(h28, file$1, 312, 16, 20932);
-    			add_location(p29, file$1, 313, 16, 20984);
+    			add_location(h28, file$1, 300, 16, 19797);
+    			add_location(strong16, file$1, 301, 69, 19902);
+    			add_location(p29, file$1, 301, 16, 19849);
+    			add_location(strong17, file$1, 303, 84, 20202);
+    			add_location(p30, file$1, 303, 16, 20134);
+    			add_location(li11, file$1, 306, 20, 20422);
+    			add_location(li12, file$1, 307, 20, 20509);
+    			add_location(li13, file$1, 308, 20, 20592);
+    			add_location(li14, file$1, 309, 20, 20668);
+    			add_location(ul2, file$1, 305, 16, 20397);
+    			add_location(p31, file$1, 311, 16, 20796);
     			attr_dev(div35, "scene", "0");
     			attr_dev(div35, "force", "ring-mid");
-    			add_location(div35, file$1, 310, 12, 20862);
+    			add_location(div35, file$1, 298, 12, 19727);
     			attr_dev(div36, "act", "outro");
     			attr_dev(div36, "class", "act-narrative svelte-2xkn88");
-    			add_location(div36, file$1, 309, 8, 20806);
+    			add_location(div36, file$1, 297, 8, 19671);
     			attr_dev(div37, "class", "narrative-wrapper svelte-2xkn88");
     			add_location(div37, file$1, 163, 4, 7981);
     			attr_dev(div38, "class", "action-vis-wrapper svelte-2xkn88");
-    			add_location(div38, file$1, 329, 8, 22467);
+    			add_location(div38, file$1, 319, 8, 21453);
     			attr_dev(div39, "class", "vis-wrapper svelte-2xkn88");
-    			add_location(div39, file$1, 328, 4, 22431);
+    			add_location(div39, file$1, 318, 4, 21417);
     			attr_dev(div40, "class", "content-wrapper svelte-2xkn88");
     			add_location(div40, file$1, 161, 0, 7909);
     		},
@@ -50654,7 +50702,26 @@ var app = (function (exports) {
     			append_dev(div35, h28);
     			append_dev(div35, t178);
     			append_dev(div35, p29);
-    			append_dev(div40, t180);
+    			append_dev(p29, t179);
+    			append_dev(p29, strong16);
+    			append_dev(p29, t181);
+    			append_dev(div35, t182);
+    			append_dev(div35, p30);
+    			append_dev(p30, t183);
+    			append_dev(p30, strong17);
+    			append_dev(p30, t185);
+    			append_dev(div35, t186);
+    			append_dev(div35, ul2);
+    			append_dev(ul2, li11);
+    			append_dev(ul2, t188);
+    			append_dev(ul2, li12);
+    			append_dev(ul2, t190);
+    			append_dev(ul2, li13);
+    			append_dev(ul2, t192);
+    			append_dev(ul2, li14);
+    			append_dev(div35, t194);
+    			append_dev(div35, p31);
+    			append_dev(div40, t196);
     			append_dev(div40, div39);
     			append_dev(div39, div38);
     			mount_component(actionvis, div38, null);
