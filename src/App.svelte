@@ -249,7 +249,7 @@
                         </div>
                         <div class = "frame__logo-wrapper">
                             <div class = 'logo-container'>
-                                <Logo type={'width'}/>
+                                <Logo type={'height'}/>
                             </div>
 
                         </div>
