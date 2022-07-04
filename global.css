@@ -3,13 +3,16 @@
     /* Palette */
     --darkGreen:            #00241a;
     --brightGreen:          #05e8a0;
-    --midGreen:             hsl(161, 37%, 46%);
+    --midGreen:             #4aa185;
     --lightGreen:           #9CBAAC;
     --midGrey:              #666666;
     --lightGrey:            #f8f8f8;
     --offWhite:             #EFEFEF;
-    --foreground:           #2b167d;
-    --foreground:           #00241a;
+
+    --pc-foreground:           #093e6a;
+    --pc-foreground:           #00241a;
+    --pc-background:           #05e8a0;
+    /* --foreground:           #00241a; */
     --bg-color:             #fff;
     --color-overlay-1:      hsl(161, 97%, 46%);
     --color-overlay-2:      #caa02f;
@@ -20,20 +23,37 @@
     /* Google palette for testing */
     --nodeBase:             var(--brightGreen);
     --nodeLabel:            var(--darkGreen);
-    --flood:                #4285F4;
+    --flood:                #5386d8;
     --heat:                 #F4B400;
     --fire:                 #DB4437;
     --drought:              #0F9D58;
+    /* Alternate palette */
+    --flood:                #428cd4;
+    --heat:                 #e6b93e;
+    --fire:                 #dd5959;
+    --drought:              #2c9f98;
+    --drought:              #bf5daf;
 
-    --noCriteria:           #caa02f;
-    --yesCriteria:          #05e8a0;
+
+    --noRegrets:            var(--midGreen);
+    --twoCriteria:          var(--midGreen);
+    --oneCriteria:          var(--midGreen);
+    --zeroCriteria:          var(--midGrey);
+    --discardCriteria:      #d57d74;
+    --forRating:              var(--midGrey);
+
+
+    --noCriteria:           #bf5daf;
+    --yesCriteria:          var(--midGreen);
     --unsureCriteria:       #f8f8f8;
 
     --healing-country:      #00261B;
 
     --approach-bg:          #9CBAAC;
-    --risk-bg:              #2b167d;
+    --risk-bg:              var(--midGreen);
     --resilience-bg:        #03E69F;
+
+    --focusArea:            var(--midGreen);
 
     --bg-blend:             multiply;
     --blur:                 0px;
@@ -135,7 +155,7 @@ li{
 
 .about-container p,
 .about-container ul{
-    font-size:      1rem;
+    font-size:      1vw;
 }
 
 *,
