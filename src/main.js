@@ -11,6 +11,24 @@ initWithAirtableContent(initSvelteApp)
 // Instantiate Svelte App with content and queryParams as props
 function initSvelteApp(actionData, schemaData, climateData){
     const queryParams = new URLSearchParams(window.location.search)
+    
+    // Filter action data for records with 'complete' data entry
+    console.log(actionData["Adaptation actions"]) 
+    actionData["Adaptation actions"] = actionData["Adaptation actions"]
+                                            .filter( d => d["Action type"])
+                                            .filter( d => d["Adaptation and risk approach"])
+                                            .filter( d => !isNaN(d["Adaptation rating"]) ) 
+                                            .filter( d => !isNaN(d["Average hazard rating"]) ) 
+                                            .filter( d => d["Name"])
+                                            .filter( d => d["Focus areas"])
+                                            .filter( d => d["Hazard"])
+                                            .filter( d => d["Hazard event"])
+                                            .filter( d => d["Linked approach theme"])
+                                            .filter( d => d["Project leads"])
+                                            .filter( d => d["Flexible: increases flexibility and preserves options"])
+                                            .filter( d => d["Robust: to wide range of climate futures"])
+                                            .filter( d => d["Viable: practical and financially viable"])
+                                            .filter( d => d["Scale"])
 
     app = new App({
         target: document.body,
@@ -52,7 +70,6 @@ function initWithAirtableContent(initApp){
             fetchNextPage()
         }).then( async() => {
         
-
             //////////// Load climate data from GSheet TSV
             const loadedClimateData =  await tsv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS86VEQlm8KI0g0b_thIlz8boNSfWwO5xZgA_8wLOEfjgygRUR0WEVHnBD2kh9EgbgJqyKuKdkwn-F3/pub?gid=0&single=true&output=tsv")
 
