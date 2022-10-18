@@ -71,9 +71,11 @@ function initWithAirtableContent(initApp){
         }).then( async() => {
         
             //////////// Load climate data from GSheet TSV
-            const loadedClimateData =  await tsv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS86VEQlm8KI0g0b_thIlz8boNSfWwO5xZgA_8wLOEfjgygRUR0WEVHnBD2kh9EgbgJqyKuKdkwn-F3/pub?gid=0&single=true&output=tsv")
+            // const loadedClimateData =  await tsv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS86VEQlm8KI0g0b_thIlz8boNSfWwO5xZgA_8wLOEfjgygRUR0WEVHnBD2kh9EgbgJqyKuKdkwn-F3/pub?gid=0&single=true&output=tsv")
+            const loadedClimateData =  []
+            // console.log(loadedClimateData)
 
-            // Parse and shape data to numbers
+            // // Parse and shape data to numbers
             const climateData = {
                 schema: {
                     scenarios:  ["RCP4.5", "RCP8.5"],
