@@ -90,7 +90,7 @@
 </script>
 
 <!-- HTML COMPONENT MARKUP-->
-<!-- <figure class = "svg-container">
+<figure class = "svg-container">
     <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
         class = "climate-variables-vis" viewBox = '0 0 {dims.width} {dims.height}' width="100%">
         <defs>
@@ -200,10 +200,10 @@
         </g>
 
     </svg> 
-</figure> -->
-<div class = "temp-img-container">
+</figure>
+<!-- <div class = "temp-img-container">
     <img src ="https://raw.githubusercontent.com/littlesketches/little-portfolio/main/img/projects/png/znet-hepburn-cca-01.png"/>
-</div>
+</div> -->
 
 
 <!-- STYLING-->
