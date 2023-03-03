@@ -20,7 +20,9 @@
     "svelte": "^3.0.0"
   },
   "dependencies": {
+    "d3": "^7.8.2",
     "gsap": "^3.11.4",
+    "showdown": "^2.1.0",
     "sirv-cli": "^2.0.0"
   }
 }
