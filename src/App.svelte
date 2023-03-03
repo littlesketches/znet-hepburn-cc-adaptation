@@ -216,8 +216,8 @@
         };
 
         // Set page view if set via query param
-        if(queryParams.get('page')) showPage(queryParams.get('page'))
-        if(queryParams.get('postcards')) $ui.state.postcards.view = queryParams.get('postcards')
+        // if(queryParams.get('page')) showPage(queryParams.get('page'))
+        // if(queryParams.get('postcards')) $ui.state.postcards.view = queryParams.get('postcards')
 
     });
 
