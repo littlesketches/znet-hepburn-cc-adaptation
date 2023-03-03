@@ -118,7 +118,7 @@
     .hero-content__title::after {
         content:                '';
         position:               absolute;
-        width:                  3rem;
+        /* width:                  3rem; */
         height:                 1px;
         background:             currentColor;
         top:                    100%;

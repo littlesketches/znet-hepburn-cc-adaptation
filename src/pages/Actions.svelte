@@ -139,7 +139,7 @@
             <span class = "title--highlight">actions</span>
         </h1>
         <div class="hero-content__text">
-            <p>There's a lot to consider when thinking about the actions we need to take to prepare and adapt our community for climate change. In this section we'll take a closer look at key actions that area already happening in and around Hepburn, through a series of different adaptation 'lenses'. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.
+            <p>There's a lot to consider when thinking about the actions we need to take to prepare and adapt our community for climate change. In this section we'll take a closer look at key actions that are already happening in and around Hepburn Shire, through a series of different adaptation 'lenses'. Our aim is to get a comprehensive idea of how we're responding, and what else we might need to do.
             </p>
         </div>
         <div class ="select">
@@ -166,10 +166,10 @@
             <div scene = 0 force='cluster-center'>
                 <hr>
                 <h2>Making sense of adaptation actions</h2>
-                <p>We've identified {@html $data.stats.actions.total} actions (so far) that are helping Hepburn adapt to climate change. Let's start by representing each action as a little <span class = "action-dot">dot</span> on the screen.</p> 
+                <p>We've identified {@html $data.stats.actions.total} actions (so far) that are helping Hepburn Shire adapt to climate change. Let's start by representing each action as a little <span class = "action-dot">dot</span> on the screen.</p> 
             </div>
             <div scene = 1 force="ring-outer">
-                <p>This seems nice an orderly: {@html $data.stats.actions.total} actions <em>seems</em> reasonable...or is it!? Adaptation actions vary wildly in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.</p>
+                <p>This seems nice and orderly: {@html $data.stats.actions.total} actions <em>seems</em> reasonable...or is it!? Adaptation actions vary wildly in size, scope and focus: many of actions here have adaptation benefits, but aren't specifically being done to manage climate risks and impacts.</p>
             </div>
             <div scene = 2 act="intro" force = "arrow-down">
                 <p>So how can we see how these actions match up to <em>our</em> adaptation needs? How can we tell if what we're doing is effective? Are we doing <em>enough</em>? And are we doing enough in the <em>right places?</em>
@@ -191,7 +191,7 @@
                 </p>
             </div>
             <div act="hazards" scene = 2 force="cluster-center" nodeBase="false" nodeArcs = "true" nodeShapes = "false" nodeShadow = "false">
-                <p>So how about we re-design our dots by putting some matching <span class="text-arcs">coloured arcs</span> around our actions. Its a bit busy, but now we can identify which actions address which hazards!
+                <p>So how about we re-design our dots by putting some matching <span class="text-arcs">coloured arcs</span> around our actions. It's a bit busy, but now we can identify which actions address which hazards!
                 </p>
             </div>
         </div>
@@ -226,7 +226,7 @@
                 </p>
             </div>
             <div scene = 1 force="cluster-scale" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "true" nodeSymbol = "false" >
-                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; maybe we could adjust the overall size of each action? However <strong>we're interested in how these actions affect Hepburn</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!
+                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; maybe we could adjust the overall size of each action? However, <strong>we're interested in how these actions affect Hepburn</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!
                 </p>
             </div>
         </div>
@@ -243,7 +243,7 @@
             <div scene = 2 force="cluster-type"> 
                 <p>We could see how actions are distributed by type by positioning them on the diagram. This view helps us see what types of actions are taking place, and where more attention might be required.</p>
 
-                <p>We can also used these classifications to reveal how actions are distributed on a more focused action type spectrum between <em>more abstract to more concrete</em> using this switch below.</p> 
+                <p>We can also use these classifications to reveal how actions are distributed on a more focused action-type spectrum between <em>more abstract to more concrete</em> using this switch below.</p> 
 
                 <Switch bind:value={flowDiagramState} options={flowDiagramOptions} />
             </div>
@@ -253,8 +253,8 @@
             <div scene = 0 force="ring-focusArea" >
                 <hr>
                 <h2>Adaptation focus areas</h2>
-                <p><strong>Five focus areas</strong> have were identified through a <a href="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target ="_blank">climate adaptation situational analysis study</a> for broader <a href="https://adaptgrampians.com.au/" target ="_blank"> Grampians region</a>. These areas are another useful lens for assessing how well distributed our adaptation actions are across <strong> areas that matter to Hepburn</strong>.</p>
-                <p>For Hepburn, we've added a sixth important focus area of <strong>healing country</strong> to highlight the importance of actions that embrace the views and practices of Traditional Owners' to manage climate risk.</p>
+                <p><strong>Five focus areas</strong> have were identified through a <a href="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target ="_blank">climate adaptation situational analysis study</a> for broader <a href="https://adaptgrampians.com.au/" target ="_blank"> Grampians region</a>. These areas are another useful lens for assessing how well distributed our adaptation actions are across <strong> areas that matter to Hepburn Shire</strong>.</p>
+                <p>For Hepburn, we've added a sixth important focus area of <strong>healing country</strong> to highlight the importance of actions that embrace the views and practices of Traditional Owners to manage climate risk.</p>
                 <p>Now of course, many actions address multiple focus areas - so we'll another way to show which actions gravitate to a given focus area. To do this, <strong>you can tap on any of the focus area names to see which actions relate to that area.</strong></p>
             </div>
         </div>
@@ -271,7 +271,7 @@
             </div>
             <div scene = 2 force="cluster-screening">
                 <p>Actions that meet all criteria are automatically classed as <strong>no regrets actions</strong>: there's no reason to not do these actions, so we should implement and support them!</p>
-                <p>Actions that answer "no" to <em>any of the three criteria</em> are considered to have limited adaptation benefit, or may lead to maladaptation. These actions are de-prioritised and essentially discarded from consideration. Next we'll look at How we might go further and prioritise these actions.</p>
+                <p>Actions that answer "no" to <em>any of the three criteria</em> are considered to have limited adaptation benefit, or may lead to maladaptation. These actions are de-prioritised and essentially discarded from consideration. Next we'll look at how we might go further and prioritise these actions.</p>
             </div>    
         </div>
 
@@ -283,7 +283,7 @@
                 </p>
             </div>
             <div scene = 1 force="cluster-adaptation-criteria">
-                <p>We can use our adaptation criteria further to create priority tiers for those actions that met two, one or none of the criteria. This is a imperfect way of stratifying actions but is relatively logical and robust: actions that expected to meet more key adaptation criteria float to the top.
+                <p>We can use our adaptation criteria further to create priority tiers for those actions that met two, one or none of the criteria. This is an imperfect way of stratifying actions but is relatively logical and robust: actions that expected to meet more key adaptation criteria float to the top.
                 </p>
             </div>
             <div scene = 2 force="cluster-rating">
@@ -326,8 +326,7 @@
 <div class = "print-wrapper">
     <div class = "print-message">
         <p>At the moment there is no "print to PDF-able" version of this content as it has been designed for digital media and features interactive content.</p>
-    </div>
-    
+    </div>    
 </div>
 
 
@@ -399,7 +398,7 @@
     .hero-content__title::after {
         content:                '';
         position:               absolute;
-        width:                  3rem;
+        /* width:                  3rem; */
         height:                 1px;
         background:             currentColor;
         top:                    100%;

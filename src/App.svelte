@@ -13,7 +13,7 @@
 	export let schemaData;
 	export let climateData;
 	export let queryParams = {};
-
+console.log(actionData)
 
     // Store loaded action data and schema
     $data.actions       = actionData["Adaptation actions"]
@@ -273,7 +273,7 @@
                     <h2 class="hero__title">
                         Climate change<br>
                         <span class = "highlight">adaptation</span><br>
-                        in Hepburn</h2>
+                        in Hepburn Shire</h2>
                 </div>
             </div>
         </div>

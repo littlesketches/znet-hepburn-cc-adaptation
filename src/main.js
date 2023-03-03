@@ -73,7 +73,7 @@ function initWithAirtableContent(initApp){
             //////////// Load climate data from GSheet TSV
             const loadedClimateData =  await tsv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTdZpZiXgr0PBPLmMtIGJVNzRrxv3F70UEPT3vhbzg3IsjIbu__JY8PWve6r5Tt2dqNmg-jOXPiwf-y/pub?gid=0&single=true&output=tsv")
             // const loadedClimateData =  []
-            console.log(loadedClimateData)
+
 
             // // Parse and shape data to numbers
             const climateData = {
@@ -88,7 +88,7 @@ function initWithAirtableContent(initApp){
                     projectedChange: {}
                 } 
             }
-console.log(climateData)
+
             for(const d of loadedClimateData){
                 for(const scenario of climateData.schema.scenarios){ 
                     if(!climateData.variables.projectedChange[scenario]) climateData.variables.projectedChange[scenario] = {}
@@ -108,7 +108,7 @@ console.log(climateData)
                     }
                 }
             }
-console.log(climateData.variables.projectedChange)
+
             /// Call initApp
             if(tableName == dataTableNames[dataTableNames.length - 1]){
                 setTimeout(() => initApp(airtableData, schema, climateData), 1000)
