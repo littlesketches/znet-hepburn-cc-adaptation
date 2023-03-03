@@ -13,7 +13,7 @@
 	export let schemaData;
 	export let climateData;
 	export let queryParams = {};
-console.log(actionData)
+
 
     // Store loaded action data and schema
     $data.actions       = actionData["Adaptation actions"]

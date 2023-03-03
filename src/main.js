@@ -10,10 +10,9 @@ initWithAirtableContent(initSvelteApp)
 
 // Instantiate Svelte App with content and queryParams as props
 function initSvelteApp(actionData, schemaData, climateData){
-    const queryParams = new URLSearchParams(window.location.search)
+    // const queryParams = new URLSearchParams(window.location.search)
     
     // Filter action data for records with 'complete' data entry
-    console.log(actionData["Adaptation actions"]) 
     actionData["Adaptation actions"] = actionData["Adaptation actions"]
                                             .filter( d => d["Action type"])
                                             .filter( d => d["Adaptation and risk approach"])
@@ -32,7 +31,7 @@ function initSvelteApp(actionData, schemaData, climateData){
 
     app = new App({
         target: document.body,
-        props: {actionData, schemaData, climateData, queryParams}
+        props: {actionData, schemaData, climateData}
     });
 };
 
