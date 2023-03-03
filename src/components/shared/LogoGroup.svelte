@@ -276,7 +276,7 @@
         justify-content: center;
     }
     .logo-container svg{
-        width: 65%;
+        width: 40%;
     }
     path, rect{
         fill: #fff
