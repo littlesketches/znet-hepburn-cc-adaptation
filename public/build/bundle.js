@@ -93,7 +93,7 @@ var app = (function (exports) {
             }
         };
     }
-    function append(target, node) {
+    function append$2(target, node) {
         target.appendChild(node);
     }
     function get_root_for_style(node) {
@@ -111,7 +111,7 @@ var app = (function (exports) {
         return style_element.sheet;
     }
     function append_stylesheet(node, style) {
-        append(node.head || node, style);
+        append$2(node.head || node, style);
     }
     function insert(target, node, anchor) {
         target.insertBefore(node, anchor || null);
@@ -739,7 +739,7 @@ var app = (function (exports) {
     }
     function append_dev(target, node) {
         dispatch_dev('SvelteDOMInsert', { target, node });
-        append(target, node);
+        append$2(target, node);
     }
     function insert_dev(target, node, anchor) {
         dispatch_dev('SvelteDOMInsert', { target, node, anchor });
@@ -947,7 +947,7 @@ var app = (function (exports) {
     function _inheritsLoose(subClass, superClass) { subClass.prototype = Object.create(superClass.prototype); subClass.prototype.constructor = subClass; subClass.__proto__ = superClass; }
 
     /*!
-     * GSAP 3.10.4
+     * GSAP 3.11.4
      * https://greensock.com
      *
      * @license Copyright 2008-2022, GreenSock. All rights reserved.
@@ -971,6 +971,8 @@ var app = (function (exports) {
       delay: 0
     },
         _suppressOverwrites$1,
+        _reverting$1,
+        _context$2,
         _bigNum$1 = 1e8,
         _tinyNum = 1 / _bigNum$1,
         _2PI = Math.PI * 2,
@@ -1038,6 +1040,18 @@ var app = (function (exports) {
     },
         _emptyFunc = function _emptyFunc() {
       return 0;
+    },
+        _startAtRevertConfig = {
+      suppressEvents: true,
+      isStart: true,
+      kill: false
+    },
+        _revertConfigNoKill = {
+      suppressEvents: true,
+      kill: false
+    },
+        _revertConfig = {
+      suppressEvents: true
     },
         _reservedProps = {},
         _lazyTweens = [],
@@ -1118,9 +1132,9 @@ var app = (function (exports) {
       }
     },
         _lazySafeRender = function _lazySafeRender(animation, time, suppressEvents, force) {
-      _lazyTweens.length && _lazyRender();
-      animation.render(time, suppressEvents, force);
-      _lazyTweens.length && _lazyRender(); //in case rendering caused any tweens to lazy-init, we should render them because typically when someone calls seek() or time() or progress(), they expect an immediate render.
+      _lazyTweens.length && !_reverting$1 && _lazyRender();
+      animation.render(time, suppressEvents, force || _reverting$1 && time < 0 && (animation._initted || animation._startAt));
+      _lazyTweens.length && !_reverting$1 && _lazyRender(); //in case rendering caused any tweens to lazy-init, we should render them because typically when someone calls seek() or time() or progress(), they expect an immediate render.
     },
         _numericIfPossible = function _numericIfPossible(value) {
       var n = parseFloat(value);
@@ -1281,6 +1295,9 @@ var app = (function (exports) {
 
       return animation;
     },
+        _rewindStartAt = function _rewindStartAt(tween, totalTime, suppressEvents, force) {
+      return tween._startAt && (_reverting$1 ? tween._startAt.revert(_revertConfigNoKill) : tween.vars.immediateRender && !tween.vars.autoRevert || tween._startAt.render(totalTime, true, force));
+    },
         _hasNoPausedAncestors = function _hasNoPausedAncestors(animation) {
       return !animation || animation._ts && _hasNoPausedAncestors(animation.parent);
     },
@@ -1360,22 +1377,24 @@ var app = (function (exports) {
 
       _isFromOrFromStart(child) || (timeline._recent = child);
       skipChecks || _postAddChecks(timeline, child);
+      timeline._ts < 0 && _alignPlayhead(timeline, timeline._tTime); // if the timeline is reversed and the new child makes it longer, we may need to adjust the parent's _start (push it back)
+
       return timeline;
     },
         _scrollTrigger = function _scrollTrigger(animation, trigger) {
       return (_globals.ScrollTrigger || _missingPlugin("scrollTrigger", trigger)) && _globals.ScrollTrigger.create(trigger, animation);
     },
-        _attemptInitTween = function _attemptInitTween(tween, totalTime, force, suppressEvents) {
-      _initTween(tween, totalTime);
+        _attemptInitTween = function _attemptInitTween(tween, time, force, suppressEvents, tTime) {
+      _initTween(tween, time, tTime);
 
       if (!tween._initted) {
         return 1;
       }
 
-      if (!force && tween._pt && (tween._dur && tween.vars.lazy !== false || !tween._dur && tween.vars.lazy) && _lastRenderedFrame !== _ticker.frame) {
+      if (!force && tween._pt && !_reverting$1 && (tween._dur && tween.vars.lazy !== false || !tween._dur && tween.vars.lazy) && _lastRenderedFrame !== _ticker.frame) {
         _lazyTweens.push(tween);
 
-        tween._lazy = [totalTime, suppressEvents];
+        tween._lazy = [tTime, suppressEvents];
         return 1;
       }
     },
@@ -1411,8 +1430,8 @@ var app = (function (exports) {
         }
       }
 
-      if (ratio !== prevRatio || force || tween._zTime === _tinyNum || !totalTime && tween._zTime) {
-        if (!tween._initted && _attemptInitTween(tween, totalTime, force, suppressEvents)) {
+      if (ratio !== prevRatio || _reverting$1 || force || tween._zTime === _tinyNum || !totalTime && tween._zTime) {
+        if (!tween._initted && _attemptInitTween(tween, totalTime, force, suppressEvents, tTime)) {
           // if we render the very beginning (time == 0) of a fromTo(), we must force the render (normal tweens wouldn't need to render at a time of 0 when the prevTime was also 0). This is also mandatory to make sure overwriting kicks in immediately.
           return;
         }
@@ -1433,14 +1452,14 @@ var app = (function (exports) {
           pt = pt._next;
         }
 
-        tween._startAt && totalTime < 0 && tween._startAt.render(totalTime, true, true);
+        totalTime < 0 && _rewindStartAt(tween, totalTime, suppressEvents, true);
         tween._onUpdate && !suppressEvents && _callback$1(tween, "onUpdate");
         tTime && tween._repeat && !suppressEvents && tween.parent && _callback$1(tween, "onRepeat");
 
         if ((totalTime >= tween._tDur || totalTime < 0) && tween.ratio === ratio) {
           ratio && _removeFromParent(tween, 1);
 
-          if (!suppressEvents) {
+          if (!suppressEvents && !_reverting$1) {
             _callback$1(tween, ratio ? "onComplete" : "onReverseComplete", true);
 
             tween._prom && tween._prom();
@@ -1482,7 +1501,8 @@ var app = (function (exports) {
       totalProgress && !leavePlayhead && (animation._time *= dur / animation._dur);
       animation._dur = dur;
       animation._tDur = !repeat ? dur : repeat < 0 ? 1e10 : _roundPrecise(dur * (repeat + 1) + animation._rDelay * repeat);
-      totalProgress > 0 && !leavePlayhead ? _alignPlayhead(animation, animation._tTime = animation._tDur * totalProgress) : animation.parent && _setEnd(animation);
+      totalProgress > 0 && !leavePlayhead && _alignPlayhead(animation, animation._tTime = animation._tDur * totalProgress);
+      animation.parent && _setEnd(animation);
       skipUncache || _uncache(animation.parent, animation);
       return animation;
     },
@@ -1588,7 +1608,7 @@ var app = (function (exports) {
     },
         //takes any value and returns an array. If it's a string (and leaveStrings isn't true), it'll use document.querySelectorAll() and convert that to an array. It'll also accept iterables like jQuery objects.
     toArray = function toArray(value, scope, leaveStrings) {
-      return _isString$1(value) && !leaveStrings && (_coreInitted$2 || !_wake()) ? _slice.call((scope || _doc$3).querySelectorAll(value), 0) : _isArray(value) ? _flatten(value, leaveStrings) : _isArrayLike(value) ? _slice.call(value, 0) : value ? [value] : [];
+      return _context$2 && !scope && _context$2.selector ? _context$2.selector(value) : _isString$1(value) && !leaveStrings && (_coreInitted$2 || !_wake()) ? _slice.call((scope || _doc$3).querySelectorAll(value), 0) : _isArray(value) ? _flatten(value, leaveStrings) : _isArrayLike(value) ? _slice.call(value, 0) : value ? [value] : [];
     },
         selector$1 = function selector(value) {
       value = toArray(value)[0] || _warn("Invalid scope") || {};
@@ -1691,7 +1711,8 @@ var app = (function (exports) {
       var p = Math.pow(10, ((v + "").split(".")[1] || "").length); //to avoid floating point math errors (like 24 * 0.1 == 2.4000000000000004), we chop off at a specific number of decimal places (much faster than toFixed())
 
       return function (raw) {
-        var n = Math.round(parseFloat(raw) / v) * v * p;
+        var n = _roundPrecise(Math.round(parseFloat(raw) / v) * v * p);
+
         return (n - n % 1) / p + (_isNumber$1(raw) ? 0 : getUnit(raw)); // n - n % 1 replaces Math.floor() in order to handle negative values properly. For example, Math.floor(-150.00000000000003) is 151!
       };
     },
@@ -1895,8 +1916,11 @@ var app = (function (exports) {
         _callback$1 = function _callback(animation, type, executeLazyFirst) {
       var v = animation.vars,
           callback = v[type],
+          prevContext = _context$2,
+          context = animation._ctx,
           params,
-          scope;
+          scope,
+          result;
 
       if (!callback) {
         return;
@@ -1906,12 +1930,15 @@ var app = (function (exports) {
       scope = v.callbackScope || animation;
       executeLazyFirst && _lazyTweens.length && _lazyRender(); //in case rendering caused any tweens to lazy-init, we should render them because typically when a timeline finishes, users expect things to have rendered fully. Imagine an onUpdate on a timeline that reports/checks tweened values.
 
-      return params ? callback.apply(scope, params) : callback.call(scope);
+      context && (_context$2 = context);
+      result = params ? callback.apply(scope, params) : callback.call(scope);
+      _context$2 = prevContext;
+      return result;
     },
         _interrupt = function _interrupt(animation) {
       _removeFromParent(animation);
 
-      animation.scrollTrigger && animation.scrollTrigger.kill(false);
+      animation.scrollTrigger && animation.scrollTrigger.kill(!!_reverting$1);
       animation.progress() < 1 && _callback$1(animation, "onInterrupt");
       return animation;
     },
@@ -2267,9 +2294,9 @@ var app = (function (exports) {
           _req = _emptyFunc;
         },
         lagSmoothing: function lagSmoothing(threshold, adjustedLag) {
-          _lagThreshold = threshold || 1 / _tinyNum; //zero should be interpreted as basically unlimited
+          _lagThreshold = threshold || Infinity; // zero should be interpreted as basically unlimited
 
-          _adjustedLag = Math.min(adjustedLag, _lagThreshold, 0);
+          _adjustedLag = Math.min(adjustedLag || 33, _lagThreshold);
         },
         fps: function fps(_fps) {
           _gap = 1000 / (_fps || 240);
@@ -2563,6 +2590,13 @@ var app = (function (exports) {
         _setDuration(this, +vars.duration, 1, 1);
 
         this.data = vars.data;
+
+        if (_context$2) {
+          this._ctx = _context$2;
+
+          _context$2.data.push(this);
+        }
+
         _tickerActive || _ticker.wake();
       }
 
@@ -2732,6 +2766,24 @@ var app = (function (exports) {
         return !parent ? this._tTime : wrapRepeats && (!this._ts || this._repeat && this._time && this.totalProgress() < 1) ? this._tTime % (this._dur + this._rDelay) : !this._ts ? this._tTime : _parentToChildTotalTime(parent.rawTime(wrapRepeats), this);
       };
 
+      _proto.revert = function revert(config) {
+        if (config === void 0) {
+          config = _revertConfig;
+        }
+
+        var prevIsReverting = _reverting$1;
+        _reverting$1 = config;
+
+        if (this._initted || this._startAt) {
+          this.timeline && this.timeline.revert(config);
+          this.totalTime(-0.01, config.suppressEvents);
+        }
+
+        this.data !== "nested" && config.kill !== false && this.kill();
+        _reverting$1 = prevIsReverting;
+        return this;
+      };
+
       _proto.globalTime = function globalTime(rawTime) {
         var animation = this,
             time = arguments.length ? rawTime : animation.rawTime();
@@ -2741,7 +2793,7 @@ var app = (function (exports) {
           animation = animation._dp;
         }
 
-        return time;
+        return !this.parent && this._sat ? this._sat.vars.immediateRender ? -1 : this._sat.globalTime(rawTime) : time; // the _startAt tweens for .fromTo() and .from() that have immediateRender should always be FIRST in the timeline (important for context.revert()). "_sat" stands for _startAtTween, referring to the parent tween that created the _startAt. We must discern if that tween had immediateRender so that we can know whether or not to prioritize it in revert().
       };
 
       _proto.repeat = function repeat(value) {
@@ -3163,7 +3215,7 @@ var app = (function (exports) {
                   return this.render(totalTime, suppressEvents, force);
                 }
 
-                child.render(child._ts > 0 ? (adjustedTime - child._start) * child._ts : (child._dirty ? child.totalDuration() : child._tDur) + (adjustedTime - child._start) * child._ts, suppressEvents, force);
+                child.render(child._ts > 0 ? (adjustedTime - child._start) * child._ts : (child._dirty ? child.totalDuration() : child._tDur) + (adjustedTime - child._start) * child._ts, suppressEvents, force || _reverting$1 && (child._initted || child._startAt)); // if reverting, we should always force renders of initted tweens (but remember that .fromTo() or .from() may have a _startAt but not _initted yet). If, for example, a .fromTo() tween with a stagger (which creates an internal timeline) gets reverted BEFORE some of its child tweens render for the first time, it may not properly trigger them to revert.
 
                 if (time !== this._time || !this._ts && !prevPaused) {
                   //in case a tween pauses or seeks the timeline when rendering, like inside of an onUpdate/onComplete
@@ -3484,16 +3536,16 @@ var app = (function (exports) {
         return _uncache(this);
       };
 
-      _proto2.invalidate = function invalidate() {
+      _proto2.invalidate = function invalidate(soft) {
         var child = this._first;
         this._lock = 0;
 
         while (child) {
-          child.invalidate();
+          child.invalidate(soft);
           child = child._next;
         }
 
-        return _Animation.prototype.invalidate.call(this);
+        return _Animation.prototype.invalidate.call(this, soft);
       };
 
       _proto2.clear = function clear(includeLabels) {
@@ -3672,7 +3724,7 @@ var app = (function (exports) {
 
       return pt;
     },
-        _addPropTween = function _addPropTween(target, prop, start, end, index, targets, modifier, stringFilter, funcParam) {
+        _addPropTween = function _addPropTween(target, prop, start, end, index, targets, modifier, stringFilter, funcParam, optional) {
       _isFunction$1(end) && (end = end(index || 0, target, targets));
       var currentValue = target[prop],
           parsedStart = start !== "get" ? start : !_isFunction$1(currentValue) ? currentValue : funcParam ? target[prop.indexOf("set") || !_isFunction$1(target["get" + prop.substr(3)]) ? prop : "get" + prop.substr(3)](funcParam) : target[prop](),
@@ -3694,7 +3746,7 @@ var app = (function (exports) {
         }
       }
 
-      if (parsedStart !== end || _forceAllPropTweens) {
+      if (!optional || parsedStart !== end || _forceAllPropTweens) {
         if (!isNaN(parsedStart * end) && end !== "") {
           // fun fact: any number multiplied by "" is evaluated as the number 0!
           pt = new PropTween(this._pt, target, prop, +parsedStart || 0, end - (parsedStart || 0), typeof currentValue === "boolean" ? _renderBoolean : _renderPlain, 0, setter);
@@ -3746,7 +3798,7 @@ var app = (function (exports) {
         _overwritingTween,
         //store a reference temporarily so we can avoid overwriting itself.
     _forceAllPropTweens,
-        _initTween = function _initTween(tween, time) {
+        _initTween = function _initTween(tween, time, tTime) {
       var vars = tween.vars,
           ease = vars.ease,
           startAt = vars.startAt,
@@ -3763,7 +3815,7 @@ var app = (function (exports) {
           prevStartAt = tween._startAt,
           targets = tween._targets,
           parent = tween.parent,
-          fullTargets = parent && parent.data === "nested" ? parent.parent._targets : targets,
+          fullTargets = parent && parent.data === "nested" ? parent.vars.targets : targets,
           autoOverwrite = tween._overwrite === "auto" && !_suppressOverwrites$1,
           tl = tween.timeline,
           cleanVars,
@@ -3800,7 +3852,10 @@ var app = (function (exports) {
         cleanVars = _copyExcluding(vars, _reservedProps);
 
         if (prevStartAt) {
-          _removeFromParent(prevStartAt.render(-1, true));
+          prevStartAt._zTime < 0 && prevStartAt.progress(1); // in case it's a lazy startAt that hasn't rendered yet.
+
+          time < 0 && runBackwards && immediateRender && !autoRevert ? prevStartAt.render(-1, true) : prevStartAt.revert(runBackwards && dur ? _revertConfigNoKill : _startAtRevertConfig); // if it's a "startAt" (not "from()" or runBackwards: true), we only need to do a shallow revert (keep transforms cached in CSSPlugin)
+          // don't just _removeFromParent(prevStartAt.render(-1, true)) because that'll leave inline styles. We're creating a new _startAt for "startAt" tweens that re-capture things to ensure that if the pre-tween values changed since the tween was created, they're recorded.
 
           prevStartAt._lazy = 0;
         }
@@ -3811,7 +3866,7 @@ var app = (function (exports) {
             overwrite: false,
             parent: parent,
             immediateRender: true,
-            lazy: _isNotFalse(lazy),
+            lazy: !prevStartAt && _isNotFalse(lazy),
             startAt: null,
             delay: 0,
             onUpdate: onUpdate,
@@ -3821,36 +3876,29 @@ var app = (function (exports) {
           }, startAt))); //copy the properties/values into a new object to avoid collisions, like var to = {x:0}, from = {x:500}; timeline.fromTo(e, from, to).fromTo(e, to, from);
 
 
-          time < 0 && !immediateRender && !autoRevert && tween._startAt.render(-1, true); // rare edge case, like if a render is forced in the negative direction of a non-initted tween.
+          tween._startAt._dp = 0; // don't allow it to get put back into root timeline! Like when revert() is called and totalTime() gets set.
+
+          tween._startAt._sat = tween; // used in globalTime(). _sat stands for _startAtTween
+
+          time < 0 && (_reverting$1 || !immediateRender && !autoRevert) && tween._startAt.revert(_revertConfigNoKill); // rare edge case, like if a render is forced in the negative direction of a non-initted tween.
 
           if (immediateRender) {
-            time > 0 && !autoRevert && (tween._startAt = 0); //tweens that render immediately (like most from() and fromTo() tweens) shouldn't revert when their parent timeline's playhead goes backward past the startTime because the initial render could have happened anytime and it shouldn't be directly correlated to this tween's startTime. Imagine setting up a complex animation where the beginning states of various objects are rendered immediately but the tween doesn't happen for quite some time - if we revert to the starting values as soon as the playhead goes backward past the tween's startTime, it will throw things off visually. Reversion should only happen in Timeline instances where immediateRender was false or when autoRevert is explicitly set to true.
-
-            if (dur && time <= 0) {
+            if (dur && time <= 0 && tTime <= 0) {
+              // check tTime here because in the case of a yoyo tween whose playhead gets pushed to the end like tween.progress(1), we should allow it through so that the onComplete gets fired properly.
               time && (tween._zTime = time);
               return; //we skip initialization here so that overwriting doesn't occur until the tween actually begins. Otherwise, if you create several immediateRender:true tweens of the same target/properties to drop into a Timeline, the last one created would overwrite the first ones because they didn't get placed into the timeline yet before the first render occurs and kicks in overwriting.
-            } // if (time > 0) {
-            // 	autoRevert || (tween._startAt = 0); //tweens that render immediately (like most from() and fromTo() tweens) shouldn't revert when their parent timeline's playhead goes backward past the startTime because the initial render could have happened anytime and it shouldn't be directly correlated to this tween's startTime. Imagine setting up a complex animation where the beginning states of various objects are rendered immediately but the tween doesn't happen for quite some time - if we revert to the starting values as soon as the playhead goes backward past the tween's startTime, it will throw things off visually. Reversion should only happen in Timeline instances where immediateRender was false or when autoRevert is explicitly set to true.
-            // } else if (dur && !(time < 0 && prevStartAt)) {
-            // 	time && (tween._zTime = time);
-            // 	return; //we skip initialization here so that overwriting doesn't occur until the tween actually begins. Otherwise, if you create several immediateRender:true tweens of the same target/properties to drop into a Timeline, the last one created would overwrite the first ones because they didn't get placed into the timeline yet before the first render occurs and kicks in overwriting.
-            // }
-
-          } else if (autoRevert === false) {
-            tween._startAt = 0;
+            }
           }
         } else if (runBackwards && dur) {
           //from() tweens must be handled uniquely: their beginning values must be rendered but we don't want overwriting to occur yet (when time is still 0). Wait until the tween actually begins before doing all the routines like overwriting. At that time, we should render at the END of the tween to ensure that things initialize correctly (remember, from() tweens go backwards)
-          if (prevStartAt) {
-            !autoRevert && (tween._startAt = 0);
-          } else {
+          if (!prevStartAt) {
             time && (immediateRender = false); //in rare cases (like if a from() tween runs and then is invalidate()-ed), immediateRender could be true but the initial forced-render gets skipped, so there's no need to force the render in this context when the _time is greater than 0
 
             p = _setDefaults$1({
               overwrite: false,
               data: "isFromStart",
               //we tag the tween with as "isFromStart" so that if [inside a plugin] we need to only do something at the very END of a tween, we have a way of identifying this tween as merely the one that's setting the beginning values for a "from()" tween. For example, clearProps in CSSPlugin should only get applied at the very END of a tween and without this tag, from(...{height:100, clearProps:"height", delay:1}) would wipe the height at the beginning of the tween and after 1 second, it'd kick back in.
-              lazy: immediateRender && _isNotFalse(lazy),
+              lazy: immediateRender && !prevStartAt && _isNotFalse(lazy),
               immediateRender: immediateRender,
               //zero-duration tweens render immediately by default, but if we're not specifically instructed to render this tween immediately, we should skip this and merely _init() to record the starting values (rendering them immediately would push them to completion which is wasteful in that case - we'd have to render(-1) immediately after)
               stagger: 0,
@@ -3861,12 +3909,15 @@ var app = (function (exports) {
 
             _removeFromParent(tween._startAt = Tween.set(targets, p));
 
-            time < 0 && tween._startAt.render(-1, true); // rare edge case, like if a render is forced in the negative direction of a non-initted from() tween.
+            tween._startAt._dp = 0; // don't allow it to get put back into root timeline!
 
+            tween._startAt._sat = tween; // used in globalTime()
+
+            time < 0 && (_reverting$1 ? tween._startAt.revert(_revertConfigNoKill) : tween._startAt.render(-1, true));
             tween._zTime = time;
 
             if (!immediateRender) {
-              _initTween(tween._startAt, _tinyNum); //ensures that the initial values are recorded
+              _initTween(tween._startAt, _tinyNum, _tinyNum); //ensures that the initial values are recorded
 
             } else if (!time) {
               return;
@@ -3932,6 +3983,7 @@ var app = (function (exports) {
         _updatePropTweens = function _updatePropTweens(tween, property, value, start, startIsRelative, ratio, time) {
       var ptCache = (tween._pt && tween._ptCache || (tween._ptCache = {}))[property],
           pt,
+          rootPT,
           lookup,
           i;
 
@@ -3947,7 +3999,8 @@ var app = (function (exports) {
             // it's a plugin, so find the nested PropTween
             pt = pt.d._pt;
 
-            while (pt && pt.p !== property) {
+            while (pt && pt.p !== property && pt.fp !== property) {
+              // "fp" is functionParam for things like setting CSS variables which require .setProperty("--var-name", value)
               pt = pt._next;
             }
           }
@@ -3972,12 +4025,14 @@ var app = (function (exports) {
       i = ptCache.length;
 
       while (i--) {
-        pt = ptCache[i];
+        rootPT = ptCache[i];
+        pt = rootPT._pt || rootPT; // complex values may have nested PropTweens. We only accommodate the FIRST value.
+
         pt.s = (start || start === 0) && !startIsRelative ? start : pt.s + (start || 0) + ratio * pt.c;
         pt.c = value - pt.s;
-        pt.e && (pt.e = _round$1(value) + getUnit(pt.e)); // mainly for CSSPlugin (end value)
+        rootPT.e && (rootPT.e = _round$1(value) + getUnit(rootPT.e)); // mainly for CSSPlugin (end value)
 
-        pt.b && (pt.b = pt.s + getUnit(pt.b)); // (beginning value)
+        rootPT.b && (rootPT.b = pt.s + getUnit(rootPT.b)); // (beginning value)
       }
     },
         _addAliasesToVars = function _addAliasesToVars(targets, vars) {
@@ -4092,8 +4147,10 @@ var app = (function (exports) {
           vars = _this3.vars;
           tl = _this3.timeline = new Timeline({
             data: "nested",
-            defaults: defaults || {}
-          });
+            defaults: defaults || {},
+            targets: parent && parent.data === "nested" ? parent.vars.targets : parsedTargets
+          }); // we need to store the targets because for staggers and keyframes, we end up creating an individual tween for each but function-based values need to know the index and the whole Array of targets.
+
           tl.kill();
           tl.parent = tl._dp = _assertThisInitialized(_this3);
           tl._start = 0;
@@ -4149,6 +4206,7 @@ var app = (function (exports) {
               keyframes.forEach(function (frame) {
                 return tl.to(parsedTargets, frame, ">");
               });
+              tl.duration(); // to ensure tl._dur is cached because we tap into it for performance purposes in the render() method.
             } else {
               copy = {};
 
@@ -4201,7 +4259,7 @@ var app = (function (exports) {
         if (immediateRender || !duration && !keyframes && _this3._start === _roundPrecise(parent._time) && _isNotFalse(immediateRender) && _hasNoPausedAncestors(_assertThisInitialized(_this3)) && parent.data !== "nested") {
           _this3._tTime = -_tinyNum; //forces a render without having to set the render() "force" parameter to true because we want to allow lazying by default (using the "force" parameter always forces an immediate full render)
 
-          _this3.render(Math.max(0, -delay)); //in case delay is negative
+          _this3.render(Math.max(0, -delay) || 0); //in case delay is negative
 
         }
 
@@ -4215,7 +4273,8 @@ var app = (function (exports) {
         var prevTime = this._time,
             tDur = this._tDur,
             dur = this._dur,
-            tTime = totalTime > tDur - _tinyNum && totalTime >= 0 ? tDur : totalTime < _tinyNum ? 0 : totalTime,
+            isNegative = totalTime < 0,
+            tTime = totalTime > tDur - _tinyNum && !isNegative ? tDur : totalTime < _tinyNum ? 0 : totalTime,
             time,
             pt,
             iteration,
@@ -4228,7 +4287,7 @@ var app = (function (exports) {
 
         if (!dur) {
           _renderZeroDurationTween(this, totalTime, suppressEvents, force);
-        } else if (tTime !== this._tTime || !totalTime || force || !this._initted && this._tTime || this._startAt && this._zTime < 0 !== totalTime < 0) {
+        } else if (tTime !== this._tTime || !totalTime || force || !this._initted && this._tTime || this._startAt && this._zTime < 0 !== isNegative) {
           //this senses if we're crossing over the start time, in which case we must record _zTime and force the render, but we do it in this lengthy conditional way for performance reasons (usually we can skip the calculations): this._initted && (this._zTime < 0) !== (totalTime < 0)
           time = tTime;
           timeline = this.timeline;
@@ -4237,7 +4296,7 @@ var app = (function (exports) {
             //adjust the time for repeats and yoyos
             cycleDuration = dur + this._rDelay;
 
-            if (this._repeat < -1 && totalTime < 0) {
+            if (this._repeat < -1 && isNegative) {
               return this.totalTime(cycleDuration * 100 + totalTime, suppressEvents, force);
             }
 
@@ -4285,7 +4344,7 @@ var app = (function (exports) {
           }
 
           if (!this._initted) {
-            if (_attemptInitTween(this, totalTime < 0 ? totalTime : time, force, suppressEvents)) {
+            if (_attemptInitTween(this, isNegative ? totalTime : time, force, suppressEvents, tTime)) {
               this._tTime = 0; // in constructor if immediateRender is true, we set _tTime to -_tinyNum to have the playhead cross the starting point but we can't leave _tTime as a negative number.
 
               return this;
@@ -4336,7 +4395,7 @@ var app = (function (exports) {
           timeline && timeline.render(totalTime < 0 ? totalTime : !time && isYoyo ? -_tinyNum : timeline._dur * timeline._ease(time / this._dur), suppressEvents, force) || this._startAt && (this._zTime = totalTime);
 
           if (this._onUpdate && !suppressEvents) {
-            totalTime < 0 && this._startAt && this._startAt.render(totalTime, true, force); //note: for performance reasons, we tuck this conditional logic inside less traveled areas (most tweens don't have an onUpdate). We'd just have it at the end before the onComplete, but the values should be updated before any onUpdate is called, so we ALSO put it here and then if it's not called, we do so later near the onComplete.
+            isNegative && _rewindStartAt(this, totalTime, suppressEvents, force); //note: for performance reasons, we tuck this conditional logic inside less traveled areas (most tweens don't have an onUpdate). We'd just have it at the end before the onComplete, but the values should be updated before any onUpdate is called, so we ALSO put it here and then if it's not called, we do so later near the onComplete.
 
             _callback$1(this, "onUpdate");
           }
@@ -4344,10 +4403,10 @@ var app = (function (exports) {
           this._repeat && iteration !== prevIteration && this.vars.onRepeat && !suppressEvents && this.parent && _callback$1(this, "onRepeat");
 
           if ((tTime === this._tDur || !tTime) && this._tTime === tTime) {
-            totalTime < 0 && this._startAt && !this._onUpdate && this._startAt.render(totalTime, true, true);
+            isNegative && !this._onUpdate && _rewindStartAt(this, totalTime, true, true);
             (totalTime || !dur) && (tTime === this._tDur && this._ts > 0 || !tTime && this._ts < 0) && _removeFromParent(this, 1); // don't remove if we're rendering at exactly a time of 0, as there could be autoRevert values that should get set on the next tick (if the playhead goes backward beyond the startTime, negative totalTime). Don't remove if the timeline is reversed and the playhead isn't at 0, otherwise tl.progress(1).reverse() won't work. Only remove if the playhead is at the end and timeScale is positive, or if the playhead is at 0 and the timeScale is negative.
 
-            if (!suppressEvents && !(totalTime < 0 && !prevTime) && (tTime || prevTime)) {
+            if (!suppressEvents && !(isNegative && !prevTime) && (tTime || prevTime || isYoyo)) {
               // if prevTime and tTime are zero, we shouldn't fire the onReverseComplete. This could happen if you gsap.to(... {paused:true}).play();
               _callback$1(this, tTime === tDur ? "onComplete" : "onReverseComplete", true);
 
@@ -4363,11 +4422,13 @@ var app = (function (exports) {
         return this._targets;
       };
 
-      _proto3.invalidate = function invalidate() {
-        this._pt = this._op = this._startAt = this._onUpdate = this._lazy = this.ratio = 0;
+      _proto3.invalidate = function invalidate(soft) {
+        // "soft" gives us a way to clear out everything EXCEPT the recorded pre-"from" portion of from() tweens. Otherwise, for example, if you tween.progress(1).render(0, true true).invalidate(), the "from" values would persist and then on the next render, the from() tweens would initialize and the current value would match the "from" values, thus animate from the same value to the same value (no animation). We tap into this in ScrollTrigger's refresh() where we must push a tween to completion and then back again but honor its init state in case the tween is dependent on another tween further up on the page.
+        (!soft || !this.vars.runBackwards) && (this._startAt = 0);
+        this._pt = this._op = this._onUpdate = this._lazy = this.ratio = 0;
         this._ptLookup = [];
-        this.timeline && this.timeline.invalidate();
-        return _Animation2.prototype.invalidate.call(this);
+        this.timeline && this.timeline.invalidate(soft);
+        return _Animation2.prototype.invalidate.call(this, soft);
       };
 
       _proto3.resetTo = function resetTo(property, value, start, startIsRelative) {
@@ -4507,7 +4568,7 @@ var app = (function (exports) {
           onCompleteParams: params,
           onReverseCompleteParams: params,
           callbackScope: scope
-        });
+        }); // we must use onReverseComplete too for things like timeline.add(() => {...}) which should be triggered in BOTH directions (forward and reverse)
       };
 
       Tween.fromTo = function fromTo(targets, fromVars, toVars) {
@@ -4722,11 +4783,245 @@ var app = (function (exports) {
       smoothChildTiming: true
     });
     _config.stringFilter = _colorStringFilter;
+
+    var _media = [],
+        _listeners$1 = {},
+        _emptyArray$1 = [],
+        _lastMediaTime = 0,
+        _dispatch$1 = function _dispatch(type) {
+      return (_listeners$1[type] || _emptyArray$1).map(function (f) {
+        return f();
+      });
+    },
+        _onMediaChange = function _onMediaChange() {
+      var time = Date.now(),
+          matches = [];
+
+      if (time - _lastMediaTime > 2) {
+        _dispatch$1("matchMediaInit");
+
+        _media.forEach(function (c) {
+          var queries = c.queries,
+              conditions = c.conditions,
+              match,
+              p,
+              anyMatch,
+              toggled;
+
+          for (p in queries) {
+            match = _win$3.matchMedia(queries[p]).matches; // Firefox doesn't update the "matches" property of the MediaQueryList object correctly - it only does so as it calls its change handler - so we must re-create a media query here to ensure it's accurate.
+
+            match && (anyMatch = 1);
+
+            if (match !== conditions[p]) {
+              conditions[p] = match;
+              toggled = 1;
+            }
+          }
+
+          if (toggled) {
+            c.revert();
+            anyMatch && matches.push(c);
+          }
+        });
+
+        _dispatch$1("matchMediaRevert");
+
+        matches.forEach(function (c) {
+          return c.onMatch(c);
+        });
+        _lastMediaTime = time;
+
+        _dispatch$1("matchMedia");
+      }
+    };
+
+    var Context = /*#__PURE__*/function () {
+      function Context(func, scope) {
+        this.selector = scope && selector$1(scope);
+        this.data = [];
+        this._r = []; // returned/cleanup functions
+
+        this.isReverted = false;
+        func && this.add(func);
+      }
+
+      var _proto5 = Context.prototype;
+
+      _proto5.add = function add(name, func, scope) {
+        // possible future addition if we need the ability to add() an animation to a context and for whatever reason cannot create that animation inside of a context.add(() => {...}) function.
+        // if (name && _isFunction(name.revert)) {
+        // 	this.data.push(name);
+        // 	return (name._ctx = this);
+        // }
+        if (_isFunction$1(name)) {
+          scope = func;
+          func = name;
+          name = _isFunction$1;
+        }
+
+        var self = this,
+            f = function f() {
+          var prev = _context$2,
+              prevSelector = self.selector,
+              result;
+          prev && prev !== self && prev.data.push(self);
+          scope && (self.selector = selector$1(scope));
+          _context$2 = self;
+          result = func.apply(self, arguments);
+          _isFunction$1(result) && self._r.push(result);
+          _context$2 = prev;
+          self.selector = prevSelector;
+          self.isReverted = false;
+          return result;
+        };
+
+        self.last = f;
+        return name === _isFunction$1 ? f(self) : name ? self[name] = f : f;
+      };
+
+      _proto5.ignore = function ignore(func) {
+        var prev = _context$2;
+        _context$2 = null;
+        func(this);
+        _context$2 = prev;
+      };
+
+      _proto5.getTweens = function getTweens() {
+        var a = [];
+        this.data.forEach(function (e) {
+          return e instanceof Context ? a.push.apply(a, e.getTweens()) : e instanceof Tween && !(e.parent && e.parent.data === "nested") && a.push(e);
+        });
+        return a;
+      };
+
+      _proto5.clear = function clear() {
+        this._r.length = this.data.length = 0;
+      };
+
+      _proto5.kill = function kill(revert, matchMedia) {
+        var _this4 = this;
+
+        if (revert) {
+          var tweens = this.getTweens();
+          this.data.forEach(function (t) {
+            // Flip plugin tweens are very different in that they should actually be pushed to their end. The plugin replaces the timeline's .revert() method to do exactly that. But we also need to remove any of those nested tweens inside the flip timeline so that they don't get individually reverted.
+            if (t.data === "isFlip") {
+              t.revert();
+              t.getChildren(true, true, false).forEach(function (tween) {
+                return tweens.splice(tweens.indexOf(tween), 1);
+              });
+            }
+          }); // save as an object so that we can cache the globalTime for each tween to optimize performance during the sort
+
+          tweens.map(function (t) {
+            return {
+              g: t.globalTime(0),
+              t: t
+            };
+          }).sort(function (a, b) {
+            return b.g - a.g || -1;
+          }).forEach(function (o) {
+            return o.t.revert(revert);
+          }); // note: all of the _startAt tweens should be reverted in reverse order that they were created, and they'll all have the same globalTime (-1) so the " || -1" in the sort keeps the order properly.
+
+          this.data.forEach(function (e) {
+            return !(e instanceof Animation) && e.revert && e.revert(revert);
+          });
+
+          this._r.forEach(function (f) {
+            return f(revert, _this4);
+          });
+
+          this.isReverted = true;
+        } else {
+          this.data.forEach(function (e) {
+            return e.kill && e.kill();
+          });
+        }
+
+        this.clear();
+
+        if (matchMedia) {
+          var i = _media.indexOf(this);
+
+          !!~i && _media.splice(i, 1);
+        }
+      };
+
+      _proto5.revert = function revert(config) {
+        this.kill(config || {});
+      };
+
+      return Context;
+    }();
+
+    var MatchMedia = /*#__PURE__*/function () {
+      function MatchMedia(scope) {
+        this.contexts = [];
+        this.scope = scope;
+      }
+
+      var _proto6 = MatchMedia.prototype;
+
+      _proto6.add = function add(conditions, func, scope) {
+        _isObject$1(conditions) || (conditions = {
+          matches: conditions
+        });
+        var context = new Context(0, scope || this.scope),
+            cond = context.conditions = {},
+            mq,
+            p,
+            active;
+        this.contexts.push(context);
+        func = context.add("onMatch", func);
+        context.queries = conditions;
+
+        for (p in conditions) {
+          if (p === "all") {
+            active = 1;
+          } else {
+            mq = _win$3.matchMedia(conditions[p]);
+
+            if (mq) {
+              _media.indexOf(context) < 0 && _media.push(context);
+              (cond[p] = mq.matches) && (active = 1);
+              mq.addListener ? mq.addListener(_onMediaChange) : mq.addEventListener("change", _onMediaChange);
+            }
+          }
+        }
+
+        active && func(context);
+        return this;
+      } // refresh() {
+      // 	let time = _lastMediaTime,
+      // 		media = _media;
+      // 	_lastMediaTime = -1;
+      // 	_media = this.contexts;
+      // 	_onMediaChange();
+      // 	_lastMediaTime = time;
+      // 	_media = media;
+      // }
+      ;
+
+      _proto6.revert = function revert(config) {
+        this.kill(config || {});
+      };
+
+      _proto6.kill = function kill(revert) {
+        this.contexts.forEach(function (c) {
+          return c.kill(revert, true);
+        });
+      };
+
+      return MatchMedia;
+    }();
     /*
      * --------------------------------------------------------------------------------------
      * GSAP
      * --------------------------------------------------------------------------------------
      */
+
 
     var _gsap = {
       registerPlugin: function registerPlugin() {
@@ -4871,6 +5166,37 @@ var app = (function (exports) {
 
         return tl;
       },
+      context: function context(func, scope) {
+        return func ? new Context(func, scope) : _context$2;
+      },
+      matchMedia: function matchMedia(scope) {
+        return new MatchMedia(scope);
+      },
+      matchMediaRefresh: function matchMediaRefresh() {
+        return _media.forEach(function (c) {
+          var cond = c.conditions,
+              found,
+              p;
+
+          for (p in cond) {
+            if (cond[p]) {
+              cond[p] = false;
+              found = 1;
+            }
+          }
+
+          found && c.revert();
+        }) || _onMediaChange();
+      },
+      addEventListener: function addEventListener(type, callback) {
+        var a = _listeners$1[type] || (_listeners$1[type] = []);
+        ~a.indexOf(callback) || a.push(callback);
+      },
+      removeEventListener: function removeEventListener(type, callback) {
+        var a = _listeners$1[type],
+            i = a && a.indexOf(callback);
+        i >= 0 && a.splice(i, 1);
+      },
       utils: {
         wrap: wrap,
         wrapYoyo: wrapYoyo,
@@ -4903,6 +5229,18 @@ var app = (function (exports) {
         Animation: Animation,
         getCache: _getCache,
         _removeLinkedListItem: _removeLinkedListItem,
+        reverting: function reverting() {
+          return _reverting$1;
+        },
+        context: function context(toAdd) {
+          if (toAdd && _context$2) {
+            _context$2.data.push(toAdd);
+
+            toAdd._ctx = _context$2;
+          }
+
+          return _context$2;
+        },
         suppressOverwrites: function suppressOverwrites(value) {
           return _suppressOverwrites$1 = value;
         }
@@ -4991,13 +5329,25 @@ var app = (function (exports) {
     var gsap$2 = _gsap.registerPlugin({
       name: "attr",
       init: function init(target, vars, tween, index, targets) {
-        var p, pt;
+        var p, pt, v;
+        this.tween = tween;
 
         for (p in vars) {
-          pt = this.add(target, "setAttribute", (target.getAttribute(p) || 0) + "", vars[p], index, targets, 0, 0, p);
-          pt && (pt.op = p);
+          v = target.getAttribute(p) || "";
+          pt = this.add(target, "setAttribute", (v || 0) + "", vars[p], index, targets, 0, 0, p);
+          pt.op = p;
+          pt.b = v; // record the beginning value so we can revert()
 
           this._props.push(p);
+        }
+      },
+      render: function render(ratio, data) {
+        var pt = data._pt;
+
+        while (pt) {
+          _reverting$1 ? pt.set(pt.t, pt.p, pt.b, pt) : pt.r(ratio, pt.d); // if reverting, go back to the original (pt.b)
+
+          pt = pt._next;
         }
       }
     }, {
@@ -5006,12 +5356,12 @@ var app = (function (exports) {
         var i = value.length;
 
         while (i--) {
-          this.add(target, i, target[i] || 0, value[i]);
+          this.add(target, i, target[i] || 0, value[i], 0, 0, 0, 0, 0, 1);
         }
       }
     }, _buildModifierPlugin("roundProps", _roundModifier), _buildModifierPlugin("modifiers"), _buildModifierPlugin("snap", snap)) || _gsap; //to prevent the core plugins from being dropped via aggressive tree shaking, we must include them in the variable declaration in this way.
 
-    Tween.version = Timeline.version = gsap$2.version = "3.10.4";
+    Tween.version = Timeline.version = gsap$2.version = "3.11.4";
     _coreReady = 1;
     _windowExists$2() && _wake();
     _easeMap.Power0;
@@ -5034,7 +5384,7 @@ var app = (function (exports) {
         _easeMap.Circ;
 
     /*!
-     * CSSPlugin 3.10.4
+     * CSSPlugin 3.11.4
      * https://greensock.com
      *
      * Copyright 2008-2022, GreenSock. All rights reserved.
@@ -5049,6 +5399,7 @@ var app = (function (exports) {
         _pluginInitted,
         _tempDiv,
         _recentSetterPlugin,
+        _reverting,
         _windowExists$1 = function _windowExists() {
       return typeof window !== "undefined";
     },
@@ -5109,6 +5460,87 @@ var app = (function (exports) {
     },
         _transformProp$1 = "transform",
         _transformOriginProp = _transformProp$1 + "Origin",
+        _saveStyle = function _saveStyle(property, isNotCSS) {
+      var _this = this;
+
+      var target = this.target,
+          style = target.style;
+
+      if (property in _transformProps) {
+        this.tfm = this.tfm || {};
+
+        if (property !== "transform") {
+          property = _propertyAliases[property] || property;
+          ~property.indexOf(",") ? property.split(",").forEach(function (a) {
+            return _this.tfm[a] = _get(target, a);
+          }) : this.tfm[property] = target._gsap.x ? target._gsap[property] : _get(target, property); // note: scale would map to "scaleX,scaleY", thus we loop and apply them both.
+        }
+
+        if (this.props.indexOf(_transformProp$1) >= 0) {
+          return;
+        }
+
+        if (target._gsap.svg) {
+          this.svgo = target.getAttribute("data-svg-origin");
+          this.props.push(_transformOriginProp, isNotCSS, "");
+        }
+
+        property = _transformProp$1;
+      }
+
+      (style || isNotCSS) && this.props.push(property, isNotCSS, style[property]);
+    },
+        _removeIndependentTransforms = function _removeIndependentTransforms(style) {
+      if (style.translate) {
+        style.removeProperty("translate");
+        style.removeProperty("scale");
+        style.removeProperty("rotate");
+      }
+    },
+        _revertStyle = function _revertStyle() {
+      var props = this.props,
+          target = this.target,
+          style = target.style,
+          cache = target._gsap,
+          i,
+          p;
+
+      for (i = 0; i < props.length; i += 3) {
+        // stored like this: property, isNotCSS, value
+        props[i + 1] ? target[props[i]] = props[i + 2] : props[i + 2] ? style[props[i]] = props[i + 2] : style.removeProperty(props[i].replace(_capsExp$1, "-$1").toLowerCase());
+      }
+
+      if (this.tfm) {
+        for (p in this.tfm) {
+          cache[p] = this.tfm[p];
+        }
+
+        if (cache.svg) {
+          cache.renderTransform();
+          target.setAttribute("data-svg-origin", this.svgo || "");
+        }
+
+        i = _reverting();
+
+        if (i && !i.isStart && !style[_transformProp$1]) {
+          _removeIndependentTransforms(style);
+
+          cache.uncache = 1; // if it's a startAt that's being reverted in the _initTween() of the core, we don't need to uncache transforms. This is purely a performance optimization.
+        }
+      }
+    },
+        _getStyleSaver = function _getStyleSaver(target, properties) {
+      var saver = {
+        target: target,
+        props: [],
+        revert: _revertStyle,
+        save: _saveStyle
+      };
+      properties && properties.split(",").forEach(function (p) {
+        return saver.save(p);
+      });
+      return saver;
+    },
         _supports3D,
         _createElement = function _createElement(type, ns) {
       var e = _doc$2.createElementNS ? _doc$2.createElementNS((ns || "http://www.w3.org/1999/xhtml").replace(/^https/, "http"), type) : _doc$2.createElement(type); //some servers swap in https for http in the namespace which can break things, making "style" inaccessible.
@@ -5149,6 +5581,7 @@ var app = (function (exports) {
         _tempDiv.style.cssText = "border-width:0;line-height:0;position:absolute;padding:0"; //make sure to override certain properties that may contaminate measurements, in case the user has overreaching style sheets.
 
         _supports3D = !!_checkPropPrefix("perspective");
+        _reverting = gsap$2.core.reverting;
         _pluginInitted = 1;
       }
     },
@@ -5256,6 +5689,10 @@ var app = (function (exports) {
       rad: 1,
       turn: 1
     },
+        _nonStandardLayouts = {
+      grid: 1,
+      flex: 1
+    },
         //takes a single value like 20px and converts it to the unit specified, like "%", returning only the numeric amount.
     _convertToUnit = function _convertToUnit(target, property, value, unit) {
       var curValue = parseFloat(value) || 0,
@@ -5298,10 +5735,10 @@ var app = (function (exports) {
 
       cache = parent._gsap;
 
-      if (cache && toPercent && cache.width && horizontal && cache.time === _ticker.time) {
+      if (cache && toPercent && cache.width && horizontal && cache.time === _ticker.time && !cache.uncache) {
         return _round$1(curValue / cache.width * amount);
       } else {
-        (toPercent || curUnit === "%") && (style.position = _getComputedProperty(target, "position"));
+        (toPercent || curUnit === "%") && !_nonStandardLayouts[_getComputedProperty(parent, "display")] && (style.position = _getComputedProperty(target, "position"));
         parent === target && (style.position = "static"); // like for borderRadius, if it's a % we must have it relative to the target itself but that may not have position: relative or position: absolute in which case it'd go up the chain until it finds its offsetParent (bad). position: static protects against that.
 
         parent.appendChild(_tempDiv);
@@ -5513,6 +5950,8 @@ var app = (function (exports) {
 
 
             cache.uncache = 1;
+
+            _removeIndependentTransforms(style);
           }
         }
       }
@@ -5637,7 +6076,7 @@ var app = (function (exports) {
           // note: in 3.3.0 we switched target.offsetParent to _doc.body.contains(target) to avoid [sometimes unnecessary] MutationObserver calls but that wasn't adequate because there are edge cases where nested position: fixed elements need to get reparented to accurately sense transforms. See https://github.com/greensock/GSAP/issues/388 and https://github.com/greensock/GSAP/issues/375
           addedToDOM = 1; //flag
 
-          nextSibling = target.nextSibling;
+          nextSibling = target.nextElementSibling;
 
           _docElement.appendChild(target); //we must add it to the DOM in order to get values properly
 
@@ -5725,6 +6164,7 @@ var app = (function (exports) {
           invertedScaleX = cache.scaleX < 0,
           px = "px",
           deg = "deg",
+          cs = getComputedStyle(target),
           origin = _getComputedProperty(target, _transformOriginProp) || "0",
           x,
           y,
@@ -5761,10 +6201,27 @@ var app = (function (exports) {
       x = y = z = rotation = rotationX = rotationY = skewX = skewY = perspective = 0;
       scaleX = scaleY = 1;
       cache.svg = !!(target.getCTM && _isSVG(target));
+
+      if (cs.translate) {
+        // accommodate independent transforms by combining them into normal ones.
+        if (cs.translate !== "none" || cs.scale !== "none" || cs.rotate !== "none") {
+          style[_transformProp$1] = (cs.translate !== "none" ? "translate3d(" + (cs.translate + " 0 0").split(" ").slice(0, 3).join(", ") + ") " : "") + (cs.rotate !== "none" ? "rotate(" + cs.rotate + ") " : "") + (cs.scale !== "none" ? "scale(" + cs.scale.split(" ").join(",") + ") " : "") + (cs[_transformProp$1] !== "none" ? cs[_transformProp$1] : "");
+        }
+
+        style.scale = style.rotate = style.translate = "none";
+      }
+
       matrix = _getMatrix(target, cache.svg);
 
       if (cache.svg) {
-        t1 = (!cache.uncache || origin === "0px 0px") && !uncache && target.getAttribute("data-svg-origin"); // if origin is 0,0 and cache.uncache is true, let the recorded data-svg-origin stay. Otherwise, whenever we set cache.uncache to true, we'd need to set element.style.transformOrigin = (cache.xOrigin - bbox.x) + "px " + (cache.yOrigin - bbox.y) + "px". Remember, to work around browser inconsistencies we always force SVG elements' transformOrigin to 0,0 and offset the translation accordingly.
+        if (cache.uncache) {
+          // if cache.uncache is true (and maybe if origin is 0,0), we need to set element.style.transformOrigin = (cache.xOrigin - bbox.x) + "px " + (cache.yOrigin - bbox.y) + "px". Previously we let the data-svg-origin stay instead, but when introducing revert(), it complicated things.
+          t2 = target.getBBox();
+          origin = cache.xOrigin - t2.x + "px " + (cache.yOrigin - t2.y) + "px";
+          t1 = "";
+        } else {
+          t1 = !uncache && target.getAttribute("data-svg-origin"); //  Remember, to work around browser inconsistencies we always force SVG elements' transformOrigin to 0,0 and offset the translation accordingly.
+        }
 
         _applySVGOrigin(target, t1 || origin, !!t1 || cache.originIsAbsolute, cache.smooth !== false, matrix);
       }
@@ -6086,7 +6543,7 @@ var app = (function (exports) {
 
       temp = "matrix(" + a11 + "," + a21 + "," + a12 + "," + a22 + "," + tx + "," + ty + ")";
       target.setAttribute("transform", temp);
-      forceCSS && (target.style[_transformProp$1] = temp); //some browsers prioritize CSS transforms over the transform attribute. When we sense that the user has CSS transforms applied, we must overwrite them this way (otherwise some browser simply won't render the  transform attribute changes!)
+      forceCSS && (target.style[_transformProp$1] = temp); //some browsers prioritize CSS transforms over the transform attribute. When we sense that the user has CSS transforms applied, we must overwrite them this way (otherwise some browser simply won't render the transform attribute changes!)
     },
         _addRotationalPropTween = function _addRotationalPropTween(plugin, target, property, startNum, endValue) {
       var cap = 360,
@@ -6236,8 +6693,13 @@ var app = (function (exports) {
             transformPropTween,
             cache,
             smooth,
-            hasPriority;
-        _pluginInitted || _initCore$1();
+            hasPriority,
+            inlineProps;
+        _pluginInitted || _initCore$1(); // we may call init() multiple times on the same plugin instance, like when adding special properties, so make sure we don't overwrite the revert data or inlineProps
+
+        this.styles = this.styles || _getStyleSaver(target);
+        inlineProps = this.styles.props;
+        this.tween = tween;
 
         for (p in vars) {
           if (p === "autoRound") {
@@ -6280,6 +6742,7 @@ var app = (function (exports) {
             endUnit ? startUnit !== endUnit && (startValue = _convertToUnit(target, p, startValue, endUnit) + endUnit) : startUnit && (endValue += startUnit);
             this.add(style, "setProperty", startValue, endValue, index, targets, 0, 0, p);
             props.push(p);
+            inlineProps.push(p, 0, style[p]);
           } else if (type !== "undefined") {
             if (startAt && p in startAt) {
               // in case someone hard-codes a complex value as the start, like top: "calc(2vh / 2)". Without this, it'd use the computed value (always in px)
@@ -6305,6 +6768,8 @@ var app = (function (exports) {
                   startNum = 0;
                 }
 
+                inlineProps.push("visibility", 0, style.visibility);
+
                 _addNonTweeningPT(this, style, "visibility", startNum ? "inherit" : "hidden", endNum ? "inherit" : "hidden", !endNum);
               }
 
@@ -6317,6 +6782,8 @@ var app = (function (exports) {
             isTransformRelated = p in _transformProps; //--- TRANSFORM-RELATED ---
 
             if (isTransformRelated) {
+              this.styles.save(p);
+
               if (!transformPropTween) {
                 cache = target._gsap;
                 cache.renderTransform && !vars.parseTransform || _parseTransform(target, vars.parseTransform); // if, for example, gsap.set(... {transform:"translateX(50vw)"}), the _get() call doesn't parse the transform, thus cache.renderTransform won't be set yet so force the parsing of the transform here.
@@ -6328,10 +6795,12 @@ var app = (function (exports) {
               }
 
               if (p === "scale") {
-                this._pt = new PropTween(this._pt, cache, "scaleY", cache.scaleY, (relative ? _parseRelative(cache.scaleY, relative + endNum) : endNum) - cache.scaleY || 0);
+                this._pt = new PropTween(this._pt, cache, "scaleY", cache.scaleY, (relative ? _parseRelative(cache.scaleY, relative + endNum) : endNum) - cache.scaleY || 0, _renderCSSProp);
+                this._pt.u = 0;
                 props.push("scaleY", p);
                 p += "X";
               } else if (p === "transformOrigin") {
+                inlineProps.push(_transformOriginProp, 0, style[_transformOriginProp]);
                 endValue = _convertKeywordsToPercentages(endValue); //in case something like "left top" or "bottom right" is passed in. Convert to percentages.
 
                 if (cache.svg) {
@@ -6387,7 +6856,7 @@ var app = (function (exports) {
               if (p in target) {
                 //maybe it's not a style - it could be a property added directly to an element in which case we'll try to animate that.
                 this.add(target, p, startValue || target[p], relative ? relative + endValue : endValue, index, targets);
-              } else {
+              } else if (p !== "parseTransform") {
                 _missingPlugin(p, endValue);
 
                 continue;
@@ -6396,11 +6865,24 @@ var app = (function (exports) {
               _tweenComplexCSSString.call(this, target, p, startValue, relative ? relative + endValue : endValue);
             }
 
+            isTransformRelated || (p in style ? inlineProps.push(p, 0, style[p]) : inlineProps.push(p, 1, startValue || target[p]));
             props.push(p);
           }
         }
 
         hasPriority && _sortPropTweensByPriority(this);
+      },
+      render: function render(ratio, data) {
+        if (data.tween._time || !_reverting()) {
+          var pt = data._pt;
+
+          while (pt) {
+            pt.r(ratio, pt.d);
+            pt = pt._next;
+          }
+        } else {
+          data.styles.revert();
+        }
       },
       get: _get,
       aliases: _propertyAliases,
@@ -6416,6 +6898,7 @@ var app = (function (exports) {
       }
     };
     gsap$2.utils.checkPrefix = _checkPropPrefix;
+    gsap$2.core.getStyleSaver = _getStyleSaver;
 
     (function (positionAndScale, rotation, others, aliases) {
       var all = _forEachName(positionAndScale + "," + rotation + "," + others, function (name) {
@@ -6471,9 +6954,9 @@ var app = (function (exports) {
 
     /* src/components/shared/Logo.svelte generated by Svelte v3.48.0 */
 
-    const file$v = "src/components/shared/Logo.svelte";
+    const file$w = "src/components/shared/Logo.svelte";
 
-    function create_fragment$v(ctx) {
+    function create_fragment$w(ctx) {
     	let svg;
     	let g0;
     	let path0;
@@ -6519,46 +7002,46 @@ var app = (function (exports) {
     			path15 = svg_element("path");
     			attr_dev(path0, "d", "M.25 18.65v3.96h22.3L.25 61.84h30.79v-3.96H7.02l22.34-39.23H.25z");
     			attr_dev(path0, "class", "z svelte-huk8x3");
-    			add_location(path0, file$v, 6, 8, 231);
+    			add_location(path0, file$w, 6, 8, 231);
     			attr_dev(path1, "d", "M41.43 28.28v33.56h-3.96V18.65h3.96v2.77c3.28-3.44 7.83-5.38 12.58-5.37 9.17-.41 16.94 6.69 17.36 15.86.02.35.02.69.01 1.04v28.9h-3.96V33.3c.05-3.55-1.39-6.96-3.98-9.39-5.21-5.16-13.6-5.19-18.85-.07a14.987 14.987 0 0 0-3.16 4.44");
-    			add_location(path1, file$v, 7, 8, 326);
+    			add_location(path1, file$w, 7, 8, 326);
     			attr_dev(path2, "d", "M111.29 22.92c-8.84-6.59-21.34-4.77-27.93 4.07a19.95 19.95 0 0 0 0 23.86l27.93-27.93zM86.05 53.75c3.6 3.35 8.36 5.18 13.28 5.1 5.31.08 10.42-2.03 14.12-5.85.5-.5.97-1.01 1.41-1.54l4.18 1.5c-.78 1.08-1.65 2.1-2.6 3.04-9.46 9.39-24.74 9.34-34.13-.11-9.39-9.46-9.34-24.74.11-34.13 8.64-8.58 22.32-9.38 31.91-1.87.7.59 1.41 1.23 2.11 1.93.27.26.51.53.75.79l-2.99 2.99-28.15 28.15z");
-    			add_location(path2, file$v, 8, 8, 575);
+    			add_location(path2, file$w, 8, 8, 575);
     			attr_dev(path3, "d", "M128.99.27v18.38h-8.8v3.96h8.8v39.23h3.96V22.61h8.8v-3.96h-8.8V.27h-3.96z");
-    			add_location(path3, file$v, 9, 8, 972);
+    			add_location(path3, file$w, 9, 8, 972);
     			attr_dev(g0, "class", "logo-title svelte-huk8x3");
-    			add_location(g0, file$v, 5, 4, 200);
+    			add_location(g0, file$w, 5, 4, 200);
     			attr_dev(path4, "d", "M6.33 67.82v3.4H2.02v-3.4H1.3v7.71h.72v-3.66h4.31v3.66h.72v-7.71h-.72z");
-    			add_location(path4, file$v, 12, 8, 1105);
+    			add_location(path4, file$w, 12, 8, 1105);
     			attr_dev(path5, "d", "M13.25 67.82v7.71h4.89v-.65h-4.17v-3h3.74v-.65h-3.74v-2.74h4v-.65l-4.72-.02z");
-    			add_location(path5, file$v, 13, 8, 1196);
+    			add_location(path5, file$w, 13, 8, 1196);
     			attr_dev(path6, "d", "M24.53 71.22h1.63c.2 0 .4-.02.6-.07.19-.04.36-.12.52-.23.16-.11.28-.25.37-.42.1-.2.15-.42.14-.64.01-.22-.04-.44-.15-.63-.09-.17-.22-.32-.38-.43-.16-.11-.34-.2-.54-.24-.2-.05-.4-.08-.61-.08h-1.59l.01 2.74zm-.72-3.4h2.22c.28 0 .57.03.84.09.29.06.56.17.81.32.25.16.45.37.6.63.17.31.25.65.23 1 .01.31-.06.62-.19.9-.12.25-.29.46-.51.63-.22.17-.47.29-.74.36-.29.08-.58.12-.88.12h-1.67v3.66h-.72l.01-7.71z");
-    			add_location(path6, file$v, 14, 8, 1293);
+    			add_location(path6, file$w, 14, 8, 1293);
     			attr_dev(path7, "d", "M34.86 74.88h1.64c.35.01.69-.04 1.02-.15.22-.08.43-.21.59-.38.13-.14.22-.3.28-.48.04-.15.07-.31.07-.46.01-.25-.05-.5-.17-.73-.1-.2-.25-.36-.42-.49-.18-.13-.38-.22-.59-.28-.22-.06-.44-.09-.67-.09h-1.75v3.06zm0-3.72h1.49c.31.01.61-.04.9-.14.2-.07.39-.19.55-.33.12-.12.21-.26.26-.42.04-.13.06-.27.07-.41.01-.23-.04-.46-.14-.67-.08-.17-.21-.32-.36-.42-.16-.11-.34-.19-.53-.22-.21-.04-.43-.07-.64-.07h-1.59l-.01 2.68zm-.72-3.34h2.22c.3 0 .59.02.88.07.28.04.56.14.8.29.24.15.44.37.58.62.16.32.24.69.22 1.05.01.37-.12.73-.35 1.02-.27.31-.63.51-1.03.58v.02c.24.02.48.08.7.18.2.09.39.23.54.39.16.17.28.37.35.58.09.24.13.49.13.74.02.38-.07.75-.26 1.08-.16.27-.38.49-.64.66-.26.16-.54.27-.84.33-.28.06-.56.09-.84.09h-2.46v-7.7z");
-    			add_location(path7, file$v, 15, 8, 1712);
+    			add_location(path7, file$w, 15, 8, 1712);
     			attr_dev(path8, "d", "M50.66 72.58c0 .4-.05.8-.14 1.19-.09.36-.25.7-.47 1-.23.3-.53.54-.87.7-.85.35-1.8.35-2.64 0-.34-.16-.64-.4-.87-.7-.23-.3-.39-.64-.47-1-.1-.39-.14-.79-.14-1.19v-4.76h.72v4.57c0 .3.03.59.08.88.05.31.15.6.3.87s.37.5.63.66c.68.35 1.49.35 2.17 0 .26-.16.48-.39.63-.66.15-.27.25-.57.3-.87.05-.29.07-.59.08-.88v-4.57h.72l-.03 4.76z");
-    			add_location(path8, file$v, 16, 8, 2449);
+    			add_location(path8, file$w, 16, 8, 2449);
     			attr_dev(path9, "d", "M57.54 71.22h1.52c.31.01.62-.04.92-.14.21-.07.39-.19.55-.35.12-.13.21-.28.27-.45.09-.28.09-.59 0-.87-.05-.17-.14-.32-.27-.45-.16-.15-.34-.27-.55-.35-.29-.11-.61-.15-.92-.14h-1.52v2.75zm-.72-3.4h2.02c.1 0 .24 0 .41.01.19.01.38.03.57.07.21.04.42.1.62.17.21.08.4.2.57.35a1.85 1.85 0 0 1 .57 1.43c.01.32-.05.63-.19.92-.12.23-.28.42-.48.58-.19.15-.41.26-.64.33-.22.07-.44.12-.66.15l2.24 3.7h-.82l-2.17-3.66h-1.34v3.67h-.71l.01-7.72z");
-    			add_location(path9, file$v, 17, 8, 2794);
+    			add_location(path9, file$w, 17, 8, 2794);
     			attr_dev(path10, "d", "M73.29 67.82v6.75h-.02l-4.69-6.75h-.92v7.71h.72v-6.75h.02l4.69 6.75h.92v-7.71h-.72z");
-    			add_location(path10, file$v, 18, 8, 3242);
+    			add_location(path10, file$w, 18, 8, 3242);
     			attr_dev(path11, "d", "M87.21 74.11c.17.31.43.56.73.73.32.16.67.25 1.03.24.23 0 .46-.03.67-.11.2-.07.39-.17.55-.3.15-.13.28-.29.37-.47.09-.2.14-.41.14-.63.01-.23-.05-.46-.17-.66-.11-.18-.27-.32-.45-.43-.2-.12-.42-.21-.64-.29-.23-.08-.48-.16-.73-.24s-.49-.17-.73-.27c-.23-.1-.45-.23-.64-.4s-.35-.38-.45-.61c-.12-.29-.18-.6-.17-.92-.01-.61.26-1.2.74-1.57.24-.18.5-.32.79-.4.3-.09.62-.14.93-.14.4 0 .8.07 1.17.22.37.16.69.42.93.75l-.62.45a1.76 1.76 0 0 0-.64-.57c-.27-.13-.57-.2-.86-.19-.22 0-.45.03-.66.09-.2.06-.38.15-.55.27a1.301 1.301 0 0 0-.52 1.09c-.02.32.08.64.29.89.21.21.46.38.73.49.31.13.63.23.96.32.33.09.65.21.96.36.29.15.54.37.73.64.21.34.32.73.29 1.13 0 .32-.06.64-.2.93-.13.26-.31.49-.53.68-.23.19-.49.33-.77.42-.29.09-.59.14-.9.14-.48 0-.96-.09-1.4-.27-.44-.19-.83-.5-1.1-.9l.72-.47z");
-    			add_location(path11, file$v, 19, 8, 3346);
+    			add_location(path11, file$w, 19, 8, 3346);
     			attr_dev(path12, "d", "M102.4 67.82v3.4h-4.31v-3.4h-.72v7.71h.72v-3.66h4.31v3.66h.72v-7.71h-.72z");
-    			add_location(path12, file$v, 20, 8, 4140);
+    			add_location(path12, file$w, 20, 8, 4140);
     			attr_dev(path13, "d", "M109.59 67.82h.72v7.71h-.72z");
-    			add_location(path13, file$v, 21, 8, 4234);
+    			add_location(path13, file$w, 21, 8, 4234);
     			attr_dev(path14, "d", "M117.5 71.22h1.52c.31.01.62-.04.92-.14.21-.07.39-.19.55-.35.12-.13.22-.28.27-.45.09-.28.09-.59 0-.87-.05-.17-.14-.32-.27-.45-.16-.15-.34-.27-.55-.35-.29-.11-.61-.15-.92-.14h-1.52v2.75zm-.72-3.4h2.02c.1 0 .24 0 .41.01.19.01.38.03.57.07.21.04.42.1.62.17.21.08.4.2.57.35a1.85 1.85 0 0 1 .57 1.43c.01.32-.05.63-.19.92-.12.23-.28.42-.48.58-.19.15-.41.26-.64.33-.22.07-.44.12-.66.15l2.24 3.7H121l-2.17-3.65h-1.34v3.66h-.72l.01-7.72z");
-    			add_location(path14, file$v, 22, 8, 4283);
+    			add_location(path14, file$w, 22, 8, 4283);
     			attr_dev(path15, "d", "M127.6 67.82v7.71h4.89v-.65h-4.17v-3h3.74v-.65h-3.74v-2.74h4v-.65l-4.72-.02z");
-    			add_location(path15, file$v, 23, 8, 4730);
+    			add_location(path15, file$w, 23, 8, 4730);
     			attr_dev(g1, "class", "logo-subtitle svelte-huk8x3");
-    			add_location(g1, file$v, 11, 4, 1071);
+    			add_location(g1, file$w, 11, 4, 1071);
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg, "width", svg_width_value = /*type*/ ctx[0] === 'width' ? '100%' : null);
     			attr_dev(svg, "height", svg_height_value = /*type*/ ctx[0] === 'height' ? '100%' : null);
     			attr_dev(svg, "viewBox", "0 0 142 76");
-    			add_location(svg, file$v, 4, 0, 50);
+    			add_location(svg, file$w, 4, 0, 50);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -6602,7 +7085,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$v.name,
+    		id: create_fragment$w.name,
     		type: "component",
     		source: "",
     		ctx
@@ -6611,7 +7094,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$v($$self, $$props, $$invalidate) {
+    function instance$w($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Logo', slots, []);
     	let { type = 'width' } = $$props;
@@ -6641,13 +7124,13 @@ var app = (function (exports) {
     class Logo extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$v, create_fragment$v, safe_not_equal, { type: 0 });
+    		init$1(this, options, instance$w, create_fragment$w, safe_not_equal, { type: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Logo",
     			options,
-    			id: create_fragment$v.name
+    			id: create_fragment$w.name
     		});
     	}
 
@@ -6661,7 +7144,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/Title.svelte generated by Svelte v3.48.0 */
-    const file$u = "src/components/byPage/postcards/postcard/Title.svelte";
+    const file$v = "src/components/byPage/postcards/postcard/Title.svelte";
 
     function get_each_context$h(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -6692,7 +7175,7 @@ var app = (function (exports) {
     			}
 
     			attr_dev(h3, "class", "svelte-8gygjn");
-    			add_location(h3, file$u, 14, 8, 410);
+    			add_location(h3, file$v, 14, 8, 410);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h3, anchor);
@@ -6892,7 +7375,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$u(ctx) {
+    function create_fragment$v(ctx) {
     	let section;
     	let div;
     	let h1;
@@ -6909,11 +7392,11 @@ var app = (function (exports) {
     			if (if_block) if_block.c();
     			attr_dev(h1, "class", "svelte-8gygjn");
     			toggle_class(h1, "three-line", /*actionData*/ ctx[0].Name.length > 70);
-    			add_location(h1, file$u, 12, 8, 278);
+    			add_location(h1, file$v, 12, 8, 278);
     			attr_dev(div, "class", "main-title svelte-8gygjn");
-    			add_location(div, file$u, 11, 4, 243);
+    			add_location(div, file$v, 11, 4, 243);
     			attr_dev(section, "class", "title svelte-8gygjn");
-    			add_location(section, file$u, 10, 0, 214);
+    			add_location(section, file$v, 10, 0, 214);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -6955,7 +7438,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$u.name,
+    		id: create_fragment$v.name,
     		type: "component",
     		source: "",
     		ctx
@@ -6964,7 +7447,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$u($$self, $$props, $$invalidate) {
+    function instance$v($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
@@ -6999,13 +7482,13 @@ var app = (function (exports) {
     class Title extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$u, create_fragment$u, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$v, create_fragment$v, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Title",
     			options,
-    			id: create_fragment$u.name
+    			id: create_fragment$v.name
     		});
 
     		const { ctx } = this.$$;
@@ -12160,7 +12643,7 @@ var app = (function (exports) {
     };
 
     /* src/components/byPage/postcards/postcard/Main.svelte generated by Svelte v3.48.0 */
-    const file$t = "src/components/byPage/postcards/postcard/Main.svelte";
+    const file$u = "src/components/byPage/postcards/postcard/Main.svelte";
 
     // (22:8) {#if (actionData["More info #1 URL"] && actionData["More info #1 description"])              ||  (actionData["More info #2 URL"] && actionData["More info #2 description"])              ||  (actionData["More info #3 URL"] && actionData["More info #3 description"])           }
     function create_if_block$b(ctx) {
@@ -12187,11 +12670,11 @@ var app = (function (exports) {
     			t3 = space();
     			if (if_block2) if_block2.c();
     			attr_dev(h3, "class", "svelte-1alepd0");
-    			add_location(h3, file$t, 26, 12, 1094);
+    			add_location(h3, file$u, 26, 12, 1094);
     			attr_dev(ul, "class", "svelte-1alepd0");
-    			add_location(ul, file$t, 27, 12, 1129);
+    			add_location(ul, file$u, 27, 12, 1129);
     			attr_dev(div, "class", "further-info-container svelte-1alepd0");
-    			add_location(div, file$t, 25, 8, 1044);
+    			add_location(div, file$u, 25, 8, 1044);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -12276,9 +12759,9 @@ var app = (function (exports) {
     			a = element("a");
     			attr_dev(a, "href", a_href_value = /*actionData*/ ctx[0]["More info #1 URL"]);
     			attr_dev(a, "target", "_blank");
-    			add_location(a, file$t, 29, 20, 1246);
+    			add_location(a, file$u, 29, 20, 1246);
     			attr_dev(li, "class", "svelte-1alepd0");
-    			add_location(li, file$t, 29, 16, 1242);
+    			add_location(li, file$u, 29, 16, 1242);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -12320,9 +12803,9 @@ var app = (function (exports) {
     			a = element("a");
     			attr_dev(a, "href", a_href_value = /*actionData*/ ctx[0]["More info #2 URL"]);
     			attr_dev(a, "target", "_blank");
-    			add_location(a, file$t, 32, 20, 1493);
+    			add_location(a, file$u, 32, 20, 1493);
     			attr_dev(li, "class", "svelte-1alepd0");
-    			add_location(li, file$t, 32, 16, 1489);
+    			add_location(li, file$u, 32, 16, 1489);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -12364,9 +12847,9 @@ var app = (function (exports) {
     			a = element("a");
     			attr_dev(a, "href", a_href_value = /*actionData*/ ctx[0]["More info #3 URL"]);
     			attr_dev(a, "target", "_blank");
-    			add_location(a, file$t, 35, 20, 1740);
+    			add_location(a, file$u, 35, 20, 1740);
     			attr_dev(li, "class", "svelte-1alepd0");
-    			add_location(li, file$t, 35, 16, 1736);
+    			add_location(li, file$u, 35, 16, 1736);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -12395,7 +12878,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$t(ctx) {
+    function create_fragment$u(ctx) {
     	let section;
     	let div1;
     	let h3;
@@ -12416,13 +12899,13 @@ var app = (function (exports) {
     			t2 = space();
     			if (if_block) if_block.c();
     			attr_dev(h3, "class", "svelte-1alepd0");
-    			add_location(h3, file$t, 16, 8, 599);
+    			add_location(h3, file$u, 16, 8, 599);
     			attr_dev(div0, "class", "about-content svelte-1alepd0");
-    			add_location(div0, file$t, 17, 8, 633);
+    			add_location(div0, file$u, 17, 8, 633);
     			attr_dev(div1, "class", "about-container svelte-1alepd0");
-    			add_location(div1, file$t, 15, 4, 559);
+    			add_location(div1, file$u, 15, 4, 559);
     			attr_dev(section, "class", "main svelte-1alepd0");
-    			add_location(section, file$t, 14, 0, 531);
+    			add_location(section, file$u, 14, 0, 531);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -12462,7 +12945,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$t.name,
+    		id: create_fragment$u.name,
     		type: "component",
     		source: "",
     		ctx
@@ -12471,7 +12954,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$t($$self, $$props, $$invalidate) {
+    function instance$u($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Main', slots, []);
     	let { actionData } = $$props;
@@ -12517,13 +13000,13 @@ var app = (function (exports) {
     class Main extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$t, create_fragment$t, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$u, create_fragment$u, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Main",
     			options,
-    			id: create_fragment$t.name
+    			id: create_fragment$u.name
     		});
 
     		const { ctx } = this.$$;
@@ -12545,9 +13028,9 @@ var app = (function (exports) {
 
     /* src/components/byPage/postcards/postcard/Image.svelte generated by Svelte v3.48.0 */
 
-    const file$s = "src/components/byPage/postcards/postcard/Image.svelte";
+    const file$t = "src/components/byPage/postcards/postcard/Image.svelte";
 
-    function create_fragment$s(ctx) {
+    function create_fragment$t(ctx) {
     	let section;
     	let img;
     	let img_src_value;
@@ -12558,9 +13041,9 @@ var app = (function (exports) {
     			img = element("img");
     			if (!src_url_equal(img.src, img_src_value = /*imgURL*/ ctx[0])) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "class", "svelte-596oyo");
-    			add_location(img, file$s, 13, 4, 639);
+    			add_location(img, file$t, 13, 4, 639);
     			attr_dev(section, "class", "img-wrapper svelte-596oyo");
-    			add_location(section, file$s, 7, 0, 103);
+    			add_location(section, file$t, 7, 0, 103);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -12583,7 +13066,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$s.name,
+    		id: create_fragment$t.name,
     		type: "component",
     		source: "",
     		ctx
@@ -12592,7 +13075,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$s($$self, $$props, $$invalidate) {
+    function instance$t($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Image', slots, []);
     	let { imgURL } = $$props;
@@ -12622,13 +13105,13 @@ var app = (function (exports) {
     class Image$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$s, create_fragment$s, safe_not_equal, { imgURL: 0 });
+    		init$1(this, options, instance$t, create_fragment$t, safe_not_equal, { imgURL: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Image",
     			options,
-    			id: create_fragment$s.name
+    			id: create_fragment$t.name
     		});
 
     		const { ctx } = this.$$;
@@ -12776,6 +13259,122 @@ var app = (function (exports) {
     const bisectLeft = ascendingBisect.left;
     const bisectCenter = bisector(number$3).center;
     var bisect = bisectRight;
+
+    function blur(values, r) {
+      if (!((r = +r) >= 0)) throw new RangeError("invalid r");
+      let length = values.length;
+      if (!((length = Math.floor(length)) >= 0)) throw new RangeError("invalid length");
+      if (!length || !r) return values;
+      const blur = blurf(r);
+      const temp = values.slice();
+      blur(values, temp, 0, length, 1);
+      blur(temp, values, 0, length, 1);
+      blur(values, temp, 0, length, 1);
+      return values;
+    }
+
+    const blur2 = Blur2(blurf);
+
+    const blurImage = Blur2(blurfImage);
+
+    function Blur2(blur) {
+      return function(data, rx, ry = rx) {
+        if (!((rx = +rx) >= 0)) throw new RangeError("invalid rx");
+        if (!((ry = +ry) >= 0)) throw new RangeError("invalid ry");
+        let {data: values, width, height} = data;
+        if (!((width = Math.floor(width)) >= 0)) throw new RangeError("invalid width");
+        if (!((height = Math.floor(height !== undefined ? height : values.length / width)) >= 0)) throw new RangeError("invalid height");
+        if (!width || !height || (!rx && !ry)) return data;
+        const blurx = rx && blur(rx);
+        const blury = ry && blur(ry);
+        const temp = values.slice();
+        if (blurx && blury) {
+          blurh(blurx, temp, values, width, height);
+          blurh(blurx, values, temp, width, height);
+          blurh(blurx, temp, values, width, height);
+          blurv(blury, values, temp, width, height);
+          blurv(blury, temp, values, width, height);
+          blurv(blury, values, temp, width, height);
+        } else if (blurx) {
+          blurh(blurx, values, temp, width, height);
+          blurh(blurx, temp, values, width, height);
+          blurh(blurx, values, temp, width, height);
+        } else if (blury) {
+          blurv(blury, values, temp, width, height);
+          blurv(blury, temp, values, width, height);
+          blurv(blury, values, temp, width, height);
+        }
+        return data;
+      };
+    }
+
+    function blurh(blur, T, S, w, h) {
+      for (let y = 0, n = w * h; y < n;) {
+        blur(T, S, y, y += w, 1);
+      }
+    }
+
+    function blurv(blur, T, S, w, h) {
+      for (let x = 0, n = w * h; x < w; ++x) {
+        blur(T, S, x, x + n, w);
+      }
+    }
+
+    function blurfImage(radius) {
+      const blur = blurf(radius);
+      return (T, S, start, stop, step) => {
+        start <<= 2, stop <<= 2, step <<= 2;
+        blur(T, S, start + 0, stop + 0, step);
+        blur(T, S, start + 1, stop + 1, step);
+        blur(T, S, start + 2, stop + 2, step);
+        blur(T, S, start + 3, stop + 3, step);
+      };
+    }
+
+    // Given a target array T, a source array S, sets each value T[i] to the average
+    // of {S[i - r], …, S[i], …, S[i + r]}, where r = ⌊radius⌋, start <= i < stop,
+    // for each i, i + step, i + 2 * step, etc., and where S[j] is clamped between
+    // S[start] (inclusive) and S[stop] (exclusive). If the given radius is not an
+    // integer, S[i - r - 1] and S[i + r + 1] are added to the sum, each weighted
+    // according to r - ⌊radius⌋.
+    function blurf(radius) {
+      const radius0 = Math.floor(radius);
+      if (radius0 === radius) return bluri(radius);
+      const t = radius - radius0;
+      const w = 2 * radius + 1;
+      return (T, S, start, stop, step) => { // stop must be aligned!
+        if (!((stop -= step) >= start)) return; // inclusive stop
+        let sum = radius0 * S[start];
+        const s0 = step * radius0;
+        const s1 = s0 + step;
+        for (let i = start, j = start + s0; i < j; i += step) {
+          sum += S[Math.min(stop, i)];
+        }
+        for (let i = start, j = stop; i <= j; i += step) {
+          sum += S[Math.min(stop, i + s0)];
+          T[i] = (sum + t * (S[Math.max(start, i - s1)] + S[Math.min(stop, i + s1)])) / w;
+          sum -= S[Math.max(start, i - s0)];
+        }
+      };
+    }
+
+    // Like blurf, but optimized for integer radius.
+    function bluri(radius) {
+      const w = 2 * radius + 1;
+      return (T, S, start, stop, step) => { // stop must be aligned!
+        if (!((stop -= step) >= start)) return; // inclusive stop
+        let sum = radius * S[start];
+        const s = step * radius;
+        for (let i = start, j = start + s; i < j; i += step) {
+          sum += S[Math.min(stop, i)];
+        }
+        for (let i = start, j = stop; i <= j; i += step) {
+          sum += S[Math.min(stop, i + s)];
+          T[i] = sum / w;
+          sum -= S[Math.max(start, i - s)];
+        }
+      };
+    }
 
     function count$1(values, valueof) {
       let count = 0;
@@ -13153,59 +13752,60 @@ var app = (function (exports) {
       return () => x;
     }
 
-    var e10 = Math.sqrt(50),
+    const e10 = Math.sqrt(50),
         e5 = Math.sqrt(10),
         e2 = Math.sqrt(2);
 
-    function ticks(start, stop, count) {
-      var reverse,
-          i = -1,
-          n,
-          ticks,
-          step;
-
-      stop = +stop, start = +start, count = +count;
-      if (start === stop && count > 0) return [start];
-      if (reverse = stop < start) n = start, start = stop, stop = n;
-      if ((step = tickIncrement(start, stop, count)) === 0 || !isFinite(step)) return [];
-
-      if (step > 0) {
-        let r0 = Math.round(start / step), r1 = Math.round(stop / step);
-        if (r0 * step < start) ++r0;
-        if (r1 * step > stop) --r1;
-        ticks = new Array(n = r1 - r0 + 1);
-        while (++i < n) ticks[i] = (r0 + i) * step;
+    function tickSpec(start, stop, count) {
+      const step = (stop - start) / Math.max(0, count),
+          power = Math.floor(Math.log10(step)),
+          error = step / Math.pow(10, power),
+          factor = error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1;
+      let i1, i2, inc;
+      if (power < 0) {
+        inc = Math.pow(10, -power) / factor;
+        i1 = Math.round(start * inc);
+        i2 = Math.round(stop * inc);
+        if (i1 / inc < start) ++i1;
+        if (i2 / inc > stop) --i2;
+        inc = -inc;
       } else {
-        step = -step;
-        let r0 = Math.round(start * step), r1 = Math.round(stop * step);
-        if (r0 / step < start) ++r0;
-        if (r1 / step > stop) --r1;
-        ticks = new Array(n = r1 - r0 + 1);
-        while (++i < n) ticks[i] = (r0 + i) / step;
+        inc = Math.pow(10, power) * factor;
+        i1 = Math.round(start / inc);
+        i2 = Math.round(stop / inc);
+        if (i1 * inc < start) ++i1;
+        if (i2 * inc > stop) --i2;
       }
+      if (i2 < i1 && 0.5 <= count && count < 2) return tickSpec(start, stop, count * 2);
+      return [i1, i2, inc];
+    }
 
-      if (reverse) ticks.reverse();
-
+    function ticks(start, stop, count) {
+      stop = +stop, start = +start, count = +count;
+      if (!(count > 0)) return [];
+      if (start === stop) return [start];
+      const reverse = stop < start, [i1, i2, inc] = reverse ? tickSpec(stop, start, count) : tickSpec(start, stop, count);
+      if (!(i2 >= i1)) return [];
+      const n = i2 - i1 + 1, ticks = new Array(n);
+      if (reverse) {
+        if (inc < 0) for (let i = 0; i < n; ++i) ticks[i] = (i2 - i) / -inc;
+        else for (let i = 0; i < n; ++i) ticks[i] = (i2 - i) * inc;
+      } else {
+        if (inc < 0) for (let i = 0; i < n; ++i) ticks[i] = (i1 + i) / -inc;
+        else for (let i = 0; i < n; ++i) ticks[i] = (i1 + i) * inc;
+      }
       return ticks;
     }
 
     function tickIncrement(start, stop, count) {
-      var step = (stop - start) / Math.max(0, count),
-          power = Math.floor(Math.log(step) / Math.LN10),
-          error = step / Math.pow(10, power);
-      return power >= 0
-          ? (error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1) * Math.pow(10, power)
-          : -Math.pow(10, -power) / (error >= e10 ? 10 : error >= e5 ? 5 : error >= e2 ? 2 : 1);
+      stop = +stop, start = +start, count = +count;
+      return tickSpec(start, stop, count)[2];
     }
 
     function tickStep(start, stop, count) {
-      var step0 = Math.abs(stop - start) / Math.max(0, count),
-          step1 = Math.pow(10, Math.floor(Math.log(step0) / Math.LN10)),
-          error = step0 / step1;
-      if (error >= e10) step1 *= 10;
-      else if (error >= e5) step1 *= 5;
-      else if (error >= e2) step1 *= 2;
-      return stop < start ? -step1 : step1;
+      stop = +stop, start = +start, count = +count;
+      const reverse = stop < start, inc = reverse ? tickIncrement(stop, start, count) : tickIncrement(start, stop, count);
+      return (reverse ? -1 : 1) * (inc < 0 ? 1 / -inc : inc);
     }
 
     function nice$1(start, stop, count) {
@@ -13288,9 +13888,11 @@ var app = (function (exports) {
         }
 
         // Remove any thresholds outside the domain.
-        var m = tz.length;
-        while (tz[0] <= x0) tz.shift(), --m;
-        while (tz[m - 1] > x1) tz.pop(), --m;
+        // Be careful not to mutate an array owned by the user!
+        var m = tz.length, a = 0, b = m;
+        while (tz[a] <= x0) ++a;
+        while (tz[b - 1] > x1) --b;
+        if (a || b < m) tz = tz.slice(a, b), m = b - a;
 
         var bins = new Array(m + 1),
             bin;
@@ -13338,7 +13940,7 @@ var app = (function (exports) {
       };
 
       histogram.thresholds = function(_) {
-        return arguments.length ? (threshold = typeof _ === "function" ? _ : Array.isArray(_) ? constant$b(slice$3.call(_)) : constant$b(_), histogram) : threshold;
+        return arguments.length ? (threshold = typeof _ === "function" ? _ : constant$b(Array.isArray(_) ? slice$3.call(_) : _), histogram) : threshold;
       };
 
       return histogram;
@@ -13365,6 +13967,29 @@ var app = (function (exports) {
       return max;
     }
 
+    function maxIndex(values, valueof) {
+      let max;
+      let maxIndex = -1;
+      let index = -1;
+      if (valueof === undefined) {
+        for (const value of values) {
+          ++index;
+          if (value != null
+              && (max < value || (max === undefined && value >= value))) {
+            max = value, maxIndex = index;
+          }
+        }
+      } else {
+        for (let value of values) {
+          if ((value = valueof(value, ++index, values)) != null
+              && (max < value || (max === undefined && value >= value))) {
+            max = value, maxIndex = index;
+          }
+        }
+      }
+      return maxIndex;
+    }
+
     function min$2(values, valueof) {
       let min;
       if (valueof === undefined) {
@@ -13386,9 +14011,38 @@ var app = (function (exports) {
       return min;
     }
 
+    function minIndex(values, valueof) {
+      let min;
+      let minIndex = -1;
+      let index = -1;
+      if (valueof === undefined) {
+        for (const value of values) {
+          ++index;
+          if (value != null
+              && (min > value || (min === undefined && value >= value))) {
+            min = value, minIndex = index;
+          }
+        }
+      } else {
+        for (let value of values) {
+          if ((value = valueof(value, ++index, values)) != null
+              && (min > value || (min === undefined && value >= value))) {
+            min = value, minIndex = index;
+          }
+        }
+      }
+      return minIndex;
+    }
+
     // Based on https://github.com/mourner/quickselect
     // ISC license, Copyright 2018 Vladimir Agafonkin.
-    function quickselect(array, k, left = 0, right = array.length - 1, compare) {
+    function quickselect(array, k, left = 0, right = Infinity, compare) {
+      k = Math.floor(k);
+      left = Math.floor(Math.max(0, left));
+      right = Math.floor(Math.min(array.length - 1, right));
+
+      if (!(left <= k && k <= right)) return array;
+
       compare = compare === undefined ? ascendingDefined : compareDefined(compare);
 
       while (right > left) {
@@ -13422,6 +14076,7 @@ var app = (function (exports) {
         if (j <= k) left = j + 1;
         if (k <= j) right = j - 1;
       }
+
       return array;
     }
 
@@ -13431,10 +14086,38 @@ var app = (function (exports) {
       array[j] = t;
     }
 
+    function greatest(values, compare = ascending$3) {
+      let max;
+      let defined = false;
+      if (compare.length === 1) {
+        let maxValue;
+        for (const element of values) {
+          const value = compare(element);
+          if (defined
+              ? ascending$3(value, maxValue) > 0
+              : ascending$3(value, value) === 0) {
+            max = element;
+            maxValue = value;
+            defined = true;
+          }
+        }
+      } else {
+        for (const value of values) {
+          if (defined
+              ? compare(value, max) > 0
+              : compare(value, value) === 0) {
+            max = value;
+            defined = true;
+          }
+        }
+      }
+      return max;
+    }
+
     function quantile$1(values, p, valueof) {
       values = Float64Array.from(numbers(values, valueof));
-      if (!(n = values.length)) return;
-      if ((p = +p) <= 0 || n < 2) return min$2(values);
+      if (!(n = values.length) || isNaN(p = +p)) return;
+      if (p <= 0 || n < 2) return min$2(values);
       if (p >= 1) return max$3(values);
       var n,
           i = (n - 1) * p,
@@ -13445,8 +14128,8 @@ var app = (function (exports) {
     }
 
     function quantileSorted(values, p, valueof = number$3) {
-      if (!(n = values.length)) return;
-      if ((p = +p) <= 0 || n < 2) return +valueof(values[0], 0, values);
+      if (!(n = values.length) || isNaN(p = +p)) return;
+      if (p <= 0 || n < 2) return +valueof(values[0], 0, values);
       if (p >= 1) return +valueof(values[n - 1], n - 1, values);
       var n,
           i = (n - 1) * p,
@@ -13456,35 +14139,24 @@ var app = (function (exports) {
       return value0 + (value1 - value0) * (i - i0);
     }
 
+    function quantileIndex(values, p, valueof) {
+      values = Float64Array.from(numbers(values, valueof));
+      if (!(n = values.length) || isNaN(p = +p)) return;
+      if (p <= 0 || n < 2) return minIndex(values);
+      if (p >= 1) return maxIndex(values);
+      var n,
+          i = Math.floor((n - 1) * p),
+          order = (i, j) => ascendingDefined(values[i], values[j]),
+          index = quickselect(Uint32Array.from(values, (_, i) => i), i, 0, n - 1, order);
+      return greatest(index.subarray(0, i + 1), i => values[i]);
+    }
+
     function thresholdFreedmanDiaconis(values, min, max) {
       return Math.ceil((max - min) / (2 * (quantile$1(values, 0.75) - quantile$1(values, 0.25)) * Math.pow(count$1(values), -1 / 3)));
     }
 
     function thresholdScott(values, min, max) {
       return Math.ceil((max - min) * Math.cbrt(count$1(values)) / (3.49 * deviation(values)));
-    }
-
-    function maxIndex(values, valueof) {
-      let max;
-      let maxIndex = -1;
-      let index = -1;
-      if (valueof === undefined) {
-        for (const value of values) {
-          ++index;
-          if (value != null
-              && (max < value || (max === undefined && value >= value))) {
-            max = value, maxIndex = index;
-          }
-        }
-      } else {
-        for (let value of values) {
-          if ((value = valueof(value, ++index, values)) != null
-              && (max < value || (max === undefined && value >= value))) {
-            max = value, maxIndex = index;
-          }
-        }
-      }
-      return maxIndex;
     }
 
     function mean(values, valueof) {
@@ -13511,6 +14183,10 @@ var app = (function (exports) {
       return quantile$1(values, 0.5, valueof);
     }
 
+    function medianIndex(values, valueof) {
+      return quantileIndex(values, 0.5, valueof);
+    }
+
     function* flatten(arrays) {
       for (const array of arrays) {
         yield* array;
@@ -13519,29 +14195,6 @@ var app = (function (exports) {
 
     function merge(arrays) {
       return Array.from(flatten(arrays));
-    }
-
-    function minIndex(values, valueof) {
-      let min;
-      let minIndex = -1;
-      let index = -1;
-      if (valueof === undefined) {
-        for (const value of values) {
-          ++index;
-          if (value != null
-              && (min > value || (min === undefined && value >= value))) {
-            min = value, minIndex = index;
-          }
-        }
-      } else {
-        for (let value of values) {
-          if ((value = valueof(value, ++index, values)) != null
-              && (min > value || (min === undefined && value >= value))) {
-            min = value, minIndex = index;
-          }
-        }
-      }
-      return minIndex;
     }
 
     function mode(values, valueof) {
@@ -13666,34 +14319,6 @@ var app = (function (exports) {
         }
       }
       return min;
-    }
-
-    function greatest(values, compare = ascending$3) {
-      let max;
-      let defined = false;
-      if (compare.length === 1) {
-        let maxValue;
-        for (const element of values) {
-          const value = compare(element);
-          if (defined
-              ? ascending$3(value, maxValue) > 0
-              : ascending$3(value, value) === 0) {
-            max = element;
-            maxValue = value;
-            defined = true;
-          }
-        }
-      } else {
-        for (const value of values) {
-          if (defined
-              ? compare(value, max) > 0
-              : compare(value, value) === 0) {
-            max = value;
-            defined = true;
-          }
-        }
-      }
-      return max;
     }
 
     function greatestIndex(values, compare = ascending$3) {
@@ -18572,39 +19197,58 @@ var app = (function (exports) {
         epsilon$4 = 1e-6,
         tauEpsilon = tau$3 - epsilon$4;
 
-    function Path$1() {
-      this._x0 = this._y0 = // start of current subpath
-      this._x1 = this._y1 = null; // end of current subpath
-      this._ = "";
+    function append$1(strings) {
+      this._ += strings[0];
+      for (let i = 1, n = strings.length; i < n; ++i) {
+        this._ += arguments[i] + strings[i];
+      }
     }
 
-    function path() {
-      return new Path$1;
+    function appendRound$1(digits) {
+      let d = Math.floor(digits);
+      if (!(d >= 0)) throw new Error(`invalid digits: ${digits}`);
+      if (d > 15) return append$1;
+      const k = 10 ** d;
+      return function(strings) {
+        this._ += strings[0];
+        for (let i = 1, n = strings.length; i < n; ++i) {
+          this._ += Math.round(arguments[i] * k) / k + strings[i];
+        }
+      };
     }
 
-    Path$1.prototype = path.prototype = {
-      constructor: Path$1,
-      moveTo: function(x, y) {
-        this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y);
-      },
-      closePath: function() {
+    class Path$1 {
+      constructor(digits) {
+        this._x0 = this._y0 = // start of current subpath
+        this._x1 = this._y1 = null; // end of current subpath
+        this._ = "";
+        this._append = digits == null ? append$1 : appendRound$1(digits);
+      }
+      moveTo(x, y) {
+        this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}`;
+      }
+      closePath() {
         if (this._x1 !== null) {
           this._x1 = this._x0, this._y1 = this._y0;
-          this._ += "Z";
+          this._append`Z`;
         }
-      },
-      lineTo: function(x, y) {
-        this._ += "L" + (this._x1 = +x) + "," + (this._y1 = +y);
-      },
-      quadraticCurveTo: function(x1, y1, x, y) {
-        this._ += "Q" + (+x1) + "," + (+y1) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
-      },
-      bezierCurveTo: function(x1, y1, x2, y2, x, y) {
-        this._ += "C" + (+x1) + "," + (+y1) + "," + (+x2) + "," + (+y2) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
-      },
-      arcTo: function(x1, y1, x2, y2, r) {
+      }
+      lineTo(x, y) {
+        this._append`L${this._x1 = +x},${this._y1 = +y}`;
+      }
+      quadraticCurveTo(x1, y1, x, y) {
+        this._append`Q${+x1},${+y1},${this._x1 = +x},${this._y1 = +y}`;
+      }
+      bezierCurveTo(x1, y1, x2, y2, x, y) {
+        this._append`C${+x1},${+y1},${+x2},${+y2},${this._x1 = +x},${this._y1 = +y}`;
+      }
+      arcTo(x1, y1, x2, y2, r) {
         x1 = +x1, y1 = +y1, x2 = +x2, y2 = +y2, r = +r;
-        var x0 = this._x1,
+
+        // Is the radius negative? Error.
+        if (r < 0) throw new Error(`negative radius: ${r}`);
+
+        let x0 = this._x1,
             y0 = this._y1,
             x21 = x2 - x1,
             y21 = y2 - y1,
@@ -18612,12 +19256,9 @@ var app = (function (exports) {
             y01 = y0 - y1,
             l01_2 = x01 * x01 + y01 * y01;
 
-        // Is the radius negative? Error.
-        if (r < 0) throw new Error("negative radius: " + r);
-
         // Is this path empty? Move to (x1,y1).
         if (this._x1 === null) {
-          this._ += "M" + (this._x1 = x1) + "," + (this._y1 = y1);
+          this._append`M${this._x1 = x1},${this._y1 = y1}`;
         }
 
         // Or, is (x1,y1) coincident with (x0,y0)? Do nothing.
@@ -18627,12 +19268,12 @@ var app = (function (exports) {
         // Equivalently, is (x1,y1) coincident with (x2,y2)?
         // Or, is the radius zero? Line to (x1,y1).
         else if (!(Math.abs(y01 * x21 - y21 * x01) > epsilon$4) || !r) {
-          this._ += "L" + (this._x1 = x1) + "," + (this._y1 = y1);
+          this._append`L${this._x1 = x1},${this._y1 = y1}`;
         }
 
         // Otherwise, draw an arc!
         else {
-          var x20 = x2 - x0,
+          let x20 = x2 - x0,
               y20 = y2 - y0,
               l21_2 = x21 * x21 + y21 * y21,
               l20_2 = x20 * x20 + y20 * y20,
@@ -18644,32 +19285,33 @@ var app = (function (exports) {
 
           // If the start tangent is not coincident with (x0,y0), line to.
           if (Math.abs(t01 - 1) > epsilon$4) {
-            this._ += "L" + (x1 + t01 * x01) + "," + (y1 + t01 * y01);
+            this._append`L${x1 + t01 * x01},${y1 + t01 * y01}`;
           }
 
-          this._ += "A" + r + "," + r + ",0,0," + (+(y01 * x20 > x01 * y20)) + "," + (this._x1 = x1 + t21 * x21) + "," + (this._y1 = y1 + t21 * y21);
+          this._append`A${r},${r},0,0,${+(y01 * x20 > x01 * y20)},${this._x1 = x1 + t21 * x21},${this._y1 = y1 + t21 * y21}`;
         }
-      },
-      arc: function(x, y, r, a0, a1, ccw) {
+      }
+      arc(x, y, r, a0, a1, ccw) {
         x = +x, y = +y, r = +r, ccw = !!ccw;
-        var dx = r * Math.cos(a0),
+
+        // Is the radius negative? Error.
+        if (r < 0) throw new Error(`negative radius: ${r}`);
+
+        let dx = r * Math.cos(a0),
             dy = r * Math.sin(a0),
             x0 = x + dx,
             y0 = y + dy,
             cw = 1 ^ ccw,
             da = ccw ? a0 - a1 : a1 - a0;
 
-        // Is the radius negative? Error.
-        if (r < 0) throw new Error("negative radius: " + r);
-
         // Is this path empty? Move to (x0,y0).
         if (this._x1 === null) {
-          this._ += "M" + x0 + "," + y0;
+          this._append`M${x0},${y0}`;
         }
 
         // Or, is (x0,y0) not coincident with the previous point? Line to (x0,y0).
         else if (Math.abs(this._x1 - x0) > epsilon$4 || Math.abs(this._y1 - y0) > epsilon$4) {
-          this._ += "L" + x0 + "," + y0;
+          this._append`L${x0},${y0}`;
         }
 
         // Is this arc empty? We’re done.
@@ -18680,21 +19322,32 @@ var app = (function (exports) {
 
         // Is this a complete circle? Draw two arcs to complete the circle.
         if (da > tauEpsilon) {
-          this._ += "A" + r + "," + r + ",0,1," + cw + "," + (x - dx) + "," + (y - dy) + "A" + r + "," + r + ",0,1," + cw + "," + (this._x1 = x0) + "," + (this._y1 = y0);
+          this._append`A${r},${r},0,1,${cw},${x - dx},${y - dy}A${r},${r},0,1,${cw},${this._x1 = x0},${this._y1 = y0}`;
         }
 
         // Is this arc non-empty? Draw an arc!
         else if (da > epsilon$4) {
-          this._ += "A" + r + "," + r + ",0," + (+(da >= pi$2)) + "," + cw + "," + (this._x1 = x + r * Math.cos(a1)) + "," + (this._y1 = y + r * Math.sin(a1));
+          this._append`A${r},${r},0,${+(da >= pi$2)},${cw},${this._x1 = x + r * Math.cos(a1)},${this._y1 = y + r * Math.sin(a1)}`;
         }
-      },
-      rect: function(x, y, w, h) {
-        this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y) + "h" + (+w) + "v" + (+h) + "h" + (-w) + "Z";
-      },
-      toString: function() {
+      }
+      rect(x, y, w, h) {
+        this._append`M${this._x0 = this._x1 = +x},${this._y0 = this._y1 = +y}h${w = +w}v${+h}h${-w}Z`;
+      }
+      toString() {
         return this._;
       }
-    };
+    }
+
+    function path() {
+      return new Path$1;
+    }
+
+    // Allow instanceof d3.path
+    path.prototype = Path$1.prototype;
+
+    function pathRound(digits = 3) {
+      return new Path$1(+digits);
+    }
 
     var slice$2 = Array.prototype.slice;
 
@@ -18899,7 +19552,7 @@ var app = (function (exports) {
       []
     ];
 
-    function contours() {
+    function Contours() {
       var dx = 1,
           dy = 1,
           threshold = thresholdSturges,
@@ -18910,8 +19563,10 @@ var app = (function (exports) {
 
         // Convert number of thresholds into uniform thresholds.
         if (!Array.isArray(tz)) {
-          const e = extent$1(values), ts = tickStep(e[0], e[1], tz);
-          tz = ticks(Math.floor(e[0] / ts) * ts, Math.floor(e[1] / ts - 1) * ts, tz);
+          const e = extent$1(values, finite);
+          tz = ticks(...nice$1(e[0], e[1], tz), tz);
+          while (tz[tz.length - 1] >= e[1]) tz.pop();
+          while (tz[1] < e[0]) tz.shift();
         } else {
           tz = tz.slice().sort(ascending$1);
         }
@@ -18922,11 +19577,14 @@ var app = (function (exports) {
       // Accumulate, smooth contour rings, assign holes to exterior rings.
       // Based on https://github.com/mbostock/shapefile/blob/v0.6.2/shp/polygon.js
       function contour(values, value) {
+        const v = value == null ? NaN : +value;
+        if (isNaN(v)) throw new Error(`invalid value: ${value}`);
+
         var polygons = [],
             holes = [];
 
-        isorings(values, value, function(ring) {
-          smooth(ring, values, value);
+        isorings(values, v, function(ring) {
+          smooth(ring, values, v);
           if (area$3(ring) > 0) polygons.push([ring]);
           else holes.push(ring);
         });
@@ -18956,10 +19614,10 @@ var app = (function (exports) {
 
         // Special case for the first row (y = -1, t2 = t3 = 0).
         x = y = -1;
-        t1 = values[0] >= value;
+        t1 = above(values[0], value);
         cases[t1 << 1].forEach(stitch);
         while (++x < dx - 1) {
-          t0 = t1, t1 = values[x + 1] >= value;
+          t0 = t1, t1 = above(values[x + 1], value);
           cases[t0 | t1 << 1].forEach(stitch);
         }
         cases[t1 << 0].forEach(stitch);
@@ -18967,12 +19625,12 @@ var app = (function (exports) {
         // General case for the intermediate rows.
         while (++y < dy - 1) {
           x = -1;
-          t1 = values[y * dx + dx] >= value;
-          t2 = values[y * dx] >= value;
+          t1 = above(values[y * dx + dx], value);
+          t2 = above(values[y * dx], value);
           cases[t1 << 1 | t2 << 2].forEach(stitch);
           while (++x < dx - 1) {
-            t0 = t1, t1 = values[y * dx + dx + x + 1] >= value;
-            t3 = t2, t2 = values[y * dx + x + 1] >= value;
+            t0 = t1, t1 = above(values[y * dx + dx + x + 1], value);
+            t3 = t2, t2 = above(values[y * dx + x + 1], value);
             cases[t0 | t1 << 1 | t2 << 2 | t3 << 3].forEach(stitch);
           }
           cases[t1 | t2 << 3].forEach(stitch);
@@ -18983,7 +19641,7 @@ var app = (function (exports) {
         t2 = values[y * dx] >= value;
         cases[t2 << 2].forEach(stitch);
         while (++x < dx - 1) {
-          t3 = t2, t2 = values[y * dx + x + 1] >= value;
+          t3 = t2, t2 = above(values[y * dx + x + 1], value);
           cases[t2 << 2 | t3 << 3].forEach(stitch);
         }
         cases[t2 << 3].forEach(stitch);
@@ -19040,15 +19698,12 @@ var app = (function (exports) {
               y = point[1],
               xt = x | 0,
               yt = y | 0,
-              v0,
-              v1 = values[yt * dx + xt];
+              v1 = valid(values[yt * dx + xt]);
           if (x > 0 && x < dx && xt === x) {
-            v0 = values[yt * dx + xt - 1];
-            point[0] = x + (value - v0) / (v1 - v0) - 0.5;
+            point[0] = smooth1(x, valid(values[yt * dx + xt - 1]), v1, value);
           }
           if (y > 0 && y < dy && yt === y) {
-            v0 = values[(yt - 1) * dx + xt];
-            point[1] = y + (value - v0) / (v1 - v0) - 0.5;
+            point[1] = smooth1(y, valid(values[(yt - 1) * dx + xt]), v1, value);
           }
         });
       }
@@ -19073,48 +19728,27 @@ var app = (function (exports) {
       return contours;
     }
 
-    // TODO Optimize edge cases.
-    // TODO Optimize index calculation.
-    // TODO Optimize arguments.
-    function blurX(source, target, r) {
-      var n = source.width,
-          m = source.height,
-          w = (r << 1) + 1;
-      for (var j = 0; j < m; ++j) {
-        for (var i = 0, sr = 0; i < n + r; ++i) {
-          if (i < n) {
-            sr += source.data[i + j * n];
-          }
-          if (i >= r) {
-            if (i >= w) {
-              sr -= source.data[i - w + j * n];
-            }
-            target.data[i - r + j * n] = sr / Math.min(i + 1, n - 1 + w - i, w);
-          }
-        }
-      }
+    // When computing the extent, ignore infinite values (as well as invalid ones).
+    function finite(x) {
+      return isFinite(x) ? x : NaN;
     }
 
-    // TODO Optimize edge cases.
-    // TODO Optimize index calculation.
-    // TODO Optimize arguments.
-    function blurY(source, target, r) {
-      var n = source.width,
-          m = source.height,
-          w = (r << 1) + 1;
-      for (var i = 0; i < n; ++i) {
-        for (var j = 0, sr = 0; j < m + r; ++j) {
-          if (j < m) {
-            sr += source.data[i + j * n];
-          }
-          if (j >= r) {
-            if (j >= w) {
-              sr -= source.data[i + (j - w) * n];
-            }
-            target.data[i + (j - r) * n] = sr / Math.min(j + 1, m - 1 + w - j, w);
-          }
-        }
-      }
+    // Is the (possibly invalid) x greater than or equal to the (known valid) value?
+    // Treat any invalid value as below negative infinity.
+    function above(x, value) {
+      return x == null ? false : +x >= value;
+    }
+
+    // During smoothing, treat any invalid value as negative infinity.
+    function valid(v) {
+      return v == null || isNaN(v = +v) ? -Infinity : v;
+    }
+
+    function smooth1(x, v0, v1, value) {
+      const a = value - v0;
+      const b = v1 - v0;
+      const d = isFinite(a) || isFinite(b) ? a / b : Math.sign(a) / Math.sign(b);
+      return isNaN(d) ? x : x + d - 0.5;
     }
 
     function defaultX$1(d) {
@@ -19142,54 +19776,63 @@ var app = (function (exports) {
           m = (dy + o * 2) >> k, // grid height
           threshold = constant$5(20);
 
-      function density(data) {
-        var values0 = new Float32Array(n * m),
-            values1 = new Float32Array(n * m),
-            pow2k = Math.pow(2, -k);
+      function grid(data) {
+        var values = new Float32Array(n * m),
+            pow2k = Math.pow(2, -k),
+            i = -1;
 
-        data.forEach(function(d, i, data) {
-          var xi = (x(d, i, data) + o) * pow2k,
+        for (const d of data) {
+          var xi = (x(d, ++i, data) + o) * pow2k,
               yi = (y(d, i, data) + o) * pow2k,
               wi = +weight(d, i, data);
-          if (xi >= 0 && xi < n && yi >= 0 && yi < m) {
+          if (wi && xi >= 0 && xi < n && yi >= 0 && yi < m) {
             var x0 = Math.floor(xi),
                 y0 = Math.floor(yi),
                 xt = xi - x0 - 0.5,
                 yt = yi - y0 - 0.5;
-            values0[x0 + y0 * n] += (1 - xt) * (1 - yt) * wi;
-            values0[x0 + 1 + y0 * n] += xt * (1 - yt) * wi;
-            values0[x0 + 1 + (y0 + 1) * n] += xt * yt * wi;
-            values0[x0 + (y0 + 1) * n] += (1 - xt) * yt * wi;
+            values[x0 + y0 * n] += (1 - xt) * (1 - yt) * wi;
+            values[x0 + 1 + y0 * n] += xt * (1 - yt) * wi;
+            values[x0 + 1 + (y0 + 1) * n] += xt * yt * wi;
+            values[x0 + (y0 + 1) * n] += (1 - xt) * yt * wi;
           }
-        });
+        }
 
-        // TODO Optimize.
-        blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-        blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
-        blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-        blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
-        blurX({width: n, height: m, data: values0}, {width: n, height: m, data: values1}, r >> k);
-        blurY({width: n, height: m, data: values1}, {width: n, height: m, data: values0}, r >> k);
+        blur2({data: values, width: n, height: m}, r * pow2k);
+        return values;
+      }
 
-        var tz = threshold(values0);
+      function density(data) {
+        var values = grid(data),
+            tz = threshold(values),
+            pow4k = Math.pow(2, 2 * k);
 
         // Convert number of thresholds into uniform thresholds.
         if (!Array.isArray(tz)) {
-          var stop = max$3(values0);
-          tz = tickStep(0, stop, tz);
-          tz = range$2(0, Math.floor(stop / tz) * tz, tz);
-          tz.shift();
+          tz = ticks(Number.MIN_VALUE, max$3(values) / pow4k, tz);
         }
 
-        return contours()
-            .thresholds(tz)
+        return Contours()
             .size([n, m])
-          (values0)
-            .map(transform);
+            .thresholds(tz.map(d => d * pow4k))
+          (values)
+            .map((c, i) => (c.value = +tz[i], transform(c)));
       }
 
+      density.contours = function(data) {
+        var values = grid(data),
+            contours = Contours().size([n, m]),
+            pow4k = Math.pow(2, 2 * k),
+            contour = value => {
+              value = +value;
+              var c = transform(contours.contour(values, value * pow4k));
+              c.value = value; // preserve exact threshold value
+              return c;
+            };
+        Object.defineProperty(contour, "max", {get: () => max$3(values) / pow4k});
+        return contour;
+      };
+
       function transform(geometry) {
-        geometry.value *= Math.pow(2, -2 * k); // Density in points per square pixel.
         geometry.coordinates.forEach(transformPolygon);
         return geometry;
       }
@@ -19247,7 +19890,7 @@ var app = (function (exports) {
       density.bandwidth = function(_) {
         if (!arguments.length) return Math.sqrt(r * (r + 1));
         if (!((_ = +_) >= 0)) throw new Error("invalid bandwidth");
-        return r = Math.round((Math.sqrt(4 * _ * _ + 1) - 1) / 2), resize();
+        return r = (Math.sqrt(4 * _ * _ + 1) - 1) / 2, resize();
       };
 
       return density;
@@ -21368,7 +22011,7 @@ var app = (function (exports) {
       return (random() - 0.5) * 1e-6;
     }
 
-    function x$4(d) {
+    function x$3(d) {
       return d.x + d.vx;
     }
 
@@ -21395,7 +22038,7 @@ var app = (function (exports) {
             ri2;
 
         for (var k = 0; k < iterations; ++k) {
-          tree = quadtree(nodes, x$4, y$3).visitAfter(prepare);
+          tree = quadtree(nodes, x$3, y$3).visitAfter(prepare);
           for (i = 0; i < n; ++i) {
             node = nodes[i];
             ri = radii[node.index], ri2 = ri * ri;
@@ -21590,7 +22233,7 @@ var app = (function (exports) {
       return () => (s = (a$2 * s + c$4) % m$1) / m$1;
     }
 
-    function x$3(d) {
+    function x$2(d) {
       return d.x;
     }
 
@@ -21755,7 +22398,7 @@ var app = (function (exports) {
           theta2 = 0.81;
 
       function force(_) {
-        var i, n = nodes.length, tree = quadtree(nodes, x$3, y$2).visitAfter(accumulate);
+        var i, n = nodes.length, tree = quadtree(nodes, x$2, y$2).visitAfter(accumulate);
         for (alpha = _, i = 0; i < n; ++i) node = nodes[i], tree.visit(apply);
       }
 
@@ -21911,7 +22554,7 @@ var app = (function (exports) {
       return force;
     }
 
-    function x$2(x) {
+    function x$1(x) {
       var strength = constant$4(0.1),
           nodes,
           strengths,
@@ -22863,7 +23506,8 @@ var app = (function (exports) {
     }
 
     function rotationIdentity(lambda, phi) {
-      return [abs$1(lambda) > pi$1 ? lambda + Math.round(-lambda / tau$1) * tau$1 : lambda, phi];
+      if (abs$1(lambda) > pi$1) lambda -= Math.round(lambda / tau$1) * tau$1;
+      return [lambda, phi];
     }
 
     rotationIdentity.invert = rotationIdentity;
@@ -22877,7 +23521,9 @@ var app = (function (exports) {
 
     function forwardRotationLambda(deltaLambda) {
       return function(lambda, phi) {
-        return lambda += deltaLambda, [lambda > pi$1 ? lambda - tau$1 : lambda < -pi$1 ? lambda + tau$1 : lambda, phi];
+        lambda += deltaLambda;
+        if (abs$1(lambda) > pi$1) lambda -= Math.round(lambda / tau$1) * tau$1;
+        return [lambda, phi];
       };
     }
 
@@ -22964,7 +23610,7 @@ var app = (function (exports) {
       return ((-point[2] < 0 ? -radius : radius) + tau$1 - epsilon$1) % tau$1;
     }
 
-    function circle$2() {
+    function circle$1() {
       var center = constant$3([0, 0]),
           radius = constant$3(90),
           precision = constant$3(6),
@@ -24383,68 +25029,96 @@ var app = (function (exports) {
 
     var pathMeasure = lengthStream;
 
-    function PathString() {
-      this._string = [];
-    }
+    // Simple caching for constant-radius points.
+    let cacheDigits, cacheAppend, cacheRadius, cacheCircle;
 
-    PathString.prototype = {
-      _radius: 4.5,
-      _circle: circle$1(4.5),
-      pointRadius: function(_) {
-        if ((_ = +_) !== this._radius) this._radius = _, this._circle = null;
+    class PathString {
+      constructor(digits) {
+        this._append = digits == null ? append : appendRound(digits);
+        this._radius = 4.5;
+        this._ = "";
+      }
+      pointRadius(_) {
+        this._radius = +_;
         return this;
-      },
-      polygonStart: function() {
+      }
+      polygonStart() {
         this._line = 0;
-      },
-      polygonEnd: function() {
+      }
+      polygonEnd() {
         this._line = NaN;
-      },
-      lineStart: function() {
+      }
+      lineStart() {
         this._point = 0;
-      },
-      lineEnd: function() {
-        if (this._line === 0) this._string.push("Z");
+      }
+      lineEnd() {
+        if (this._line === 0) this._ += "Z";
         this._point = NaN;
-      },
-      point: function(x, y) {
+      }
+      point(x, y) {
         switch (this._point) {
           case 0: {
-            this._string.push("M", x, ",", y);
+            this._append`M${x},${y}`;
             this._point = 1;
             break;
           }
           case 1: {
-            this._string.push("L", x, ",", y);
+            this._append`L${x},${y}`;
             break;
           }
           default: {
-            if (this._circle == null) this._circle = circle$1(this._radius);
-            this._string.push("M", x, ",", y, this._circle);
+            this._append`M${x},${y}`;
+            if (this._radius !== cacheRadius || this._append !== cacheAppend) {
+              const r = this._radius;
+              const s = this._;
+              this._ = ""; // stash the old string so we can cache the circle path fragment
+              this._append`m0,${r}a${r},${r} 0 1,1 0,${-2 * r}a${r},${r} 0 1,1 0,${2 * r}z`;
+              cacheRadius = r;
+              cacheAppend = this._append;
+              cacheCircle = this._;
+              this._ = s;
+            }
+            this._ += cacheCircle;
             break;
           }
         }
-      },
-      result: function() {
-        if (this._string.length) {
-          var result = this._string.join("");
-          this._string = [];
-          return result;
-        } else {
-          return null;
-        }
       }
-    };
+      result() {
+        const result = this._;
+        this._ = "";
+        return result.length ? result : null;
+      }
+    }
 
-    function circle$1(radius) {
-      return "m0," + radius
-          + "a" + radius + "," + radius + " 0 1,1 0," + -2 * radius
-          + "a" + radius + "," + radius + " 0 1,1 0," + 2 * radius
-          + "z";
+    function append(strings) {
+      let i = 1;
+      this._ += strings[0];
+      for (const j = strings.length; i < j; ++i) {
+        this._ += arguments[i] + strings[i];
+      }
+    }
+
+    function appendRound(digits) {
+      const d = Math.floor(digits);
+      if (!(d >= 0)) throw new RangeError(`invalid digits: ${digits}`);
+      if (d > 15) return append;
+      if (d !== cacheDigits) {
+        const k = 10 ** d;
+        cacheDigits = d;
+        cacheAppend = function append(strings) {
+          let i = 1;
+          this._ += strings[0];
+          for (const j = strings.length; i < j; ++i) {
+            this._ += Math.round(arguments[i] * k) / k + strings[i];
+          }
+        };
+      }
+      return cacheAppend;
     }
 
     function index$2(projection, context) {
-      var pointRadius = 4.5,
+      let digits = 3,
+          pointRadius = 4.5,
           projectionStream,
           contextStream;
 
@@ -24477,12 +25151,14 @@ var app = (function (exports) {
       };
 
       path.projection = function(_) {
-        return arguments.length ? (projectionStream = _ == null ? (projection = null, identity$5) : (projection = _).stream, path) : projection;
+        if (!arguments.length) return projection;
+        projectionStream = _ == null ? (projection = null, identity$5) : (projection = _).stream;
+        return path;
       };
 
       path.context = function(_) {
         if (!arguments.length) return context;
-        contextStream = _ == null ? (context = null, new PathString) : new PathContext(context = _);
+        contextStream = _ == null ? (context = null, new PathString(digits)) : new PathContext(context = _);
         if (typeof pointRadius !== "function") contextStream.pointRadius(pointRadius);
         return path;
       };
@@ -24493,7 +25169,19 @@ var app = (function (exports) {
         return path;
       };
 
-      return path.projection(projection).context(context);
+      path.digits = function(_) {
+        if (!arguments.length) return digits;
+        if (_ == null) digits = null;
+        else {
+          const d = Math.floor(_);
+          if (!(d >= 0)) throw new RangeError(`invalid digits: ${_}`);
+          digits = d;
+        }
+        if (context === null) contextStream = new PathString(digits);
+        return path;
+      };
+
+      return path.projection(projection).digits(digits).context(context);
     }
 
     function transform$1(methods) {
@@ -28092,47 +28780,46 @@ var app = (function (exports) {
       return initRange.apply(scale, arguments);
     }
 
-    var t0 = new Date,
-        t1 = new Date;
+    const t0 = new Date, t1 = new Date;
 
-    function newInterval(floori, offseti, count, field) {
+    function timeInterval(floori, offseti, count, field) {
 
       function interval(date) {
         return floori(date = arguments.length === 0 ? new Date : new Date(+date)), date;
       }
 
-      interval.floor = function(date) {
+      interval.floor = (date) => {
         return floori(date = new Date(+date)), date;
       };
 
-      interval.ceil = function(date) {
+      interval.ceil = (date) => {
         return floori(date = new Date(date - 1)), offseti(date, 1), floori(date), date;
       };
 
-      interval.round = function(date) {
-        var d0 = interval(date),
-            d1 = interval.ceil(date);
+      interval.round = (date) => {
+        const d0 = interval(date), d1 = interval.ceil(date);
         return date - d0 < d1 - date ? d0 : d1;
       };
 
-      interval.offset = function(date, step) {
+      interval.offset = (date, step) => {
         return offseti(date = new Date(+date), step == null ? 1 : Math.floor(step)), date;
       };
 
-      interval.range = function(start, stop, step) {
-        var range = [], previous;
+      interval.range = (start, stop, step) => {
+        const range = [];
         start = interval.ceil(start);
         step = step == null ? 1 : Math.floor(step);
         if (!(start < stop) || !(step > 0)) return range; // also handles Invalid Date
+        let previous;
         do range.push(previous = new Date(+start)), offseti(start, step), floori(start);
         while (previous < start && start < stop);
         return range;
       };
 
-      interval.filter = function(test) {
-        return newInterval(function(date) {
+      interval.filter = (test) => {
+        return timeInterval((date) => {
           if (date >= date) while (floori(date), !test(date)) date.setTime(date - 1);
-        }, function(date, step) {
+        }, (date, step) => {
           if (date >= date) {
             if (step < 0) while (++step <= 0) {
               while (offseti(date, -1), !test(date)) {} // eslint-disable-line no-empty
@@ -28144,49 +28831,48 @@ var app = (function (exports) {
       };
 
       if (count) {
-        interval.count = function(start, end) {
+        interval.count = (start, end) => {
           t0.setTime(+start), t1.setTime(+end);
           floori(t0), floori(t1);
           return Math.floor(count(t0, t1));
         };
 
-        interval.every = function(step) {
+        interval.every = (step) => {
           step = Math.floor(step);
           return !isFinite(step) || !(step > 0) ? null
               : !(step > 1) ? interval
               : interval.filter(field
-                  ? function(d) { return field(d) % step === 0; }
-                  : function(d) { return interval.count(0, d) % step === 0; });
+                  ? (d) => field(d) % step === 0
+                  : (d) => interval.count(0, d) % step === 0);
         };
       }
 
       return interval;
     }
 
-    var millisecond = newInterval(function() {
+    const millisecond = timeInterval(() => {
       // noop
-    }, function(date, step) {
+    }, (date, step) => {
       date.setTime(+date + step);
-    }, function(start, end) {
+    }, (start, end) => {
       return end - start;
     });
 
     // An optimized implementation for this simple case.
-    millisecond.every = function(k) {
+    millisecond.every = (k) => {
       k = Math.floor(k);
       if (!isFinite(k) || !(k > 0)) return null;
       if (!(k > 1)) return millisecond;
-      return newInterval(function(date) {
+      return timeInterval((date) => {
         date.setTime(Math.floor(date / k) * k);
-      }, function(date, step) {
+      }, (date, step) => {
         date.setTime(+date + step * k);
-      }, function(start, end) {
+      }, (start, end) => {
         return (end - start) / k;
       });
     };
 
-    var millisecond$1 = millisecond;
-    var milliseconds = millisecond.range;
+    const milliseconds = millisecond.range;
 
     const durationSecond = 1000;
     const durationMinute = durationSecond * 60;
@@ -28196,233 +28882,234 @@ var app = (function (exports) {
     const durationMonth = durationDay * 30;
     const durationYear = durationDay * 365;
 
-    var second = newInterval(function(date) {
+    const second = timeInterval((date) => {
       date.setTime(date - date.getMilliseconds());
-    }, function(date, step) {
+    }, (date, step) => {
       date.setTime(+date + step * durationSecond);
-    }, function(start, end) {
+    }, (start, end) => {
       return (end - start) / durationSecond;
-    }, function(date) {
+    }, (date) => {
       return date.getUTCSeconds();
     });
 
-    var utcSecond = second;
-    var seconds = second.range;
+    const seconds = second.range;
 
-    var minute = newInterval(function(date) {
+    const timeMinute = timeInterval((date) => {
       date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond);
-    }, function(date, step) {
+    }, (date, step) => {
       date.setTime(+date + step * durationMinute);
-    }, function(start, end) {
+    }, (start, end) => {
       return (end - start) / durationMinute;
-    }, function(date) {
+    }, (date) => {
       return date.getMinutes();
     });
 
-    var timeMinute = minute;
-    var minutes = minute.range;
+    const timeMinutes = timeMinute.range;
 
-    var hour = newInterval(function(date) {
+    const utcMinute = timeInterval((date) => {
+      date.setUTCSeconds(0, 0);
+    }, (date, step) => {
+      date.setTime(+date + step * durationMinute);
+    }, (start, end) => {
+      return (end - start) / durationMinute;
+    }, (date) => {
+      return date.getUTCMinutes();
+    });
+
+    const utcMinutes = utcMinute.range;
+
+    const timeHour = timeInterval((date) => {
       date.setTime(date - date.getMilliseconds() - date.getSeconds() * durationSecond - date.getMinutes() * durationMinute);
-    }, function(date, step) {
+    }, (date, step) => {
       date.setTime(+date + step * durationHour);
-    }, function(start, end) {
+    }, (start, end) => {
       return (end - start) / durationHour;
-    }, function(date) {
+    }, (date) => {
       return date.getHours();
     });
 
-    var timeHour = hour;
-    var hours = hour.range;
+    const timeHours = timeHour.range;
 
-    var day = newInterval(
+    const utcHour = timeInterval((date) => {
+      date.setUTCMinutes(0, 0, 0);
+    }, (date, step) => {
+      date.setTime(+date + step * durationHour);
+    }, (start, end) => {
+      return (end - start) / durationHour;
+    }, (date) => {
+      return date.getUTCHours();
+    });
+
+    const utcHours = utcHour.range;
+
+    const timeDay = timeInterval(
       date => date.setHours(0, 0, 0, 0),
       (date, step) => date.setDate(date.getDate() + step),
       (start, end) => (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationDay,
       date => date.getDate() - 1
     );
 
-    var timeDay = day;
-    var days = day.range;
+    const timeDays = timeDay.range;
 
-    function weekday(i) {
-      return newInterval(function(date) {
+    const utcDay = timeInterval((date) => {
+      date.setUTCHours(0, 0, 0, 0);
+    }, (date, step) => {
+      date.setUTCDate(date.getUTCDate() + step);
+    }, (start, end) => {
+      return (end - start) / durationDay;
+    }, (date) => {
+      return date.getUTCDate() - 1;
+    });
+
+    const utcDays = utcDay.range;
+
+    const unixDay = timeInterval((date) => {
+      date.setUTCHours(0, 0, 0, 0);
+    }, (date, step) => {
+      date.setUTCDate(date.getUTCDate() + step);
+    }, (start, end) => {
+      return (end - start) / durationDay;
+    }, (date) => {
+      return Math.floor(date / durationDay);
+    });
+
+    const unixDays = unixDay.range;
+
+    function timeWeekday(i) {
+      return timeInterval((date) => {
         date.setDate(date.getDate() - (date.getDay() + 7 - i) % 7);
         date.setHours(0, 0, 0, 0);
-      }, function(date, step) {
+      }, (date, step) => {
         date.setDate(date.getDate() + step * 7);
-      }, function(start, end) {
+      }, (start, end) => {
         return (end - start - (end.getTimezoneOffset() - start.getTimezoneOffset()) * durationMinute) / durationWeek;
       });
     }
 
-    var sunday = weekday(0);
-    var monday = weekday(1);
-    var tuesday = weekday(2);
-    var wednesday = weekday(3);
-    var thursday = weekday(4);
-    var friday = weekday(5);
-    var saturday = weekday(6);
+    const timeSunday = timeWeekday(0);
+    const timeMonday = timeWeekday(1);
+    const timeTuesday = timeWeekday(2);
+    const timeWednesday = timeWeekday(3);
+    const timeThursday = timeWeekday(4);
+    const timeFriday = timeWeekday(5);
+    const timeSaturday = timeWeekday(6);
 
-    var sundays = sunday.range;
-    var mondays = monday.range;
-    var tuesdays = tuesday.range;
-    var wednesdays = wednesday.range;
-    var thursdays = thursday.range;
-    var fridays = friday.range;
-    var saturdays = saturday.range;
-
-    var month = newInterval(function(date) {
-      date.setDate(1);
-      date.setHours(0, 0, 0, 0);
-    }, function(date, step) {
-      date.setMonth(date.getMonth() + step);
-    }, function(start, end) {
-      return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
-    }, function(date) {
-      return date.getMonth();
-    });
-
-    var timeMonth = month;
-    var months = month.range;
-
-    var year = newInterval(function(date) {
-      date.setMonth(0, 1);
-      date.setHours(0, 0, 0, 0);
-    }, function(date, step) {
-      date.setFullYear(date.getFullYear() + step);
-    }, function(start, end) {
-      return end.getFullYear() - start.getFullYear();
-    }, function(date) {
-      return date.getFullYear();
-    });
-
-    // An optimized implementation for this simple case.
-    year.every = function(k) {
-      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
-        date.setFullYear(Math.floor(date.getFullYear() / k) * k);
-        date.setMonth(0, 1);
-        date.setHours(0, 0, 0, 0);
-      }, function(date, step) {
-        date.setFullYear(date.getFullYear() + step * k);
-      });
-    };
-
-    var timeYear = year;
-    var years = year.range;
-
-    var utcMinute = newInterval(function(date) {
-      date.setUTCSeconds(0, 0);
-    }, function(date, step) {
-      date.setTime(+date + step * durationMinute);
-    }, function(start, end) {
-      return (end - start) / durationMinute;
-    }, function(date) {
-      return date.getUTCMinutes();
-    });
-
-    var utcMinute$1 = utcMinute;
-    var utcMinutes = utcMinute.range;
-
-    var utcHour = newInterval(function(date) {
-      date.setUTCMinutes(0, 0, 0);
-    }, function(date, step) {
-      date.setTime(+date + step * durationHour);
-    }, function(start, end) {
-      return (end - start) / durationHour;
-    }, function(date) {
-      return date.getUTCHours();
-    });
-
-    var utcHour$1 = utcHour;
-    var utcHours = utcHour.range;
-
-    var utcDay = newInterval(function(date) {
-      date.setUTCHours(0, 0, 0, 0);
-    }, function(date, step) {
-      date.setUTCDate(date.getUTCDate() + step);
-    }, function(start, end) {
-      return (end - start) / durationDay;
-    }, function(date) {
-      return date.getUTCDate() - 1;
-    });
-
-    var utcDay$1 = utcDay;
-    var utcDays = utcDay.range;
+    const timeSundays = timeSunday.range;
+    const timeMondays = timeMonday.range;
+    const timeTuesdays = timeTuesday.range;
+    const timeWednesdays = timeWednesday.range;
+    const timeThursdays = timeThursday.range;
+    const timeFridays = timeFriday.range;
+    const timeSaturdays = timeSaturday.range;
 
     function utcWeekday(i) {
-      return newInterval(function(date) {
+      return timeInterval((date) => {
         date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 7 - i) % 7);
         date.setUTCHours(0, 0, 0, 0);
-      }, function(date, step) {
+      }, (date, step) => {
         date.setUTCDate(date.getUTCDate() + step * 7);
-      }, function(start, end) {
+      }, (start, end) => {
         return (end - start) / durationWeek;
       });
     }
 
-    var utcSunday = utcWeekday(0);
-    var utcMonday = utcWeekday(1);
-    var utcTuesday = utcWeekday(2);
-    var utcWednesday = utcWeekday(3);
-    var utcThursday = utcWeekday(4);
-    var utcFriday = utcWeekday(5);
-    var utcSaturday = utcWeekday(6);
+    const utcSunday = utcWeekday(0);
+    const utcMonday = utcWeekday(1);
+    const utcTuesday = utcWeekday(2);
+    const utcWednesday = utcWeekday(3);
+    const utcThursday = utcWeekday(4);
+    const utcFriday = utcWeekday(5);
+    const utcSaturday = utcWeekday(6);
 
-    var utcSundays = utcSunday.range;
-    var utcMondays = utcMonday.range;
-    var utcTuesdays = utcTuesday.range;
-    var utcWednesdays = utcWednesday.range;
-    var utcThursdays = utcThursday.range;
-    var utcFridays = utcFriday.range;
-    var utcSaturdays = utcSaturday.range;
+    const utcSundays = utcSunday.range;
+    const utcMondays = utcMonday.range;
+    const utcTuesdays = utcTuesday.range;
+    const utcWednesdays = utcWednesday.range;
+    const utcThursdays = utcThursday.range;
+    const utcFridays = utcFriday.range;
+    const utcSaturdays = utcSaturday.range;
 
-    var utcMonth = newInterval(function(date) {
+    const timeMonth = timeInterval((date) => {
+      date.setDate(1);
+      date.setHours(0, 0, 0, 0);
+    }, (date, step) => {
+      date.setMonth(date.getMonth() + step);
+    }, (start, end) => {
+      return end.getMonth() - start.getMonth() + (end.getFullYear() - start.getFullYear()) * 12;
+    }, (date) => {
+      return date.getMonth();
+    });
+
+    const timeMonths = timeMonth.range;
+
+    const utcMonth = timeInterval((date) => {
       date.setUTCDate(1);
       date.setUTCHours(0, 0, 0, 0);
-    }, function(date, step) {
+    }, (date, step) => {
       date.setUTCMonth(date.getUTCMonth() + step);
-    }, function(start, end) {
+    }, (start, end) => {
       return end.getUTCMonth() - start.getUTCMonth() + (end.getUTCFullYear() - start.getUTCFullYear()) * 12;
-    }, function(date) {
+    }, (date) => {
       return date.getUTCMonth();
     });
 
-    var utcMonth$1 = utcMonth;
-    var utcMonths = utcMonth.range;
+    const utcMonths = utcMonth.range;
 
-    var utcYear = newInterval(function(date) {
+    const timeYear = timeInterval((date) => {
+      date.setMonth(0, 1);
+      date.setHours(0, 0, 0, 0);
+    }, (date, step) => {
+      date.setFullYear(date.getFullYear() + step);
+    }, (start, end) => {
+      return end.getFullYear() - start.getFullYear();
+    }, (date) => {
+      return date.getFullYear();
+    });
+
+    // An optimized implementation for this simple case.
+    timeYear.every = (k) => {
+      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
+        date.setFullYear(Math.floor(date.getFullYear() / k) * k);
+        date.setMonth(0, 1);
+        date.setHours(0, 0, 0, 0);
+      }, (date, step) => {
+        date.setFullYear(date.getFullYear() + step * k);
+      });
+    };
+
+    const timeYears = timeYear.range;
+
+    const utcYear = timeInterval((date) => {
       date.setUTCMonth(0, 1);
       date.setUTCHours(0, 0, 0, 0);
-    }, function(date, step) {
+    }, (date, step) => {
       date.setUTCFullYear(date.getUTCFullYear() + step);
-    }, function(start, end) {
+    }, (start, end) => {
       return end.getUTCFullYear() - start.getUTCFullYear();
-    }, function(date) {
+    }, (date) => {
       return date.getUTCFullYear();
     });
 
     // An optimized implementation for this simple case.
-    utcYear.every = function(k) {
-      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : newInterval(function(date) {
+    utcYear.every = (k) => {
+      return !isFinite(k = Math.floor(k)) || !(k > 0) ? null : timeInterval((date) => {
         date.setUTCFullYear(Math.floor(date.getUTCFullYear() / k) * k);
         date.setUTCMonth(0, 1);
         date.setUTCHours(0, 0, 0, 0);
-      }, function(date, step) {
+      }, (date, step) => {
         date.setUTCFullYear(date.getUTCFullYear() + step * k);
       });
     };
 
-    var utcYear$1 = utcYear;
-    var utcYears = utcYear.range;
+    const utcYears = utcYear.range;
 
     function ticker(year, month, week, day, hour, minute) {
 
       const tickIntervals = [
-        [utcSecond,  1,      durationSecond],
-        [utcSecond,  5,  5 * durationSecond],
-        [utcSecond, 15, 15 * durationSecond],
-        [utcSecond, 30, 30 * durationSecond],
+        [second,  1,      durationSecond],
+        [second,  5,  5 * durationSecond],
+        [second, 15, 15 * durationSecond],
+        [second, 30, 30 * durationSecond],
         [minute,  1,      durationMinute],
         [minute,  5,  5 * durationMinute],
         [minute, 15, 15 * durationMinute],
@@ -28451,7 +29138,7 @@ var app = (function (exports) {
         const target = Math.abs(stop - start) / count;
         const i = bisector(([,, step]) => step).right(tickIntervals, target);
         if (i === tickIntervals.length) return year.every(tickStep(start / durationYear, stop / durationYear, count));
-        if (i === 0) return millisecond$1.every(Math.max(tickStep(start, stop, count), 1));
+        if (i === 0) return millisecond.every(Math.max(tickStep(start, stop, count), 1));
         const [t, step] = tickIntervals[target / tickIntervals[i - 1][2] < tickIntervals[i][2] / target ? i - 1 : i];
         return t.every(step);
       }
@@ -28459,8 +29146,8 @@ var app = (function (exports) {
       return [ticks, tickInterval];
     }
 
-    const [utcTicks, utcTickInterval] = ticker(utcYear$1, utcMonth$1, utcSunday, utcDay$1, utcHour$1, utcMinute$1);
-    const [timeTicks, timeTickInterval] = ticker(timeYear, timeMonth, sunday, timeDay, timeHour, timeMinute);
+    const [utcTicks, utcTickInterval] = ticker(utcYear, utcMonth, utcSunday, unixDay, utcHour, utcMinute);
+    const [timeTicks, timeTickInterval] = ticker(timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute);
 
     function localDate(d) {
       if (0 <= d.y && d.y < 100) {
@@ -28673,13 +29360,13 @@ var app = (function (exports) {
             if ("Z" in d) {
               week = utcDate(newDate(d.y, 0, 1)), day = week.getUTCDay();
               week = day > 4 || day === 0 ? utcMonday.ceil(week) : utcMonday(week);
-              week = utcDay$1.offset(week, (d.V - 1) * 7);
+              week = utcDay.offset(week, (d.V - 1) * 7);
               d.y = week.getUTCFullYear();
               d.m = week.getUTCMonth();
               d.d = week.getUTCDate() + (d.w + 6) % 7;
             } else {
               week = localDate(newDate(d.y, 0, 1)), day = week.getDay();
-              week = day > 4 || day === 0 ? monday.ceil(week) : monday(week);
+              week = day > 4 || day === 0 ? timeMonday.ceil(week) : timeMonday(week);
               week = timeDay.offset(week, (d.V - 1) * 7);
               d.y = week.getFullYear();
               d.m = week.getMonth();
@@ -29002,17 +29689,17 @@ var app = (function (exports) {
     }
 
     function formatWeekNumberSunday(d, p) {
-      return pad(sunday.count(timeYear(d) - 1, d), p, 2);
+      return pad(timeSunday.count(timeYear(d) - 1, d), p, 2);
     }
 
     function dISO(d) {
       var day = d.getDay();
-      return (day >= 4 || day === 0) ? thursday(d) : thursday.ceil(d);
+      return (day >= 4 || day === 0) ? timeThursday(d) : timeThursday.ceil(d);
     }
 
     function formatWeekNumberISO(d, p) {
       d = dISO(d);
-      return pad(thursday.count(timeYear(d), d) + (timeYear(d).getDay() === 4), p, 2);
+      return pad(timeThursday.count(timeYear(d), d) + (timeYear(d).getDay() === 4), p, 2);
     }
 
     function formatWeekdayNumberSunday(d) {
@@ -29020,7 +29707,7 @@ var app = (function (exports) {
     }
 
     function formatWeekNumberMonday(d, p) {
-      return pad(monday.count(timeYear(d) - 1, d), p, 2);
+      return pad(timeMonday.count(timeYear(d) - 1, d), p, 2);
     }
 
     function formatYear(d, p) {
@@ -29038,7 +29725,7 @@ var app = (function (exports) {
 
     function formatFullYearISO(d, p) {
       var day = d.getDay();
-      d = (day >= 4 || day === 0) ? thursday(d) : thursday.ceil(d);
+      d = (day >= 4 || day === 0) ? timeThursday(d) : timeThursday.ceil(d);
       return pad(d.getFullYear() % 10000, p, 4);
     }
 
@@ -29062,7 +29749,7 @@ var app = (function (exports) {
     }
 
     function formatUTCDayOfYear(d, p) {
-      return pad(1 + utcDay$1.count(utcYear$1(d), d), p, 3);
+      return pad(1 + utcDay.count(utcYear(d), d), p, 3);
     }
 
     function formatUTCMilliseconds(d, p) {
@@ -29091,7 +29778,7 @@ var app = (function (exports) {
     }
 
     function formatUTCWeekNumberSunday(d, p) {
-      return pad(utcSunday.count(utcYear$1(d) - 1, d), p, 2);
+      return pad(utcSunday.count(utcYear(d) - 1, d), p, 2);
     }
 
     function UTCdISO(d) {
@@ -29101,7 +29788,7 @@ var app = (function (exports) {
 
     function formatUTCWeekNumberISO(d, p) {
       d = UTCdISO(d);
-      return pad(utcThursday.count(utcYear$1(d), d) + (utcYear$1(d).getUTCDay() === 4), p, 2);
+      return pad(utcThursday.count(utcYear(d), d) + (utcYear(d).getUTCDay() === 4), p, 2);
     }
 
     function formatUTCWeekdayNumberSunday(d) {
@@ -29109,7 +29796,7 @@ var app = (function (exports) {
     }
 
     function formatUTCWeekNumberMonday(d, p) {
-      return pad(utcMonday.count(utcYear$1(d) - 1, d), p, 2);
+      return pad(utcMonday.count(utcYear(d) - 1, d), p, 2);
     }
 
     function formatUTCYear(d, p) {
@@ -29259,11 +29946,11 @@ var app = (function (exports) {
     }
 
     function time() {
-      return initRange.apply(calendar(timeTicks, timeTickInterval, timeYear, timeMonth, sunday, timeDay, timeHour, timeMinute, utcSecond, timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
+      return initRange.apply(calendar(timeTicks, timeTickInterval, timeYear, timeMonth, timeSunday, timeDay, timeHour, timeMinute, second, timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
     }
 
     function utcTime() {
-      return initRange.apply(calendar(utcTicks, utcTickInterval, utcYear$1, utcMonth$1, utcSunday, utcDay$1, utcHour$1, utcMinute$1, utcSecond, utcFormat).domain([Date.UTC(2000, 0, 1), Date.UTC(2000, 0, 2)]), arguments);
+      return initRange.apply(calendar(utcTicks, utcTickInterval, utcYear, utcMonth, utcSunday, utcDay, utcHour, utcMinute, second, utcFormat).domain([Date.UTC(2000, 0, 1), Date.UTC(2000, 0, 2)]), arguments);
     }
 
     function transformer$1() {
@@ -29957,6 +30644,24 @@ var app = (function (exports) {
       return x >= 1 ? halfPi : x <= -1 ? -halfPi : Math.asin(x);
     }
 
+    function withPath(shape) {
+      let digits = 3;
+
+      shape.digits = function(_) {
+        if (!arguments.length) return digits;
+        if (_ == null) {
+          digits = null;
+        } else {
+          const d = Math.floor(_);
+          if (!(d >= 0)) throw new RangeError(`invalid digits: ${_}`);
+          digits = d;
+        }
+        return shape;
+      };
+
+      return () => new Path$1(digits);
+    }
+
     function arcInnerRadius(d) {
       return d.innerRadius;
     }
@@ -30037,7 +30742,8 @@ var app = (function (exports) {
           startAngle = arcStartAngle,
           endAngle = arcEndAngle,
           padAngle = arcPadAngle,
-          context = null;
+          context = null,
+          path = withPath(arc);
 
       function arc() {
         var buffer,
@@ -30106,16 +30812,22 @@ var app = (function (exports) {
                 y00 = r0 * sin(a00),
                 oc;
 
-            // Restrict the corner radius according to the sector angle.
-            if (da < pi && (oc = intersect(x01, y01, x00, y00, x11, y11, x10, y10))) {
-              var ax = x01 - oc[0],
-                  ay = y01 - oc[1],
-                  bx = x11 - oc[0],
-                  by = y11 - oc[1],
-                  kc = 1 / sin(acos((ax * bx + ay * by) / (sqrt(ax * ax + ay * ay) * sqrt(bx * bx + by * by))) / 2),
-                  lc = sqrt(oc[0] * oc[0] + oc[1] * oc[1]);
-              rc0 = min(rc, (r0 - lc) / (kc - 1));
-              rc1 = min(rc, (r1 - lc) / (kc + 1));
+            // Restrict the corner radius according to the sector angle. If this
+            // intersection fails, it’s probably because the arc is too small, so
+            // disable the corner radius entirely.
+            if (da < pi) {
+              if (oc = intersect(x01, y01, x00, y00, x11, y11, x10, y10)) {
+                var ax = x01 - oc[0],
+                    ay = y01 - oc[1],
+                    bx = x11 - oc[0],
+                    by = y11 - oc[1],
+                    kc = 1 / sin(acos((ax * bx + ay * by) / (sqrt(ax * ax + ay * ay) * sqrt(bx * bx + by * by))) / 2),
+                    lc = sqrt(oc[0] * oc[0] + oc[1] * oc[1]);
+                rc0 = min(rc, (r0 - lc) / (kc - 1));
+                rc1 = min(rc, (r1 - lc) / (kc + 1));
+              } else {
+                rc0 = rc1 = 0;
+              }
             }
           }
 
@@ -30255,7 +30967,7 @@ var app = (function (exports) {
       return new Linear(context);
     }
 
-    function x$1(p) {
+    function x(p) {
       return p[0];
     }
 
@@ -30263,13 +30975,14 @@ var app = (function (exports) {
       return p[1];
     }
 
-    function line(x, y$1) {
+    function line(x$1, y$1) {
       var defined = constant$1(true),
           context = null,
           curve = curveLinear,
-          output = null;
+          output = null,
+          path = withPath(line);
 
-      x = typeof x === "function" ? x : (x === undefined) ? x$1 : constant$1(x);
+      x$1 = typeof x$1 === "function" ? x$1 : (x$1 === undefined) ? x : constant$1(x$1);
       y$1 = typeof y$1 === "function" ? y$1 : (y$1 === undefined) ? y : constant$1(y$1);
 
       function line(data) {
@@ -30286,14 +30999,14 @@ var app = (function (exports) {
             if (defined0 = !defined0) output.lineStart();
             else output.lineEnd();
           }
-          if (defined0) output.point(+x(d, i, data), +y$1(d, i, data));
+          if (defined0) output.point(+x$1(d, i, data), +y$1(d, i, data));
         }
 
         if (buffer) return output = null, buffer + "" || null;
       }
 
       line.x = function(_) {
-        return arguments.length ? (x = typeof _ === "function" ? _ : constant$1(+_), line) : x;
+        return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant$1(+_), line) : x$1;
       };
 
       line.y = function(_) {
@@ -30320,9 +31033,10 @@ var app = (function (exports) {
           defined = constant$1(true),
           context = null,
           curve = curveLinear,
-          output = null;
+          output = null,
+          path = withPath(area);
 
-      x0 = typeof x0 === "function" ? x0 : (x0 === undefined) ? x$1 : constant$1(+x0);
+      x0 = typeof x0 === "function" ? x0 : (x0 === undefined) ? x : constant$1(+x0);
       y0 = typeof y0 === "function" ? y0 : (y0 === undefined) ? constant$1(0) : constant$1(+y0);
       y1 = typeof y1 === "function" ? y1 : (y1 === undefined) ? y : constant$1(+y1);
 
@@ -30633,8 +31347,8 @@ var app = (function (exports) {
       lineEnd() {}
       point(x, y) {
         x = +x, y = +y;
-        if (this._point++ === 0) {
-          this._x0 = x, this._y0 = y;
+        if (this._point === 0) {
+          this._point = 1;
         } else {
           const p0 = pointRadial(this._x0, this._y0);
           const p1 = pointRadial(this._x0, this._y0 = (this._y0 + y) / 2);
@@ -30643,6 +31357,7 @@ var app = (function (exports) {
           this._context.moveTo(...p0);
           this._context.bezierCurveTo(...p1, ...p2, ...p3);
         }
+        this._x0 = x, this._y0 = y;
       }
     }
 
@@ -30667,12 +31382,13 @@ var app = (function (exports) {
     }
 
     function link(curve) {
-      let source = linkSource;
-      let target = linkTarget;
-      let x = x$1;
-      let y$1 = y;
-      let context = null;
-      let output = null;
+      let source = linkSource,
+          target = linkTarget,
+          x$1 = x,
+          y$1 = y,
+          context = null,
+          output = null,
+          path = withPath(link);
 
       function link() {
         let buffer;
@@ -30681,8 +31397,8 @@ var app = (function (exports) {
         const t = target.apply(this, argv);
         if (context == null) output = curve(buffer = path());
         output.lineStart();
-        argv[0] = s, output.point(+x.apply(this, argv), +y$1.apply(this, argv));
-        argv[0] = t, output.point(+x.apply(this, argv), +y$1.apply(this, argv));
+        argv[0] = s, output.point(+x$1.apply(this, argv), +y$1.apply(this, argv));
+        argv[0] = t, output.point(+x$1.apply(this, argv), +y$1.apply(this, argv));
         output.lineEnd();
         if (buffer) return output = null, buffer + "" || null;
       }
@@ -30696,7 +31412,7 @@ var app = (function (exports) {
       };
 
       link.x = function(_) {
-        return arguments.length ? (x = typeof _ === "function" ? _ : constant$1(+_), link) : x;
+        return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant$1(+_), link) : x$1;
       };
 
       link.y = function(_) {
@@ -30896,7 +31612,7 @@ var app = (function (exports) {
       }
     };
 
-    var x = {
+    var times = {
       draw(context, size) {
         const r = sqrt(size - min(size / 6, 1.7)) * 0.6189;
         context.moveTo(-r, -r);
@@ -30921,7 +31637,7 @@ var app = (function (exports) {
     const symbolsStroke = [
       circle,
       plus,
-      x,
+      times,
       triangle2,
       asterisk,
       square2,
@@ -30929,7 +31645,8 @@ var app = (function (exports) {
     ];
 
     function Symbol$1(type, size) {
-      let context = null;
+      let context = null,
+          path = withPath(symbol);
 
       type = typeof type === "function" ? type : constant$1(type || circle);
       size = typeof size === "function" ? size : constant$1(size === undefined ? 64 : +size);
@@ -32493,6 +33210,9 @@ var app = (function (exports) {
         bisectCenter: bisectCenter,
         ascending: ascending$3,
         bisector: bisector,
+        blur: blur,
+        blur2: blur2,
+        blurImage: blurImage,
         count: count$1,
         cross: cross$2,
         cumsum: cumsum,
@@ -32520,6 +33240,7 @@ var app = (function (exports) {
         maxIndex: maxIndex,
         mean: mean,
         median: median,
+        medianIndex: medianIndex,
         merge: merge,
         min: min$2,
         minIndex: minIndex,
@@ -32528,6 +33249,7 @@ var app = (function (exports) {
         pairs: pairs,
         permute: permute,
         quantile: quantile$1,
+        quantileIndex: quantileIndex,
         quantileSorted: quantileSorted,
         quickselect: quickselect,
         range: range$2,
@@ -32582,7 +33304,7 @@ var app = (function (exports) {
         lch: lch,
         gray: gray,
         cubehelix: cubehelix$3,
-        contours: contours,
+        contours: Contours,
         contourDensity: density,
         Delaunay: Delaunay,
         Voronoi: Voronoi,
@@ -32660,7 +33382,7 @@ var app = (function (exports) {
         forceManyBody: manyBody,
         forceRadial: radial$1,
         forceSimulation: simulation,
-        forceX: x$2,
+        forceX: x$1,
         forceY: y$1,
         formatDefaultLocale: defaultLocale$1,
         get format () { return format; },
@@ -32674,7 +33396,7 @@ var app = (function (exports) {
         geoArea: area$2,
         geoBounds: bounds,
         geoCentroid: centroid$1,
-        geoCircle: circle$2,
+        geoCircle: circle$1,
         geoClipAntimeridian: clipAntimeridian,
         geoClipCircle: clipCircle,
         geoClipExtent: extent,
@@ -32763,7 +33485,9 @@ var app = (function (exports) {
         interpolateCubehelixLong: cubehelixLong,
         piecewise: piecewise,
         quantize: quantize$1,
+        Path: Path$1,
         path: path,
+        pathRound: pathRound,
         polygonArea: area$1,
         polygonCentroid: centroid,
         polygonHull: hull,
@@ -32935,7 +33659,8 @@ var app = (function (exports) {
         symbolTriangle: triangle,
         symbolTriangle2: triangle2,
         symbolWye: wye,
-        symbolX: x,
+        symbolTimes: times,
+        symbolX: times,
         curveBasisClosed: basisClosed,
         curveBasisOpen: basisOpen,
         curveBasis: basis,
@@ -32968,47 +33693,45 @@ var app = (function (exports) {
         stackOrderInsideOut: insideOut,
         stackOrderNone: none,
         stackOrderReverse: reverse,
-        timeInterval: newInterval,
-        timeMillisecond: millisecond$1,
-        timeMilliseconds: milliseconds,
-        utcMillisecond: millisecond$1,
+        timeInterval: timeInterval,
+        utcMillisecond: millisecond,
         utcMilliseconds: milliseconds,
-        timeSecond: utcSecond,
-        timeSeconds: seconds,
-        utcSecond: utcSecond,
+        timeMillisecond: millisecond,
+        timeMilliseconds: milliseconds,
+        utcSecond: second,
         utcSeconds: seconds,
+        timeSecond: second,
+        timeSeconds: seconds,
         timeMinute: timeMinute,
-        timeMinutes: minutes,
-        timeHour: timeHour,
-        timeHours: hours,
-        timeDay: timeDay,
-        timeDays: days,
-        timeWeek: sunday,
-        timeWeeks: sundays,
-        timeSunday: sunday,
-        timeSundays: sundays,
-        timeMonday: monday,
-        timeMondays: mondays,
-        timeTuesday: tuesday,
-        timeTuesdays: tuesdays,
-        timeWednesday: wednesday,
-        timeWednesdays: wednesdays,
-        timeThursday: thursday,
-        timeThursdays: thursdays,
-        timeFriday: friday,
-        timeFridays: fridays,
-        timeSaturday: saturday,
-        timeSaturdays: saturdays,
-        timeMonth: timeMonth,
-        timeMonths: months,
-        timeYear: timeYear,
-        timeYears: years,
-        utcMinute: utcMinute$1,
+        timeMinutes: timeMinutes,
+        utcMinute: utcMinute,
         utcMinutes: utcMinutes,
-        utcHour: utcHour$1,
+        timeHour: timeHour,
+        timeHours: timeHours,
+        utcHour: utcHour,
         utcHours: utcHours,
-        utcDay: utcDay$1,
+        timeDay: timeDay,
+        timeDays: timeDays,
+        utcDay: utcDay,
         utcDays: utcDays,
+        unixDay: unixDay,
+        unixDays: unixDays,
+        timeWeek: timeSunday,
+        timeWeeks: timeSundays,
+        timeSunday: timeSunday,
+        timeSundays: timeSundays,
+        timeMonday: timeMonday,
+        timeMondays: timeMondays,
+        timeTuesday: timeTuesday,
+        timeTuesdays: timeTuesdays,
+        timeWednesday: timeWednesday,
+        timeWednesdays: timeWednesdays,
+        timeThursday: timeThursday,
+        timeThursdays: timeThursdays,
+        timeFriday: timeFriday,
+        timeFridays: timeFridays,
+        timeSaturday: timeSaturday,
+        timeSaturdays: timeSaturdays,
         utcWeek: utcSunday,
         utcWeeks: utcSundays,
         utcSunday: utcSunday,
@@ -33025,9 +33748,13 @@ var app = (function (exports) {
         utcFridays: utcFridays,
         utcSaturday: utcSaturday,
         utcSaturdays: utcSaturdays,
-        utcMonth: utcMonth$1,
+        timeMonth: timeMonth,
+        timeMonths: timeMonths,
+        utcMonth: utcMonth,
         utcMonths: utcMonths,
-        utcYear: utcYear$1,
+        timeYear: timeYear,
+        timeYears: timeYears,
+        utcYear: utcYear,
         utcYears: utcYears,
         utcTicks: utcTicks,
         utcTickInterval: utcTickInterval,
@@ -33103,7 +33830,7 @@ var app = (function (exports) {
     } // end wrap()
 
     /* src/components/byPage/postcards/postcard/Hazards.svelte generated by Svelte v3.48.0 */
-    const file$r = "src/components/byPage/postcards/postcard/Hazards.svelte";
+    const file$s = "src/components/byPage/postcards/postcard/Hazards.svelte";
 
     function get_each_context$g(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -33126,7 +33853,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "event svelte-9a8w10");
-    			add_location(div, file$r, 38, 16, 1615);
+    			add_location(div, file$s, 38, 16, 1615);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33158,7 +33885,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker svelte-9a8w10");
-    			add_location(div, file$r, 42, 86, 1828);
+    			add_location(div, file$s, 42, 86, 1828);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33187,7 +33914,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker filled svelte-9a8w10");
-    			add_location(div, file$r, 42, 44, 1786);
+    			add_location(div, file$s, 42, 44, 1786);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33216,7 +33943,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker svelte-9a8w10");
-    			add_location(div, file$r, 43, 86, 1948);
+    			add_location(div, file$s, 43, 86, 1948);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33245,7 +33972,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker filled svelte-9a8w10");
-    			add_location(div, file$r, 43, 44, 1906);
+    			add_location(div, file$s, 43, 44, 1906);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33274,7 +34001,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker svelte-9a8w10");
-    			add_location(div, file$r, 44, 86, 2068);
+    			add_location(div, file$s, 44, 86, 2068);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33303,7 +34030,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker filled svelte-9a8w10");
-    			add_location(div, file$r, 44, 44, 2026);
+    			add_location(div, file$s, 44, 44, 2026);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33332,7 +34059,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker svelte-9a8w10");
-    			add_location(div, file$r, 45, 86, 2188);
+    			add_location(div, file$s, 45, 86, 2188);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33361,7 +34088,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker filled svelte-9a8w10");
-    			add_location(div, file$r, 45, 44, 2146);
+    			add_location(div, file$s, 45, 44, 2146);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33390,7 +34117,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker svelte-9a8w10");
-    			add_location(div, file$r, 46, 86, 2308);
+    			add_location(div, file$s, 46, 86, 2308);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33419,7 +34146,7 @@ var app = (function (exports) {
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "class", "marker filled svelte-9a8w10");
-    			add_location(div, file$r, 46, 44, 2266);
+    			add_location(div, file$s, 46, 44, 2266);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -33534,21 +34261,21 @@ var app = (function (exports) {
     			if_block4.c();
     			t7 = space();
     			attr_dev(div0, "class", "hazard-label-wrapper svelte-9a8w10");
-    			add_location(div0, file$r, 30, 12, 1192);
+    			add_location(div0, file$s, 30, 12, 1192);
     			attr_dev(path, "class", "icon " + slugify(/*hazard*/ ctx[6]) + " svelte-9a8w10");
     			attr_dev(path, "d", icons[slugify(/*hazard*/ ctx[6])]);
-    			add_location(path, file$r, 33, 20, 1389);
+    			add_location(path, file$s, 33, 20, 1389);
     			attr_dev(svg, "class", "hazard-icon svelte-9a8w10");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
-    			add_location(svg, file$r, 32, 16, 1313);
+    			add_location(svg, file$s, 32, 16, 1313);
     			attr_dev(div1, "class", "hazard-icon-wrapper svelte-9a8w10");
-    			add_location(div1, file$r, 31, 12, 1261);
+    			add_location(div1, file$s, 31, 12, 1261);
     			attr_dev(div2, "class", "event-wrapper");
-    			add_location(div2, file$r, 36, 12, 1513);
+    			add_location(div2, file$s, 36, 12, 1513);
     			attr_dev(div3, "class", "marker-wrapper svelte-9a8w10");
-    			add_location(div3, file$r, 41, 12, 1711);
+    			add_location(div3, file$s, 41, 12, 1711);
     			attr_dev(div4, "class", "hazard-container " + slugify(/*hazard*/ ctx[6]) + " svelte-9a8w10");
-    			add_location(div4, file$r, 29, 8, 1129);
+    			add_location(div4, file$s, 29, 8, 1129);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div4, anchor);
@@ -33675,7 +34402,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$r(ctx) {
+    function create_fragment$s(ctx) {
     	let section;
     	let div0;
     	let t0;
@@ -33705,13 +34432,13 @@ var app = (function (exports) {
     			}
 
     			attr_dev(div0, "class", "wedge svelte-9a8w10");
-    			add_location(div0, file$r, 25, 4, 979);
+    			add_location(div0, file$s, 25, 4, 979);
     			attr_dev(h3, "class", "svelte-9a8w10");
-    			add_location(h3, file$r, 26, 4, 1011);
+    			add_location(h3, file$s, 26, 4, 1011);
     			attr_dev(div1, "class", "hazards-container svelte-9a8w10");
-    			add_location(div1, file$r, 27, 4, 1051);
+    			add_location(div1, file$s, 27, 4, 1051);
     			attr_dev(section, "class", "hazards-wrapper svelte-9a8w10");
-    			add_location(section, file$r, 24, 0, 940);
+    			add_location(section, file$s, 24, 0, 940);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33763,7 +34490,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$r.name,
+    		id: create_fragment$s.name,
     		type: "component",
     		source: "",
     		ctx
@@ -33772,7 +34499,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$r($$self, $$props, $$invalidate) {
+    function instance$s($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
@@ -33830,13 +34557,13 @@ var app = (function (exports) {
     class Hazards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$r, create_fragment$r, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$s, create_fragment$s, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Hazards",
     			options,
-    			id: create_fragment$r.name
+    			id: create_fragment$s.name
     		});
 
     		const { ctx } = this.$$;
@@ -33857,9 +34584,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/ImageHazards.svelte generated by Svelte v3.48.0 */
-    const file$q = "src/components/byPage/postcards/postcard/ImageHazards.svelte";
+    const file$r = "src/components/byPage/postcards/postcard/ImageHazards.svelte";
 
-    function create_fragment$q(ctx) {
+    function create_fragment$r(ctx) {
     	let section;
     	let image;
     	let t;
@@ -33883,7 +34610,7 @@ var app = (function (exports) {
     			t = space();
     			create_component(hazards.$$.fragment);
     			attr_dev(section, "class", "imgHazard svelte-1bxb02c");
-    			add_location(section, file$q, 12, 0, 264);
+    			add_location(section, file$r, 12, 0, 264);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33923,7 +34650,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$q.name,
+    		id: create_fragment$r.name,
     		type: "component",
     		source: "",
     		ctx
@@ -33932,7 +34659,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$q($$self, $$props, $$invalidate) {
+    function instance$r($$self, $$props, $$invalidate) {
     	let imgURL;
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('ImageHazards', slots, []);
@@ -33970,13 +34697,13 @@ var app = (function (exports) {
     class ImageHazards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$q, create_fragment$q, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$r, create_fragment$r, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ImageHazards",
     			options,
-    			id: create_fragment$q.name
+    			id: create_fragment$r.name
     		});
 
     		const { ctx } = this.$$;
@@ -33997,7 +34724,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/AdaptationCriteria.svelte generated by Svelte v3.48.0 */
-    const file$p = "src/components/byPage/postcards/postcard/AdaptationCriteria.svelte";
+    const file$q = "src/components/byPage/postcards/postcard/AdaptationCriteria.svelte";
 
     function get_each_context$f(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -34024,7 +34751,7 @@ var app = (function (exports) {
     			attr_dev(circle, "class", circle_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(circle, "r", /*radius*/ ctx[3]);
     			set_style(circle, "transform", "translate(" + /*dims*/ ctx[2].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[2].height * /*lens*/ ctx[4].yPos + "px)");
-    			add_location(circle, file$p, 23, 12, 895);
+    			add_location(circle, file$q, 23, 12, 895);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -34085,12 +34812,12 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 110
     			));
 
-    			add_location(path, file$p, 44, 20, 2468);
+    			add_location(path, file$q, 44, 20, 2468);
     			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "12.5%");
-    			add_location(textPath, file$p, 46, 24, 2689);
-    			add_location(text_1, file$p, 45, 20, 2658);
+    			add_location(textPath, file$q, 46, 24, 2689);
+    			add_location(text_1, file$q, 45, 20, 2658);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34172,12 +34899,12 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 110
     			));
 
-    			add_location(path, file$p, 36, 20, 1843);
+    			add_location(path, file$q, 36, 20, 1843);
     			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "32.5%");
-    			add_location(textPath, file$p, 38, 24, 2064);
-    			add_location(text_1, file$p, 37, 20, 2033);
+    			add_location(textPath, file$q, 38, 24, 2064);
+    			add_location(text_1, file$q, 37, 20, 2033);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34259,12 +34986,12 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 20
     			));
 
-    			add_location(path, file$p, 28, 20, 1226);
+    			add_location(path, file$q, 28, 20, 1226);
     			attr_dev(textPath, "class", textPath_class_value = "" + (/*criteria*/ ctx[0][slugify(/*lens*/ ctx[4].Screen)] + " lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-royxzr"));
     			attr_dev(textPath, "href", textPath_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath, "startOffset", "75%");
-    			add_location(textPath, file$p, 30, 24, 1442);
-    			add_location(text_1, file$p, 29, 20, 1411);
+    			add_location(textPath, file$q, 30, 24, 1442);
+    			add_location(text_1, file$q, 29, 20, 1411);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34370,7 +35097,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$p(ctx) {
+    function create_fragment$q(ctx) {
     	let svg;
     	let g1;
     	let g0;
@@ -34409,12 +35136,12 @@ var app = (function (exports) {
     			}
 
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[2].width * 0.5 + "px, " + /*dims*/ ctx[2].height * 0.55 + "px)");
-    			add_location(g0, file$p, 21, 8, 735);
+    			add_location(g0, file$q, 21, 8, 735);
     			attr_dev(g1, "id", "screening-vis-container");
-    			add_location(g1, file$p, 20, 4, 685);
+    			add_location(g1, file$q, 20, 4, 685);
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[2].width + " " + /*dims*/ ctx[2].height);
     			attr_dev(svg, "width", "100%");
-    			add_location(svg, file$p, 19, 0, 619);
+    			add_location(svg, file$q, 19, 0, 619);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -34501,7 +35228,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$p.name,
+    		id: create_fragment$q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -34510,7 +35237,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$p($$self, $$props, $$invalidate) {
+    function instance$q($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
@@ -34564,13 +35291,13 @@ var app = (function (exports) {
     class AdaptationCriteria extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$p, create_fragment$p, safe_not_equal, { criteria: 0 });
+    		init$1(this, options, instance$q, create_fragment$q, safe_not_equal, { criteria: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "AdaptationCriteria",
     			options,
-    			id: create_fragment$p.name
+    			id: create_fragment$q.name
     		});
     	}
 
@@ -34584,7 +35311,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/ActionTypeVis.svelte generated by Svelte v3.48.0 */
-    const file$o = "src/components/byPage/postcards/postcard/ActionTypeVis.svelte";
+    const file$p = "src/components/byPage/postcards/postcard/ActionTypeVis.svelte";
 
     function get_each_context$e(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -34620,7 +35347,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "class", "flow svelte-1sv06l");
     			attr_dev(path, "d", /*path*/ ctx[10]);
-    			add_location(path, file$o, 35, 16, 1652);
+    			add_location(path, file$p, 35, 16, 1652);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34652,7 +35379,7 @@ var app = (function (exports) {
     			attr_dev(circle, "class", "node " + slugify(/*node*/ ctx[4].Class) + " svelte-1sv06l");
     			set_style(circle, "transform", "translate( " + /*node*/ ctx[4].xPos * 0.5 * /*dims*/ ctx[1].width + "px, " + /*node*/ ctx[4].yPos * /*dims*/ ctx[1].height + "px)");
     			toggle_class(circle, "selected", /*node*/ ctx[4].Name === /*actionType*/ ctx[0]);
-    			add_location(circle, file$o, 40, 12, 1823);
+    			add_location(circle, file$p, 40, 12, 1823);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -34678,7 +35405,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$o(ctx) {
+    function create_fragment$p(ctx) {
     	let svg;
     	let g2;
     	let g0;
@@ -34717,15 +35444,15 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g0, "class", "connector-container");
-    			add_location(g0, file$o, 24, 8, 796);
+    			add_location(g0, file$p, 24, 8, 796);
     			attr_dev(g1, "class", "action-type-node-container");
-    			add_location(g1, file$o, 38, 8, 1727);
+    			add_location(g1, file$p, 38, 8, 1727);
     			attr_dev(g2, "class", "flow-diagram");
     			set_style(g2, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g2, file$o, 23, 4, 705);
+    			add_location(g2, file$p, 23, 4, 705);
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
     			attr_dev(svg, "width", "100%");
-    			add_location(svg, file$o, 22, 0, 632);
+    			add_location(svg, file$p, 22, 0, 632);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -34812,7 +35539,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$o.name,
+    		id: create_fragment$p.name,
     		type: "component",
     		source: "",
     		ctx
@@ -34821,7 +35548,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$o($$self, $$props, $$invalidate) {
+    function instance$p($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(3, $data = $$value));
@@ -34874,13 +35601,13 @@ var app = (function (exports) {
     class ActionTypeVis extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$o, create_fragment$o, safe_not_equal, { actionType: 0 });
+    		init$1(this, options, instance$p, create_fragment$p, safe_not_equal, { actionType: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ActionTypeVis",
     			options,
-    			id: create_fragment$o.name
+    			id: create_fragment$p.name
     		});
 
     		const { ctx } = this.$$;
@@ -34903,7 +35630,7 @@ var app = (function (exports) {
     /* src/components/byPage/postcards/postcard/Info.svelte generated by Svelte v3.48.0 */
 
     const { Object: Object_1$1 } = globals;
-    const file$n = "src/components/byPage/postcards/postcard/Info.svelte";
+    const file$o = "src/components/byPage/postcards/postcard/Info.svelte";
 
     // (77:20) {#if actionApproachThemeArray.includes('Increase resilience')}
     function create_if_block_1$6(ctx) {
@@ -34914,7 +35641,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "d", triangle$1(50));
     			set_style(path, "transform", "translate( 50px, 50px)");
-    			add_location(path, file$n, 77, 20, 3597);
+    			add_location(path, file$o, 77, 20, 3597);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34945,7 +35672,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "d", triangle$1(50, 'down'));
     			set_style(path, "transform", "translate( 50px, 50px)");
-    			add_location(path, file$n, 80, 20, 3786);
+    			add_location(path, file$o, 80, 20, 3786);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -34967,7 +35694,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$n(ctx) {
+    function create_fragment$o(ctx) {
     	let section;
     	let div5;
     	let div0;
@@ -35086,73 +35813,73 @@ var app = (function (exports) {
     			div21 = element("div");
     			div20 = element("div");
     			attr_dev(h40, "class", "svelte-1k9n8ov");
-    			add_location(h40, file$n, 54, 12, 2801);
+    			add_location(h40, file$o, 54, 12, 2801);
     			attr_dev(div0, "class", "header svelte-1k9n8ov");
-    			add_location(div0, file$n, 53, 8, 2766);
+    			add_location(div0, file$o, 53, 8, 2766);
     			attr_dev(div1, "class", "icon-wrapper svelte-1k9n8ov");
-    			add_location(div1, file$n, 57, 13, 2891);
+    			add_location(div1, file$o, 57, 13, 2891);
     			attr_dev(div2, "class", "response svelte-1k9n8ov");
-    			add_location(div2, file$n, 61, 16, 3043);
+    			add_location(div2, file$o, 61, 16, 3043);
     			attr_dev(div3, "class", "label-wrapper svelte-1k9n8ov");
-    			add_location(div3, file$n, 60, 12, 2997);
+    			add_location(div3, file$o, 60, 12, 2997);
     			attr_dev(div4, "class", "response-wrapper svelte-1k9n8ov");
-    			add_location(div4, file$n, 56, 8, 2845);
+    			add_location(div4, file$o, 56, 8, 2845);
     			attr_dev(div5, "class", "info-container svelte-1k9n8ov");
-    			add_location(div5, file$n, 52, 4, 2728);
+    			add_location(div5, file$o, 52, 4, 2728);
     			attr_dev(h41, "class", "svelte-1k9n8ov");
-    			add_location(h41, file$n, 71, 12, 3287);
+    			add_location(h41, file$o, 71, 12, 3287);
     			attr_dev(div6, "class", "header svelte-1k9n8ov");
-    			add_location(div6, file$n, 70, 8, 3252);
+    			add_location(div6, file$o, 70, 8, 3252);
     			attr_dev(svg0, "class", "scale-icon svelte-1k9n8ov");
     			attr_dev(svg0, "viewBox", "0 0 100 100");
     			attr_dev(svg0, "width", "100%");
-    			add_location(svg0, file$n, 75, 16, 3430);
+    			add_location(svg0, file$o, 75, 16, 3430);
     			attr_dev(div7, "class", "icon-wrapper svelte-1k9n8ov");
-    			add_location(div7, file$n, 74, 13, 3385);
+    			add_location(div7, file$o, 74, 13, 3385);
     			attr_dev(div8, "class", "response icon-label svelte-1k9n8ov");
-    			add_location(div8, file$n, 85, 16, 3988);
+    			add_location(div8, file$o, 85, 16, 3988);
     			attr_dev(div9, "class", "label-wrapper svelte-1k9n8ov");
-    			add_location(div9, file$n, 84, 12, 3942);
+    			add_location(div9, file$o, 84, 12, 3942);
     			attr_dev(div10, "class", "response-wrapper svelte-1k9n8ov");
-    			add_location(div10, file$n, 73, 8, 3339);
+    			add_location(div10, file$o, 73, 8, 3339);
     			attr_dev(div11, "class", "info-container svelte-1k9n8ov");
-    			add_location(div11, file$n, 69, 4, 3214);
+    			add_location(div11, file$o, 69, 4, 3214);
     			attr_dev(h42, "class", "svelte-1k9n8ov");
-    			add_location(h42, file$n, 95, 12, 4246);
+    			add_location(h42, file$o, 95, 12, 4246);
     			attr_dev(div12, "class", "header svelte-1k9n8ov");
-    			add_location(div12, file$n, 94, 8, 4211);
+    			add_location(div12, file$o, 94, 8, 4211);
     			attr_dev(path, "d", mapIcons[/*actionScale*/ ctx[4]]);
-    			add_location(path, file$n, 100, 20, 4482);
+    			add_location(path, file$o, 100, 20, 4482);
     			attr_dev(svg1, "class", "scale-icon svelte-1k9n8ov");
     			attr_dev(svg1, "viewBox", "-50 -50 100 100");
     			attr_dev(svg1, "width", "100%");
-    			add_location(svg1, file$n, 99, 16, 4394);
+    			add_location(svg1, file$o, 99, 16, 4394);
     			attr_dev(div13, "class", "icon-wrapper svelte-1k9n8ov");
-    			add_location(div13, file$n, 98, 13, 4349);
+    			add_location(div13, file$o, 98, 13, 4349);
     			attr_dev(div14, "class", "response icon-label svelte-1k9n8ov");
-    			add_location(div14, file$n, 104, 16, 4618);
+    			add_location(div14, file$o, 104, 16, 4618);
     			attr_dev(div15, "class", "label-wrapper svelte-1k9n8ov");
-    			add_location(div15, file$n, 103, 12, 4572);
+    			add_location(div15, file$o, 103, 12, 4572);
     			attr_dev(div16, "class", "response-wrapper icon-label svelte-1k9n8ov");
-    			add_location(div16, file$n, 97, 8, 4292);
+    			add_location(div16, file$o, 97, 8, 4292);
     			attr_dev(div17, "class", "info-container svelte-1k9n8ov");
-    			add_location(div17, file$n, 93, 4, 4173);
+    			add_location(div17, file$o, 93, 4, 4173);
     			attr_dev(h43, "class", "svelte-1k9n8ov");
-    			add_location(h43, file$n, 114, 12, 4882);
+    			add_location(h43, file$o, 114, 12, 4882);
     			attr_dev(div18, "class", "header svelte-1k9n8ov");
-    			add_location(div18, file$n, 113, 8, 4847);
+    			add_location(div18, file$o, 113, 8, 4847);
     			attr_dev(div19, "class", "icon-wrapper svelte-1k9n8ov");
-    			add_location(div19, file$n, 117, 12, 4990);
+    			add_location(div19, file$o, 117, 12, 4990);
     			attr_dev(div20, "class", "response svelte-1k9n8ov");
-    			add_location(div20, file$n, 121, 16, 5147);
+    			add_location(div20, file$o, 121, 16, 5147);
     			attr_dev(div21, "class", "label-wrapper svelte-1k9n8ov");
-    			add_location(div21, file$n, 120, 12, 5100);
+    			add_location(div21, file$o, 120, 12, 5100);
     			attr_dev(div22, "class", "response-wrapper icon-label svelte-1k9n8ov");
-    			add_location(div22, file$n, 116, 8, 4934);
+    			add_location(div22, file$o, 116, 8, 4934);
     			attr_dev(div23, "class", "info-container svelte-1k9n8ov");
-    			add_location(div23, file$n, 112, 4, 4809);
+    			add_location(div23, file$o, 112, 4, 4809);
     			attr_dev(section, "class", "svelte-1k9n8ov");
-    			add_location(section, file$n, 50, 0, 2690);
+    			add_location(section, file$o, 50, 0, 2690);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35238,7 +35965,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$n.name,
+    		id: create_fragment$o.name,
     		type: "component",
     		source: "",
     		ctx
@@ -35247,7 +35974,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$n($$self, $$props, $$invalidate) {
+    function instance$o($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(7, $data = $$value));
@@ -35362,13 +36089,13 @@ var app = (function (exports) {
     class Info extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$n, create_fragment$n, safe_not_equal, { actionData: 6 });
+    		init$1(this, options, instance$o, create_fragment$o, safe_not_equal, { actionData: 6 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Info",
     			options,
-    			id: create_fragment$n.name
+    			id: create_fragment$o.name
     		});
 
     		const { ctx } = this.$$;
@@ -35389,7 +36116,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/postcard/Strip.svelte generated by Svelte v3.48.0 */
-    const file$m = "src/components/byPage/postcards/postcard/Strip.svelte";
+    const file$n = "src/components/byPage/postcards/postcard/Strip.svelte";
 
     function get_each_context$d(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -35419,18 +36146,18 @@ var app = (function (exports) {
     			div1 = element("div");
     			t1 = space();
     			attr_dev(path, "d", path_d_value = icons[slugify(/*d*/ ctx[3].Alias)]);
-    			add_location(path, file$m, 31, 24, 1288);
+    			add_location(path, file$n, 31, 24, 1288);
     			attr_dev(svg, "class", "focusArea-icon svelte-oau61i");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
     			attr_dev(svg, "width", "80%");
-    			add_location(svg, file$m, 30, 20, 1190);
+    			add_location(svg, file$n, 30, 20, 1190);
     			attr_dev(div0, "class", "focusArea-icon-wrapper svelte-oau61i");
-    			add_location(div0, file$m, 29, 16, 1130);
+    			add_location(div0, file$n, 29, 16, 1130);
     			attr_dev(div1, "class", "focusArea-icon-label svelte-oau61i");
-    			add_location(div1, file$m, 34, 16, 1393);
+    			add_location(div1, file$n, 34, 16, 1393);
     			attr_dev(div2, "class", "focusArea-wrapper svelte-oau61i");
     			toggle_class(div2, "selected", /*focusAreas*/ ctx[1].indexOf(/*d*/ ctx[3].Alias) > -1);
-    			add_location(div2, file$m, 28, 12, 1030);
+    			add_location(div2, file$n, 28, 12, 1030);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -35468,7 +36195,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$m(ctx) {
+    function create_fragment$n(ctx) {
     	let section;
     	let div0;
     	let logo;
@@ -35516,23 +36243,23 @@ var app = (function (exports) {
     			}
 
     			attr_dev(div0, "class", "logo-container svelte-oau61i");
-    			add_location(div0, file$m, 15, 4, 563);
+    			add_location(div0, file$n, 15, 4, 563);
     			attr_dev(div1, "class", "strip-1a svelte-oau61i");
-    			add_location(div1, file$m, 18, 4, 625);
+    			add_location(div1, file$n, 18, 4, 625);
     			attr_dev(div2, "class", "strip-2a svelte-oau61i");
-    			add_location(div2, file$m, 19, 4, 659);
+    			add_location(div2, file$n, 19, 4, 659);
     			attr_dev(div3, "class", "vertical-label svelte-oau61i");
-    			add_location(div3, file$m, 22, 12, 778);
+    			add_location(div3, file$n, 22, 12, 778);
     			attr_dev(div4, "class", "vertical-label-container svelte-oau61i");
-    			add_location(div4, file$m, 21, 8, 725);
+    			add_location(div4, file$n, 21, 8, 725);
     			attr_dev(div5, "class", "strip-1b svelte-oau61i");
-    			add_location(div5, file$m, 20, 4, 693);
+    			add_location(div5, file$n, 20, 4, 693);
     			attr_dev(div6, "class", "focus-area-container svelte-oau61i");
-    			add_location(div6, file$m, 26, 8, 922);
+    			add_location(div6, file$n, 26, 8, 922);
     			attr_dev(div7, "class", "strip-2b svelte-oau61i");
-    			add_location(div7, file$m, 25, 4, 890);
+    			add_location(div7, file$n, 25, 4, 890);
     			attr_dev(section, "class", "svelte-oau61i");
-    			add_location(section, file$m, 14, 0, 549);
+    			add_location(section, file$n, 14, 0, 549);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35602,7 +36329,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$m.name,
+    		id: create_fragment$n.name,
     		type: "component",
     		source: "",
     		ctx
@@ -35611,7 +36338,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$m($$self, $$props, $$invalidate) {
+    function instance$n($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
@@ -35655,13 +36382,13 @@ var app = (function (exports) {
     class Strip extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$m, create_fragment$m, safe_not_equal, { actionData: 2 });
+    		init$1(this, options, instance$n, create_fragment$n, safe_not_equal, { actionData: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Strip",
     			options,
-    			id: create_fragment$m.name
+    			id: create_fragment$n.name
     		});
 
     		const { ctx } = this.$$;
@@ -35682,9 +36409,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/Postcard.svelte generated by Svelte v3.48.0 */
-    const file$l = "src/components/byPage/postcards/Postcard.svelte";
+    const file$m = "src/components/byPage/postcards/Postcard.svelte";
 
-    function create_fragment$l(ctx) {
+    function create_fragment$m(ctx) {
     	let main1;
     	let strip;
     	let t0;
@@ -35736,7 +36463,7 @@ var app = (function (exports) {
     			t3 = space();
     			create_component(info.$$.fragment);
     			attr_dev(main1, "class", "postcard svelte-6pifco");
-    			add_location(main1, file$l, 12, 0, 407);
+    			add_location(main1, file$m, 12, 0, 407);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35809,7 +36536,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$l.name,
+    		id: create_fragment$m.name,
     		type: "component",
     		source: "",
     		ctx
@@ -35818,7 +36545,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$l($$self, $$props, $$invalidate) {
+    function instance$m($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Postcard', slots, []);
     	let { actionData } = $$props;
@@ -35856,13 +36583,13 @@ var app = (function (exports) {
     class Postcard extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$l, create_fragment$l, safe_not_equal, { actionData: 0 });
+    		init$1(this, options, instance$m, create_fragment$m, safe_not_equal, { actionData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Postcard",
     			options,
-    			id: create_fragment$l.name
+    			id: create_fragment$m.name
     		});
 
     		const { ctx } = this.$$;
@@ -35883,7 +36610,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/postcards/ActionTable.svelte generated by Svelte v3.48.0 */
-    const file$k = "src/components/byPage/postcards/ActionTable.svelte";
+    const file$l = "src/components/byPage/postcards/ActionTable.svelte";
 
     function get_each_context$c(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -35946,15 +36673,15 @@ var app = (function (exports) {
     			div0 = element("div");
     			t1 = space();
     			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[13].Alias)]);
-    			add_location(path, file$k, 57, 28, 2733);
+    			add_location(path, file$l, 57, 28, 2733);
     			attr_dev(svg, "class", "icon");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
     			attr_dev(svg, "width", "80%");
-    			add_location(svg, file$k, 56, 24, 2647);
+    			add_location(svg, file$l, 56, 24, 2647);
     			attr_dev(div0, "class", "icon-label svelte-16qh7xx");
-    			add_location(div0, file$k, 59, 24, 2828);
+    			add_location(div0, file$l, 59, 24, 2828);
     			attr_dev(div1, "class", "icon-container svelte-16qh7xx");
-    			add_location(div1, file$k, 55, 20, 2593);
+    			add_location(div1, file$l, 55, 20, 2593);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -36007,15 +36734,15 @@ var app = (function (exports) {
     			div0 = element("div");
     			t1 = space();
     			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[13].Hazard)]);
-    			add_location(path, file$k, 69, 28, 3254);
+    			add_location(path, file$l, 69, 28, 3254);
     			attr_dev(svg, "class", "icon");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
     			attr_dev(svg, "width", "80%");
-    			add_location(svg, file$k, 68, 24, 3168);
+    			add_location(svg, file$l, 68, 24, 3168);
     			attr_dev(div0, "class", "icon-label svelte-16qh7xx");
-    			add_location(div0, file$k, 71, 24, 3350);
+    			add_location(div0, file$l, 71, 24, 3350);
     			attr_dev(div1, "class", "icon-container svelte-16qh7xx");
-    			add_location(div1, file$k, 67, 20, 3114);
+    			add_location(div1, file$l, 67, 20, 3114);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -36150,37 +36877,37 @@ var app = (function (exports) {
     			t12 = text$1(t12_value);
     			t13 = space();
     			attr_dev(td0, "class", "name svelte-16qh7xx");
-    			add_location(td0, file$k, 40, 12, 1917);
+    			add_location(td0, file$l, 40, 12, 1917);
     			attr_dev(td1, "class", "leads svelte-16qh7xx");
-    			add_location(td1, file$k, 41, 12, 1962);
+    			add_location(td1, file$l, 41, 12, 1962);
     			attr_dev(td2, "class", "status svelte-16qh7xx");
-    			add_location(td2, file$k, 42, 12, 2018);
+    			add_location(td2, file$l, 42, 12, 2018);
     			attr_dev(path, "d", path_d_value = mapIcons[/*scale*/ ctx[7]]);
-    			add_location(path, file$k, 46, 24, 2236);
+    			add_location(path, file$l, 46, 24, 2236);
     			attr_dev(svg, "class", "icon");
     			attr_dev(svg, "viewBox", "-50 -50 100 100");
     			attr_dev(svg, "width", "80%");
-    			add_location(svg, file$k, 45, 20, 2154);
+    			add_location(svg, file$l, 45, 20, 2154);
     			attr_dev(div0, "class", "icon-label svelte-16qh7xx");
-    			add_location(div0, file$k, 48, 20, 2313);
+    			add_location(div0, file$l, 48, 20, 2313);
     			attr_dev(div1, "class", "icon-container svelte-16qh7xx");
-    			add_location(div1, file$k, 44, 16, 2104);
+    			add_location(div1, file$l, 44, 16, 2104);
     			attr_dev(td3, "class", "scale svelte-16qh7xx");
-    			add_location(td3, file$k, 43, 12, 2067);
+    			add_location(td3, file$l, 43, 12, 2067);
     			attr_dev(td4, "class", "type svelte-16qh7xx");
-    			add_location(td4, file$k, 51, 12, 2411);
+    			add_location(td4, file$l, 51, 12, 2411);
     			attr_dev(div2, "class", "icon-cell-container svelte-16qh7xx");
-    			add_location(div2, file$k, 53, 16, 2496);
+    			add_location(div2, file$l, 53, 16, 2496);
     			attr_dev(td5, "class", "focusAreas svelte-16qh7xx");
-    			add_location(td5, file$k, 52, 12, 2454);
+    			add_location(td5, file$l, 52, 12, 2454);
     			attr_dev(div3, "class", "icon-cell-container svelte-16qh7xx");
-    			add_location(div3, file$k, 65, 16, 3020);
+    			add_location(div3, file$l, 65, 16, 3020);
     			attr_dev(td6, "class", "hazards svelte-16qh7xx");
-    			add_location(td6, file$k, 64, 12, 2981);
+    			add_location(td6, file$l, 64, 12, 2981);
     			attr_dev(td7, "class", "assessment svelte-16qh7xx");
-    			add_location(td7, file$k, 76, 12, 3504);
+    			add_location(td7, file$l, 76, 12, 3504);
     			attr_dev(tr, "class", "action-row svelte-16qh7xx");
-    			add_location(tr, file$k, 39, 8, 1847);
+    			add_location(tr, file$l, 39, 8, 1847);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -36311,7 +37038,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$k(ctx) {
+    function create_fragment$l(ctx) {
     	let table;
     	let thead;
     	let tr;
@@ -36374,27 +37101,27 @@ var app = (function (exports) {
     			}
 
     			attr_dev(th0, "class", "name svelte-16qh7xx");
-    			add_location(th0, file$k, 17, 12, 485);
+    			add_location(th0, file$l, 17, 12, 485);
     			attr_dev(th1, "class", "leads svelte-16qh7xx");
-    			add_location(th1, file$k, 18, 12, 533);
+    			add_location(th1, file$l, 18, 12, 533);
     			attr_dev(th2, "class", "status svelte-16qh7xx");
-    			add_location(th2, file$k, 19, 12, 578);
+    			add_location(th2, file$l, 19, 12, 578);
     			attr_dev(th3, "class", "scale svelte-16qh7xx");
-    			add_location(th3, file$k, 20, 12, 623);
+    			add_location(th3, file$l, 20, 12, 623);
     			attr_dev(th4, "class", "type svelte-16qh7xx");
-    			add_location(th4, file$k, 21, 12, 666);
+    			add_location(th4, file$l, 21, 12, 666);
     			attr_dev(th5, "class", "focusAreas svelte-16qh7xx");
-    			add_location(th5, file$k, 22, 12, 707);
+    			add_location(th5, file$l, 22, 12, 707);
     			attr_dev(th6, "class", "hazards svelte-16qh7xx");
-    			add_location(th6, file$k, 23, 12, 761);
+    			add_location(th6, file$l, 23, 12, 761);
     			attr_dev(th7, "class", "assessment svelte-16qh7xx");
-    			add_location(th7, file$k, 24, 12, 808);
+    			add_location(th7, file$l, 24, 12, 808);
     			attr_dev(tr, "class", "svelte-16qh7xx");
-    			add_location(tr, file$k, 16, 8, 468);
+    			add_location(tr, file$l, 16, 8, 468);
     			attr_dev(thead, "class", "svelte-16qh7xx");
-    			add_location(thead, file$k, 15, 4, 452);
+    			add_location(thead, file$l, 15, 4, 452);
     			attr_dev(table, "class", "svelte-16qh7xx");
-    			add_location(table, file$k, 14, 0, 440);
+    			add_location(table, file$l, 14, 0, 440);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36459,7 +37186,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$l.name,
     		type: "component",
     		source: "",
     		ctx
@@ -36468,7 +37195,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
+    function instance$l($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -36509,19 +37236,19 @@ var app = (function (exports) {
     class ActionTable extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$k, create_fragment$k, safe_not_equal, {});
+    		init$1(this, options, instance$l, create_fragment$l, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ActionTable",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$l.name
     		});
     	}
     }
 
     /* src/pages/Postcards.svelte generated by Svelte v3.48.0 */
-    const file$j = "src/pages/Postcards.svelte";
+    const file$k = "src/pages/Postcards.svelte";
 
     function get_each_context$b(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -36656,46 +37383,46 @@ var app = (function (exports) {
     			t27 = space();
     			if_block.c();
     			attr_dev(div0, "class", "hero-logo__wrapper svelte-12kzw4n");
-    			add_location(div0, file$j, 21, 16, 844);
+    			add_location(div0, file$k, 21, 16, 844);
     			attr_dev(div1, "class", "hero-logo svelte-12kzw4n");
-    			add_location(div1, file$j, 20, 12, 804);
+    			add_location(div1, file$k, 20, 12, 804);
     			attr_dev(span0, "class", "title--mute svelte-12kzw4n");
-    			add_location(span0, file$j, 24, 16, 970);
-    			add_location(br0, file$j, 24, 58, 1012);
-    			add_location(br1, file$j, 25, 33, 1051);
+    			add_location(span0, file$k, 24, 16, 970);
+    			add_location(br0, file$k, 24, 58, 1012);
+    			add_location(br1, file$k, 25, 33, 1051);
     			attr_dev(span1, "class", "title--highlight svelte-12kzw4n");
-    			add_location(span1, file$j, 26, 16, 1073);
+    			add_location(span1, file$k, 26, 16, 1073);
     			attr_dev(h1, "class", "hero-content__title svelte-12kzw4n");
-    			add_location(h1, file$j, 23, 12, 921);
-    			add_location(em, file$j, 29, 84, 1270);
-    			add_location(p, file$j, 29, 16, 1202);
+    			add_location(h1, file$k, 23, 12, 921);
+    			add_location(em, file$k, 29, 84, 1270);
+    			add_location(p, file$k, 29, 16, 1202);
     			attr_dev(div2, "class", "hero-content__text svelte-12kzw4n");
-    			add_location(div2, file$j, 28, 12, 1153);
+    			add_location(div2, file$k, 28, 12, 1153);
     			attr_dev(li0, "class", "select__item svelte-12kzw4n");
-    			add_location(li0, file$j, 34, 20, 1579);
+    			add_location(li0, file$k, 34, 20, 1579);
     			attr_dev(li1, "class", "select__item svelte-12kzw4n");
-    			add_location(li1, file$j, 35, 20, 1664);
-    			add_location(ul, file$j, 33, 16, 1554);
+    			add_location(li1, file$k, 35, 20, 1664);
+    			add_location(ul, file$k, 33, 16, 1554);
     			attr_dev(div3, "class", "select svelte-12kzw4n");
-    			add_location(div3, file$j, 32, 12, 1516);
+    			add_location(div3, file$k, 32, 12, 1516);
     			attr_dev(div4, "class", "hero-content svelte-12kzw4n");
-    			add_location(div4, file$j, 18, 8, 726);
+    			add_location(div4, file$k, 18, 8, 726);
     			attr_dev(div5, "class", "hero-wrapper svelte-12kzw4n");
-    			add_location(div5, file$j, 17, 4, 673);
-    			add_location(h2, file$j, 45, 16, 1978);
-    			add_location(div6, file$j, 47, 20, 2086);
-    			add_location(div7, file$j, 48, 20, 2146);
-    			add_location(div8, file$j, 49, 20, 2205);
-    			add_location(div9, file$j, 46, 16, 2060);
-    			add_location(h3, file$j, 52, 20, 2309);
-    			add_location(div10, file$j, 53, 20, 2363);
-    			add_location(div11, file$j, 54, 20, 2416);
-    			add_location(div12, file$j, 51, 16, 2283);
-    			add_location(div13, file$j, 44, 12, 1956);
+    			add_location(div5, file$k, 17, 4, 673);
+    			add_location(h2, file$k, 45, 16, 1978);
+    			add_location(div6, file$k, 47, 20, 2086);
+    			add_location(div7, file$k, 48, 20, 2146);
+    			add_location(div8, file$k, 49, 20, 2205);
+    			add_location(div9, file$k, 46, 16, 2060);
+    			add_location(h3, file$k, 52, 20, 2309);
+    			add_location(div10, file$k, 53, 20, 2363);
+    			add_location(div11, file$k, 54, 20, 2416);
+    			add_location(div12, file$k, 51, 16, 2283);
+    			add_location(div13, file$k, 44, 12, 1956);
     			attr_dev(section, "class", "option-container col-1-2 svelte-12kzw4n");
-    			add_location(section, file$j, 43, 8, 1899);
+    			add_location(section, file$k, 43, 8, 1899);
     			attr_dev(div14, "class", "content-wrapper svelte-12kzw4n");
-    			add_location(div14, file$j, 42, 4, 1843);
+    			add_location(div14, file$k, 42, 4, 1843);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -36907,12 +37634,12 @@ var app = (function (exports) {
     			em.textContent = "Tap on any action to open its summary postcard";
     			t3 = space();
     			create_component(actiontable.$$.fragment);
-    			add_location(h2, file$j, 67, 12, 2838);
-    			add_location(em, file$j, 68, 31, 2907);
+    			add_location(h2, file$k, 67, 12, 2838);
+    			add_location(em, file$k, 68, 31, 2907);
     			attr_dev(p, "class", "notes svelte-12kzw4n");
-    			add_location(p, file$j, 68, 12, 2888);
+    			add_location(p, file$k, 68, 12, 2888);
     			attr_dev(section, "class", "table-container svelte-12kzw4n");
-    			add_location(section, file$j, 66, 8, 2774);
+    			add_location(section, file$k, 66, 8, 2774);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -36986,7 +37713,7 @@ var app = (function (exports) {
     			}
 
     			attr_dev(section, "class", "postcards-container");
-    			add_location(section, file$j, 60, 8, 2566);
+    			add_location(section, file$k, 60, 8, 2566);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -37117,7 +37844,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$j(ctx) {
+    function create_fragment$k(ctx) {
     	let current_block_type_index;
     	let if_block;
     	let if_block_anchor;
@@ -37190,7 +37917,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$j.name,
+    		id: create_fragment$k.name,
     		type: "component",
     		source: "",
     		ctx
@@ -37199,7 +37926,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$j($$self, $$props, $$invalidate) {
+    function instance$k($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -37235,21 +37962,21 @@ var app = (function (exports) {
     class Postcards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$j, create_fragment$j, safe_not_equal, {});
+    		init$1(this, options, instance$k, create_fragment$k, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Postcards",
     			options,
-    			id: create_fragment$j.name
+    			id: create_fragment$k.name
     		});
     	}
     }
 
     /* src/components/byPage/actions/vis/Type.svelte generated by Svelte v3.48.0 */
-    const file$i = "src/components/byPage/actions/vis/Type.svelte";
+    const file$j = "src/components/byPage/actions/vis/Type.svelte";
 
-    function create_fragment$i(ctx) {
+    function create_fragment$j(ctx) {
     	let g7;
     	let g2;
     	let g0;
@@ -37296,14 +38023,14 @@ var app = (function (exports) {
     			g5 = svg_element("g");
     			attr_dev(tspan0, "class", "svelte-8cg3va");
     			toggle_class(tspan0, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			add_location(tspan0, file$i, 82, 103, 4138);
+    			add_location(tspan0, file$j, 82, 103, 4138);
     			attr_dev(text0, "class", "spectrum-label abstract svelte-8cg3va");
     			toggle_class(text0, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text0, file$i, 82, 12, 4047);
+    			add_location(text0, file$j, 82, 12, 4047);
     			attr_dev(text1, "class", "spectrum-sub-label svelte-8cg3va");
     			attr_dev(text1, "dy", "35");
     			toggle_class(text1, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text1, file$i, 83, 12, 4234);
+    			add_location(text1, file$j, 83, 12, 4234);
 
     			set_style(g0, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
     			? 0
@@ -37311,17 +38038,17 @@ var app = (function (exports) {
     			? /*dims*/ ctx[0].height * 0.05
     			: /*dims*/ ctx[0].height * 0.025) + "px)");
 
-    			add_location(g0, file$i, 81, 8, 3865);
+    			add_location(g0, file$j, 81, 8, 3865);
     			attr_dev(tspan1, "class", "svelte-8cg3va");
     			toggle_class(tspan1, "none", /*$ui*/ ctx[1].state.actionVis.scene !== 3);
-    			add_location(tspan1, file$i, 86, 103, 4645);
+    			add_location(tspan1, file$j, 86, 103, 4645);
     			attr_dev(text2, "class", "spectrum-label concrete svelte-8cg3va");
     			toggle_class(text2, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text2, file$i, 86, 12, 4554);
+    			add_location(text2, file$j, 86, 12, 4554);
     			attr_dev(text3, "class", "spectrum-sub-label svelte-8cg3va");
     			attr_dev(text3, "dy", "35");
     			toggle_class(text3, "centered", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(text3, file$i, 87, 12, 4741);
+    			add_location(text3, file$j, 87, 12, 4741);
 
     			set_style(g1, "transform", "translate(" + (/*$ui*/ ctx[1].state.actionVis.scene !== 3
     			? 0
@@ -37329,21 +38056,21 @@ var app = (function (exports) {
     			? /*dims*/ ctx[0].height * 0.65
     			: /*dims*/ ctx[0].height * 0.85) + "px)");
 
-    			add_location(g1, file$i, 85, 8, 4373);
+    			add_location(g1, file$j, 85, 8, 4373);
     			attr_dev(g2, "class", "spectrum-group svelte-8cg3va");
-    			add_location(g2, file$i, 80, 4, 3828);
+    			add_location(g2, file$j, 80, 4, 3828);
     			attr_dev(g3, "class", "connector-container");
-    			add_location(g3, file$i, 91, 8, 5025);
+    			add_location(g3, file$j, 91, 8, 5025);
     			attr_dev(g4, "class", "action-type-node-container");
-    			add_location(g4, file$i, 92, 8, 5071);
+    			add_location(g4, file$j, 92, 8, 5071);
     			attr_dev(g5, "class", "outcomes-label-container");
-    			add_location(g5, file$i, 93, 8, 5124);
+    			add_location(g5, file$j, 93, 8, 5124);
     			attr_dev(g6, "class", "flow-diagram svelte-8cg3va");
     			set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, 0px)");
     			toggle_class(g6, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 3);
-    			add_location(g6, file$i, 90, 4, 4886);
+    			add_location(g6, file$j, 90, 4, 4886);
     			attr_dev(g7, "id", "type-vis-container");
-    			add_location(g7, file$i, 79, 0, 3787);
+    			add_location(g7, file$j, 79, 0, 3787);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -37435,7 +38162,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$i.name,
+    		id: create_fragment$j.name,
     		type: "component",
     		source: "",
     		ctx
@@ -37444,7 +38171,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$i($$self, $$props, $$invalidate) {
+    function instance$j($$self, $$props, $$invalidate) {
     	let $data;
     	let $ui;
     	validate_store(data, 'data');
@@ -37548,13 +38275,13 @@ var app = (function (exports) {
     class Type extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$i, create_fragment$i, safe_not_equal, { dims: 0, typeData: 2 });
+    		init$1(this, options, instance$j, create_fragment$j, safe_not_equal, { dims: 0, typeData: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Type",
     			options,
-    			id: create_fragment$i.name
+    			id: create_fragment$j.name
     		});
     	}
 
@@ -37578,7 +38305,7 @@ var app = (function (exports) {
     /* src/components/byPage/adaptation/vis/ClimateVariables.svelte generated by Svelte v3.48.0 */
 
     const { Object: Object_1 } = globals;
-    const file$h = "src/components/byPage/adaptation/vis/ClimateVariables.svelte";
+    const file$i = "src/components/byPage/adaptation/vis/ClimateVariables.svelte";
 
     function get_each_context$a(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -37738,7 +38465,7 @@ var app = (function (exports) {
     				target: [/*targetPos*/ ctx[25].x, /*targetPos*/ ctx[25].y]
     			}));
 
-    			add_location(path, file$h, 142, 24, 6904);
+    			add_location(path, file$i, 142, 24, 6904);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -37829,17 +38556,17 @@ var app = (function (exports) {
     			text1 = svg_element("text");
     			attr_dev(path, "class", "gridline time svelte-vsezfc");
     			attr_dev(path, "d", path_d_value = "M" + /*scaleX*/ ctx[3](/*year*/ ctx[17]) + ", " + (-/*chartDims*/ ctx[2].height - 10) + " V" + /*dims*/ ctx[0].height * 0.715);
-    			add_location(path, file$h, 154, 20, 7474);
+    			add_location(path, file$i, 154, 20, 7474);
     			attr_dev(text0, "class", "label-year svelte-vsezfc");
     			attr_dev(text0, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
     			attr_dev(text0, "y", -/*chartDims*/ ctx[2].height - 20);
-    			add_location(text0, file$h, 155, 20, 7598);
+    			add_location(text0, file$i, 155, 20, 7598);
     			attr_dev(text1, "class", "label-year svelte-vsezfc");
     			attr_dev(text1, "x", /*scaleX*/ ctx[3](/*year*/ ctx[17]));
     			attr_dev(text1, "y", text1_y_value = /*dims*/ ctx[0].height * 0.715 + 15);
-    			add_location(text1, file$h, 156, 20, 7711);
+    			add_location(text1, file$i, 156, 20, 7711);
     			set_style(g, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			add_location(g, file$h, 153, 16, 7366);
+    			add_location(g, file$i, 153, 16, 7366);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -37977,28 +38704,28 @@ var app = (function (exports) {
     			t3 = text$1(t3_value);
     			attr_dev(path0, "class", "gridline svelte-vsezfc");
     			attr_dev(path0, "d", path0_d_value = "M" + 50 + ", 0 H" + (/*dims*/ ctx[0].width * 0.67 - 50));
-    			add_location(path0, file$h, 170, 20, 9047);
+    			add_location(path0, file$i, 170, 20, 9047);
     			attr_dev(text0, "class", "variable-label svelte-vsezfc");
     			set_style(text0, "transform", "translate(" + 50 + "px, " + -10 + "px)");
-    			add_location(text0, file$h, 171, 20, 9136);
+    			add_location(text0, file$i, 171, 20, 9136);
     			attr_dev(path1, "class", "area-chart rcp-45 svelte-vsezfc");
     			attr_dev(path1, "d", path1_d_value = /*chartPath*/ ctx[5](/*chartData45*/ ctx[10], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
-    			add_location(path1, file$h, 176, 28, 9504);
+    			add_location(path1, file$i, 176, 28, 9504);
     			attr_dev(path2, "class", "area-chart rcp-85 svelte-vsezfc");
     			attr_dev(path2, "d", path2_d_value = /*chartPath*/ ctx[5](/*chartData85*/ ctx[11], /*scaleY*/ ctx[15], /*d*/ ctx[9].Variable));
-    			add_location(path2, file$h, 177, 28, 9619);
+    			add_location(path2, file$i, 177, 28, 9619);
     			attr_dev(text1, "class", "unit-label svelte-vsezfc");
     			set_style(text1, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*max*/ ctx[13]) + 6) + "px)");
-    			add_location(text1, file$h, 178, 28, 9734);
+    			add_location(text1, file$i, 178, 28, 9734);
     			attr_dev(text2, "class", "unit-label svelte-vsezfc");
     			set_style(text2, "transform", "translate(" + (/*chartDims*/ ctx[2].width + 5) + "px, " + (/*scaleY*/ ctx[15](/*min*/ ctx[14]) + 6) + "px)");
-    			add_location(text2, file$h, 181, 28, 9971);
+    			add_location(text2, file$i, 181, 28, 9971);
     			set_style(g0, "transform", "translate(0px, " + -/*scaleY*/ ctx[15](0) + "px)");
-    			add_location(g0, file$h, 175, 24, 9420);
+    			add_location(g0, file$i, 175, 24, 9420);
     			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, " + 0 + "px)");
-    			add_location(g1, file$h, 174, 20, 9307);
+    			add_location(g1, file$i, 174, 20, 9307);
     			set_style(g2, "transform", "translate(" + 0 + "px, " + /*dims*/ ctx[0].variableSpacing * /*i*/ ctx[8] + "px)");
-    			add_location(g2, file$h, 169, 16, 8955);
+    			add_location(g2, file$i, 169, 16, 8955);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g2, anchor);
@@ -38117,14 +38844,14 @@ var app = (function (exports) {
     			attr_dev(path, "class", "hazard-icon svelte-vsezfc");
     			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[6].Hazard)]);
     			set_style(path, "transform", "translate(0px, -100px) scale(2)");
-    			add_location(path, file$h, 194, 16, 10588);
+    			add_location(path, file$i, 194, 16, 10588);
     			attr_dev(text0, "class", "hazard-label svelte-vsezfc");
-    			add_location(text0, file$h, 195, 16, 10718);
+    			add_location(text0, file$i, 195, 16, 10718);
     			attr_dev(text1, "class", "hazard-trend projection svelte-vsezfc");
     			attr_dev(text1, "y", "35");
-    			add_location(text1, file$h, 196, 16, 10789);
+    			add_location(text1, file$i, 196, 16, 10789);
     			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * 0.825 + "px, " + (/*i*/ ctx[8] / /*$data*/ ctx[1].schema.hazards.data.length * /*dims*/ ctx[0].height * 0.7 + /*dims*/ ctx[0].height * 0.3 + 20) + "px)");
-    			add_location(g, file$h, 193, 12, 10426);
+    			add_location(g, file$i, 193, 12, 10426);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -38160,7 +38887,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$h(ctx) {
+    function create_fragment$i(ctx) {
     	let figure;
     	let svg;
     	let defs;
@@ -38314,90 +39041,90 @@ var app = (function (exports) {
 
     			attr_dev(stop0, "stop-color", "#e21ffc");
     			attr_dev(stop0, "offset", "10%");
-    			add_location(stop0, file$h, 97, 16, 4133);
+    			add_location(stop0, file$i, 97, 16, 4133);
     			attr_dev(stop1, "stop-color", "#00ffff");
     			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$h, 98, 16, 4191);
+    			add_location(stop1, file$i, 98, 16, 4191);
     			attr_dev(linearGradient, "id", "rcp");
     			attr_dev(linearGradient, "x1", "0");
     			attr_dev(linearGradient, "y1", "0");
     			attr_dev(linearGradient, "x2", "100%");
     			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$h, 96, 12, 4057);
-    			add_location(defs, file$h, 95, 8, 4038);
+    			add_location(linearGradient, file$i, 96, 12, 4057);
+    			add_location(defs, file$i, 95, 8, 4038);
     			attr_dev(rect, "class", "bg svelte-vsezfc");
     			attr_dev(rect, "x", "-300");
     			attr_dev(rect, "y", "0");
     			attr_dev(rect, "width", rect_width_value = /*dims*/ ctx[0].width + 600);
     			attr_dev(rect, "height", rect_height_value = /*dims*/ ctx[0].height);
-    			add_location(rect, file$h, 103, 8, 4289);
+    			add_location(rect, file$i, 103, 8, 4289);
     			attr_dev(text0, "class", "source svelte-vsezfc");
     			attr_dev(text0, "x", text0_x_value = /*dims*/ ctx[0].width - 50);
     			attr_dev(text0, "y", text0_y_value = /*dims*/ ctx[0].height - 50);
-    			add_location(text0, file$h, 104, 8, 4385);
+    			add_location(text0, file$i, 104, 8, 4385);
     			attr_dev(text1, "class", "header svelte-vsezfc");
-    			add_location(text1, file$h, 108, 16, 4693);
+    			add_location(text1, file$i, 108, 16, 4693);
     			attr_dev(text2, "class", "sub-header svelte-vsezfc");
     			attr_dev(text2, "y", "40");
-    			add_location(text2, file$h, 109, 16, 4758);
+    			add_location(text2, file$i, 109, 16, 4758);
     			attr_dev(text3, "class", "sub-header svelte-vsezfc");
     			attr_dev(text3, "y", "70");
-    			add_location(text3, file$h, 110, 16, 4854);
+    			add_location(text3, file$i, 110, 16, 4854);
     			attr_dev(text4, "class", "sub-header svelte-vsezfc");
     			attr_dev(text4, "y", "100");
-    			add_location(text4, file$h, 111, 16, 4950);
+    			add_location(text4, file$i, 111, 16, 4950);
     			set_style(g0, "transform", "translate(" + 50 + "px, 0px)");
-    			add_location(g0, file$h, 107, 12, 4631);
+    			add_location(g0, file$i, 107, 12, 4631);
     			attr_dev(text5, "class", "header projection svelte-vsezfc");
-    			add_location(text5, file$h, 114, 16, 5154);
+    			add_location(text5, file$i, 114, 16, 5154);
     			attr_dev(text6, "class", "sub-header svelte-vsezfc");
     			attr_dev(text6, "y", "40");
-    			add_location(text6, file$h, 115, 16, 5223);
+    			add_location(text6, file$i, 115, 16, 5223);
     			attr_dev(tspan0, "class", "rcp-45 svelte-vsezfc");
-    			add_location(tspan0, file$h, 116, 50, 5349);
+    			add_location(tspan0, file$i, 116, 50, 5349);
     			attr_dev(tspan1, "class", "rcp-85 svelte-vsezfc");
-    			add_location(tspan1, file$h, 116, 92, 5391);
+    			add_location(tspan1, file$i, 116, 92, 5391);
     			attr_dev(text7, "class", "sub-header svelte-vsezfc");
     			attr_dev(text7, "y", "70");
-    			add_location(text7, file$h, 116, 16, 5315);
+    			add_location(text7, file$i, 116, 16, 5315);
     			attr_dev(text8, "class", "sub-header svelte-vsezfc");
     			attr_dev(text8, "y", "100");
-    			add_location(text8, file$h, 117, 16, 5463);
+    			add_location(text8, file$i, 117, 16, 5463);
     			set_style(g1, "transform", "translate(" + (/*dims*/ ctx[0].width * 0.5 - /*chartDims*/ ctx[2].width * 0.5) + "px, 0px)");
-    			add_location(g1, file$h, 113, 12, 5054);
+    			add_location(g1, file$i, 113, 12, 5054);
     			attr_dev(text9, "class", "header svelte-vsezfc");
-    			add_location(text9, file$h, 120, 16, 5642);
+    			add_location(text9, file$i, 120, 16, 5642);
     			attr_dev(text10, "class", "sub-header svelte-vsezfc");
     			attr_dev(text10, "y", "40");
-    			add_location(text10, file$h, 121, 16, 5696);
+    			add_location(text10, file$i, 121, 16, 5696);
     			attr_dev(text11, "class", "sub-header svelte-vsezfc");
     			attr_dev(text11, "y", "70");
-    			add_location(text11, file$h, 122, 16, 5786);
+    			add_location(text11, file$i, 122, 16, 5786);
     			attr_dev(text12, "class", "sub-header svelte-vsezfc");
     			attr_dev(text12, "y", "100");
-    			add_location(text12, file$h, 123, 16, 5877);
+    			add_location(text12, file$i, 123, 16, 5877);
     			set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.725 + "px, 0px)");
-    			add_location(g2, file$h, 119, 12, 5564);
+    			add_location(g2, file$i, 119, 12, 5564);
     			set_style(g3, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g3, file$h, 106, 8, 4568);
+    			add_location(g3, file$i, 106, 8, 4568);
     			attr_dev(g4, "class", "links-group");
-    			add_location(g4, file$h, 127, 8, 5979);
+    			add_location(g4, file$i, 127, 8, 5979);
     			attr_dev(g5, "class", "text-wrap-layer");
-    			add_location(g5, file$h, 159, 12, 7859);
+    			add_location(g5, file$i, 159, 12, 7859);
     			attr_dev(g6, "class", "chart-group");
     			set_style(g6, "transform", "translate(0px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
-    			add_location(g6, file$h, 151, 8, 7205);
+    			add_location(g6, file$i, 151, 8, 7205);
     			attr_dev(g7, "class", "hazards-group");
-    			add_location(g7, file$h, 190, 8, 10316);
+    			add_location(g7, file$i, 190, 8, 10316);
     			attr_dev(svg, "version", "1.1");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg, "xmlns:xlink", "http://www.w3.org/1999/xlink");
     			attr_dev(svg, "class", "climate-variables-vis svelte-vsezfc");
     			attr_dev(svg, "viewBox", svg_viewBox_value = "0 0 " + /*dims*/ ctx[0].width + " " + /*dims*/ ctx[0].height);
     			attr_dev(svg, "width", "100%");
-    			add_location(svg, file$h, 93, 4, 3836);
+    			add_location(svg, file$i, 93, 4, 3836);
     			attr_dev(figure, "class", "svg-container svelte-vsezfc");
-    			add_location(figure, file$h, 92, 0, 3799);
+    			add_location(figure, file$i, 92, 0, 3799);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38609,7 +39336,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$h.name,
+    		id: create_fragment$i.name,
     		type: "component",
     		source: "",
     		ctx
@@ -38618,7 +39345,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$h($$self, $$props, $$invalidate) {
+    function instance$i($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(1, $data = $$value));
@@ -38751,13 +39478,13 @@ var app = (function (exports) {
     class ClimateVariables extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$h, create_fragment$h, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$i, create_fragment$i, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ClimateVariables",
     			options,
-    			id: create_fragment$h.name
+    			id: create_fragment$i.name
     		});
     	}
 
@@ -38771,7 +39498,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/adaptation/vis/ClimateHazards.svelte generated by Svelte v3.48.0 */
-    const file$g = "src/components/byPage/adaptation/vis/ClimateHazards.svelte";
+    const file$h = "src/components/byPage/adaptation/vis/ClimateHazards.svelte";
 
     function get_each_context$9(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -38803,12 +39530,12 @@ var app = (function (exports) {
     			t1 = text$1("Stress");
     			attr_dev(text0, "class", "type-label shock svelte-1ktcv8p");
     			set_style(text0, "transform", "translate(" + (/*dims*/ ctx[1].width - 50) + "px, " + 0 + "px)");
-    			add_location(text0, file$g, 83, 16, 3899);
+    			add_location(text0, file$h, 83, 16, 3899);
     			attr_dev(text1, "class", "type-label stress svelte-1ktcv8p");
     			set_style(text1, "transform", "translate(" + 50 + "px, " + 0 + "px)");
-    			add_location(text1, file$g, 84, 16, 4018);
+    			add_location(text1, file$h, 84, 16, 4018);
     			set_style(g, "transform", "translate(" + 0 + "px, " + (/*dims*/ ctx[1].width * 0.25 + /*offset*/ ctx[7]) + "px)");
-    			add_location(g, file$g, 82, 12, 3811);
+    			add_location(g, file$h, 82, 12, 3811);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -38850,11 +39577,11 @@ var app = (function (exports) {
     			attr_dev(path, "class", "hazard-icon svelte-1ktcv8p");
     			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[4].Hazard)]);
     			set_style(path, "transform", "translate(0px, -80px) scale(1.25)");
-    			add_location(path, file$g, 92, 16, 4486);
+    			add_location(path, file$h, 92, 16, 4486);
     			attr_dev(text_1, "class", "hazard-label svelte-1ktcv8p");
-    			add_location(text_1, file$g, 93, 16, 4618);
+    			add_location(text_1, file$h, 93, 16, 4618);
     			set_style(g, "transform", "translate(0px, " + (/*eventsByHazard*/ ctx[3][/*i*/ ctx[6]] / /*$data*/ ctx[0].schema.hazardEvents.data.length * /*dims*/ ctx[1].height * 0.8 + /*dims*/ ctx[1].height * 0.2) + "px)");
-    			add_location(g, file$g, 91, 12, 4322);
+    			add_location(g, file$h, 91, 12, 4322);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -38888,7 +39615,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$g(ctx) {
+    function create_fragment$h(ctx) {
     	let figure;
     	let svg;
     	let defs;
@@ -38959,46 +39686,46 @@ var app = (function (exports) {
     			g3 = svg_element("g");
     			attr_dev(stop0, "stop-color", "hsl(50, 100%, 70%)");
     			attr_dev(stop0, "offset", "10%");
-    			add_location(stop0, file$g, 67, 16, 2956);
+    			add_location(stop0, file$h, 67, 16, 2956);
     			attr_dev(stop1, "stop-color", "hsl(320, 100%, 50%)");
     			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$g, 68, 16, 3025);
+    			add_location(stop1, file$h, 68, 16, 3025);
     			attr_dev(linearGradient, "id", "gr-hazard");
     			attr_dev(linearGradient, "x1", "0");
     			attr_dev(linearGradient, "y1", "0");
     			attr_dev(linearGradient, "x2", "100%");
     			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$g, 66, 12, 2874);
-    			add_location(defs, file$g, 65, 8, 2855);
+    			add_location(linearGradient, file$h, 66, 12, 2874);
+    			add_location(defs, file$h, 65, 8, 2855);
     			attr_dev(tspan, "class", "hazard-text svelte-1ktcv8p");
-    			add_location(tspan, file$g, 74, 48, 3305);
+    			add_location(tspan, file$h, 74, 48, 3305);
     			attr_dev(text0, "class", "header svelte-1ktcv8p");
-    			add_location(text0, file$g, 74, 16, 3273);
+    			add_location(text0, file$h, 74, 16, 3273);
     			attr_dev(text1, "class", "sub-header svelte-1ktcv8p");
     			attr_dev(text1, "y", "40");
-    			add_location(text1, file$g, 75, 16, 3392);
+    			add_location(text1, file$h, 75, 16, 3392);
     			attr_dev(text2, "class", "sub-header svelte-1ktcv8p");
     			attr_dev(text2, "y", "70");
-    			add_location(text2, file$g, 76, 16, 3535);
+    			add_location(text2, file$h, 76, 16, 3535);
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g0, file$g, 73, 12, 3197);
+    			add_location(g0, file$h, 73, 12, 3197);
     			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g1, file$g, 72, 8, 3134);
+    			add_location(g1, file$h, 72, 8, 3134);
     			attr_dev(g2, "class", "shock-stress-group");
-    			add_location(g2, file$g, 80, 8, 3713);
+    			add_location(g2, file$h, 80, 8, 3713);
     			attr_dev(g3, "class", "event-description-group");
-    			add_location(g3, file$g, 96, 12, 4722);
+    			add_location(g3, file$h, 96, 12, 4722);
     			attr_dev(g4, "class", "hazards-group");
     			set_style(g4, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g4, file$g, 89, 8, 4169);
+    			add_location(g4, file$h, 89, 8, 4169);
     			attr_dev(svg, "version", "1.1");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg, "xmlns:xlink", "http://www.w3.org/1999/xlink");
     			attr_dev(svg, "class", "climate-hazards-vis svelte-1ktcv8p");
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
-    			add_location(svg, file$g, 63, 4, 2668);
+    			add_location(svg, file$h, 63, 4, 2668);
     			attr_dev(figure, "class", "svg-container svelte-1ktcv8p");
-    			add_location(figure, file$g, 62, 0, 2631);
+    			add_location(figure, file$h, 62, 0, 2631);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39095,7 +39822,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$g.name,
+    		id: create_fragment$h.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39108,7 +39835,7 @@ var app = (function (exports) {
     const eventOffset = 72.5;
     const textLength = 550;
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$h($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
@@ -39166,19 +39893,19 @@ var app = (function (exports) {
     class ClimateHazards extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$g, create_fragment$g, safe_not_equal, {});
+    		init$1(this, options, instance$h, create_fragment$h, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ClimateHazards",
     			options,
-    			id: create_fragment$g.name
+    			id: create_fragment$h.name
     		});
     	}
     }
 
     /* src/components/byPage/adaptation/vis/ClimateRisks.svelte generated by Svelte v3.48.0 */
-    const file$f = "src/components/byPage/adaptation/vis/ClimateRisks.svelte";
+    const file$g = "src/components/byPage/adaptation/vis/ClimateRisks.svelte";
 
     function get_each_context$8(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -39213,7 +39940,7 @@ var app = (function (exports) {
     			attr_dev(ellipse0, "ry", /*dims*/ ctx[1].width * 0.125);
     			set_style(ellipse0, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
     			set_style(ellipse0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
-    			add_location(ellipse0, file$f, 45, 20, 2216);
+    			add_location(ellipse0, file$g, 45, 20, 2216);
     			attr_dev(ellipse1, "class", "oval-fg svelte-ekibjj");
     			attr_dev(ellipse1, "cx", "0");
     			attr_dev(ellipse1, "cy", "0");
@@ -39221,16 +39948,16 @@ var app = (function (exports) {
     			attr_dev(ellipse1, "ry", /*dims*/ ctx[1].width * 0.125);
     			set_style(ellipse1, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
     			set_style(ellipse1, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
-    			add_location(ellipse1, file$f, 46, 20, 2461);
+    			add_location(ellipse1, file$g, 46, 20, 2461);
     			attr_dev(text_1, "class", "determinant-label svelte-ekibjj");
     			attr_dev(text_1, "x", /*dims*/ ctx[1].width * 0.1 * (/*i*/ ctx[5] === 2 ? -1 : 1));
     			set_style(text_1, "transform", "rotate(" + (/*i*/ ctx[5] === 2 ? 180 : 0) + "deg)");
-    			add_location(text_1, file$f, 48, 24, 2864);
+    			add_location(text_1, file$g, 48, 24, 2864);
     			set_style(g0, "transform-origin", -/*dims*/ ctx[1].width * 0.1 + "px 0");
     			set_style(g0, "transform", "rotate(" + (/*i*/ ctx[5] * 360 / /*$data*/ ctx[0].schema.riskDeterminants.data.length - 90) + "deg)");
-    			add_location(g0, file$f, 47, 20, 2706);
+    			add_location(g0, file$g, 47, 20, 2706);
     			attr_dev(g1, "class", g1_class_value = "oval-group " + slugify(/*obj*/ ctx[3].Name) + " svelte-ekibjj");
-    			add_location(g1, file$f, 44, 16, 2151);
+    			add_location(g1, file$g, 44, 16, 2151);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g1, anchor);
@@ -39275,7 +40002,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$f(ctx) {
+    function create_fragment$g(ctx) {
     	let figure;
     	let svg;
     	let defs;
@@ -39343,60 +40070,60 @@ var app = (function (exports) {
     			t5 = text$1("Response to climate change");
     			attr_dev(stop0, "stop-color", "hsl(144, 97%, 70%)");
     			attr_dev(stop0, "offset", "30%");
-    			add_location(stop0, file$f, 27, 16, 1056);
+    			add_location(stop0, file$g, 27, 16, 1056);
     			attr_dev(stop1, "stop-color", "hsl(236, 60%, 85%)");
     			attr_dev(stop1, "offset", "90%");
-    			add_location(stop1, file$f, 28, 16, 1125);
+    			add_location(stop1, file$g, 28, 16, 1125);
     			attr_dev(linearGradient, "id", "gr-risk");
     			attr_dev(linearGradient, "x1", "0");
     			attr_dev(linearGradient, "y1", "0");
     			attr_dev(linearGradient, "x2", "100%");
     			attr_dev(linearGradient, "y2", "100%");
-    			add_location(linearGradient, file$f, 26, 12, 976);
-    			add_location(defs, file$f, 24, 8, 956);
+    			add_location(linearGradient, file$g, 26, 12, 976);
+    			add_location(defs, file$g, 24, 8, 956);
     			attr_dev(tspan, "class", "risk-text svelte-ekibjj");
-    			add_location(tspan, file$f, 34, 55, 1411);
+    			add_location(tspan, file$g, 34, 55, 1411);
     			attr_dev(text0, "class", "header svelte-ekibjj");
-    			add_location(text0, file$f, 34, 16, 1372);
+    			add_location(text0, file$g, 34, 16, 1372);
     			attr_dev(text1, "class", "sub-header svelte-ekibjj");
     			attr_dev(text1, "y", "40");
-    			add_location(text1, file$f, 35, 16, 1482);
+    			add_location(text1, file$g, 35, 16, 1482);
     			attr_dev(text2, "class", "sub-header svelte-ekibjj");
     			attr_dev(text2, "y", "70");
-    			add_location(text2, file$f, 36, 16, 1621);
+    			add_location(text2, file$g, 36, 16, 1621);
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, 0px)");
-    			add_location(g0, file$f, 33, 12, 1296);
+    			add_location(g0, file$g, 33, 12, 1296);
     			set_style(g1, "transform", "translate(" + 0 + "px, " + 100 + "px)");
-    			add_location(g1, file$f, 32, 8, 1233);
+    			add_location(g1, file$g, 32, 8, 1233);
     			attr_dev(circle, "class", "response-circle svelte-ekibjj");
     			attr_dev(circle, "r", /*dims*/ ctx[1].width * 0.35);
-    			add_location(circle, file$f, 41, 12, 1921);
+    			add_location(circle, file$g, 41, 12, 1921);
     			set_style(g2, "transform", "translate(" + /*dims*/ ctx[1].width * 0.1 + "px, " + /*dims*/ ctx[1].width * 0 + "px)");
-    			add_location(g2, file$f, 42, 12, 1991);
+    			add_location(g2, file$g, 42, 12, 1991);
     			attr_dev(text3, "class", "center-label risk-label svelte-ekibjj");
     			attr_dev(text3, "dy", "40");
-    			add_location(text3, file$f, 57, 12, 3220);
+    			add_location(text3, file$g, 57, 12, 3220);
     			attr_dev(path, "id", "response-label-path");
     			attr_dev(path, "class", "label-path svelte-ekibjj");
     			attr_dev(path, "d", circleAntiClockwise({ x: 0, y: 0 }, /*dims*/ ctx[1].width * 0.35 + 45));
-    			add_location(path, file$f, 58, 12, 3292);
+    			add_location(path, file$g, 58, 12, 3292);
     			attr_dev(textPath, "class", "response-label svelte-ekibjj");
     			attr_dev(textPath, "href", "#response-label-path");
     			attr_dev(textPath, "startOffset", "25%");
-    			add_location(textPath, file$f, 60, 16, 3447);
+    			add_location(textPath, file$g, 60, 16, 3447);
     			attr_dev(text4, "class", "svelte-ekibjj");
-    			add_location(text4, file$f, 59, 12, 3424);
+    			add_location(text4, file$g, 59, 12, 3424);
     			attr_dev(g3, "class", "risk-ovals-group");
     			set_style(g3, "transform", "translate(" + /*dims*/ ctx[1].width * 0.5 + "px, " + /*dims*/ ctx[1].height * 0.55 + "px)");
-    			add_location(g3, file$f, 40, 8, 1803);
+    			add_location(g3, file$g, 40, 8, 1803);
     			attr_dev(svg, "version", "1.1");
     			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg, "xmlns:xlink", "http://www.w3.org/1999/xlink");
     			attr_dev(svg, "class", "climate-hazards-vis svelte-ekibjj");
     			attr_dev(svg, "viewBox", "0 0 " + /*dims*/ ctx[1].width + " " + /*dims*/ ctx[1].height);
-    			add_location(svg, file$f, 22, 4, 769);
+    			add_location(svg, file$g, 22, 4, 769);
     			attr_dev(figure, "class", "svg-container svelte-ekibjj");
-    			add_location(figure, file$f, 21, 0, 732);
+    			add_location(figure, file$g, 21, 0, 732);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39468,7 +40195,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$f.name,
+    		id: create_fragment$g.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39477,7 +40204,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$g($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
@@ -39512,19 +40239,19 @@ var app = (function (exports) {
     class ClimateRisks extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$f, create_fragment$f, safe_not_equal, {});
+    		init$1(this, options, instance$g, create_fragment$g, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ClimateRisks",
     			options,
-    			id: create_fragment$f.name
+    			id: create_fragment$g.name
     		});
     	}
     }
 
     /* src/components/byPage/adaptation/RiskTable.svelte generated by Svelte v3.48.0 */
-    const file$e = "src/components/byPage/adaptation/RiskTable.svelte";
+    const file$f = "src/components/byPage/adaptation/RiskTable.svelte";
 
     function get_each_context$7(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -39560,7 +40287,7 @@ var app = (function (exports) {
     			t = text$1(t_value);
     			attr_dev(td, "class", "community-theme svelte-1fde3it");
     			attr_dev(td, "rowspan", /*spanData*/ ctx[9].count);
-    			add_location(td, file$e, 31, 12, 1263);
+    			add_location(td, file$f, 31, 12, 1263);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, td, anchor);
@@ -39618,11 +40345,11 @@ var app = (function (exports) {
     			t3 = text$1(t3_value);
     			t4 = space();
     			attr_dev(td0, "class", "community-risk svelte-1fde3it");
-    			add_location(td0, file$e, 33, 12, 1406);
+    			add_location(td0, file$f, 33, 12, 1406);
     			attr_dev(td1, "class", "hazard-event svelte-1fde3it");
-    			add_location(td1, file$e, 34, 12, 1474);
+    			add_location(td1, file$f, 34, 12, 1474);
     			attr_dev(tr, "class", "svelte-1fde3it");
-    			add_location(tr, file$e, 28, 8, 1126);
+    			add_location(tr, file$f, 28, 8, 1126);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -39660,7 +40387,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$e(ctx) {
+    function create_fragment$f(ctx) {
     	let table;
     	let thead;
     	let tr;
@@ -39698,17 +40425,17 @@ var app = (function (exports) {
     			}
 
     			attr_dev(th0, "class", "svelte-1fde3it");
-    			add_location(th0, file$e, 18, 12, 579);
+    			add_location(th0, file$f, 18, 12, 579);
     			attr_dev(th1, "class", "svelte-1fde3it");
-    			add_location(th1, file$e, 19, 12, 610);
+    			add_location(th1, file$f, 19, 12, 610);
     			attr_dev(th2, "class", "svelte-1fde3it");
-    			add_location(th2, file$e, 20, 12, 661);
+    			add_location(th2, file$f, 20, 12, 661);
     			attr_dev(tr, "class", "svelte-1fde3it");
-    			add_location(tr, file$e, 17, 8, 562);
+    			add_location(tr, file$f, 17, 8, 562);
     			attr_dev(thead, "class", "svelte-1fde3it");
-    			add_location(thead, file$e, 16, 4, 546);
+    			add_location(thead, file$f, 16, 4, 546);
     			attr_dev(table, "class", "svelte-1fde3it");
-    			add_location(table, file$e, 15, 0, 534);
+    			add_location(table, file$f, 15, 0, 534);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39763,7 +40490,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$e.name,
+    		id: create_fragment$f.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39772,7 +40499,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
+    function instance$f($$self, $$props, $$invalidate) {
     	let $data;
     	validate_store(data, 'data');
     	component_subscribe($$self, data, $$value => $$invalidate(0, $data = $$value));
@@ -39810,21 +40537,21 @@ var app = (function (exports) {
     class RiskTable extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$e, create_fragment$e, safe_not_equal, {});
+    		init$1(this, options, instance$f, create_fragment$f, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "RiskTable",
     			options,
-    			id: create_fragment$e.name
+    			id: create_fragment$f.name
     		});
     	}
     }
 
     /* src/pages/Adaptation.svelte generated by Svelte v3.48.0 */
-    const file$d = "src/pages/Adaptation.svelte";
+    const file$e = "src/pages/Adaptation.svelte";
 
-    function create_fragment$d(ctx) {
+    function create_fragment$e(ctx) {
     	let div5;
     	let div4;
     	let div1;
@@ -40051,11 +40778,11 @@ var app = (function (exports) {
     			br1 = element("br");
     			t3 = space();
     			span1 = element("span");
-    			span1.textContent = "in Hepburn";
+    			span1.textContent = "in Hepburn Shire";
     			t5 = space();
     			div2 = element("div");
     			p0 = element("p");
-    			p0.textContent = "The climate is changing and we need to make sure our community is ready to adapt to future with more frequent and severe climate-related events like bushfires, floods, droughts and heatwaves. In this section, we will: summarise the latest climate change modelling for Hepburn; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.";
+    			p0.textContent = "The climate is changing and we need to make sure our community is ready to adapt to future with more frequent and severe climate-related events like bushfires, floods, droughts and heatwaves. In this section, we will: summarise the latest climate change modelling for Hepburn Shire; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.";
     			t7 = space();
     			div3 = element("div");
     			ul0 = element("ul");
@@ -40090,7 +40817,7 @@ var app = (function (exports) {
     			t23 = text$1(" changing. The Paris Agreement - the legally binding international treaty on climate change - sets the goal of ");
     			strong0 = element("strong");
     			strong0.textContent = "limiting global warming to well below 2, preferably to 1.5 degrees celsius";
-    			t25 = text$1(", compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and draw down greenhouse gas emissions. And in Hepburn, we've been coordinating actions to reduce emissions through ");
+    			t25 = text$1(", compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and draw down greenhouse gas emissions. And in Hepburn Shire, we've been coordinating actions to reduce emissions through ");
     			a0 = element("a");
     			a0.textContent = "Z-NET Hepburn";
     			t27 = text$1(". These emissions reduction actions also known as ");
@@ -40128,7 +40855,7 @@ var app = (function (exports) {
     			t45 = text$1("It gets more interesting when we look at climate models that project how these variables might change over time. Modelling by ");
     			a1 = element("a");
     			a1.textContent = "CSIRO for the Victorian Government (DEWLP)";
-    			t47 = text$1(" for the Central Highlands region (which includes Hepburn) ");
+    			t47 = text$1(" for the Central Highlands region (which includes Hepburn Shire) ");
     			a2 = element("a");
     			a2.textContent = "projects the change in each climate variable";
     			t49 = text$1(" between 2019 and 2090. Each model projection assumes an emissions scenarios that corresponds to a \"Representative Concentration Pathway\" (RCP) that corresponds to different levels of average global warming by 2100. The ");
@@ -40143,7 +40870,7 @@ var app = (function (exports) {
     			t55 = text$1("We can (very simply) think of these as medium and higher warming scenarios. But more importantly, together they are illustrate");
     			strong4 = element("strong");
     			strong4.textContent = "the general trend and level of uncertainty";
-    			t57 = text$1(" of climate modelling for Hepburn.");
+    			t57 = text$1(" of climate modelling for Hepburn Shire.");
     			t58 = space();
     			p7 = element("p");
     			t59 = text$1("The last idea we'll consider here is ");
@@ -40195,7 +40922,7 @@ var app = (function (exports) {
     			t85 = text$1("Climate scientists - aided by models and projections - tell us that climate change will lead to ");
     			strong11 = element("strong");
     			strong11.textContent = "more frequent and more intense climate events";
-    			t87 = text$1(". Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn.");
+    			t87 = text$1(". Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn Shire.");
     			t88 = space();
     			div14 = element("div");
     			create_component(climatehazards.$$.fragment);
@@ -40251,7 +40978,7 @@ var app = (function (exports) {
     			t119 = text$1(" to climate change can also ");
     			a6 = element("a");
     			a6.textContent = "be considered as a fourth determinant or risk";
-    			t121 = text$1(". We'll look at this in more detail by examining Hepburn's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in community level.");
+    			t121 = text$1(". We'll look at this in more detail by examining Hepburn Shire's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in community level.");
     			t122 = space();
     			div17 = element("div");
     			create_component(climaterisks.$$.fragment);
@@ -40265,7 +40992,7 @@ var app = (function (exports) {
     			h24.textContent = "Climate risks and community impacts";
     			t126 = space();
     			p14 = element("p");
-    			p14.textContent = "We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn, and help us to understand what's at stake.";
+    			p14.textContent = "We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn Shire, and help us to understand what's at stake.";
     			t128 = space();
     			p15 = element("p");
     			p15.textContent = "Risks are grouped into \"risk areas\" that help to classify them into broader themes that can help us think about the wide-ranging impacts of climate hazards and events. Risks and risk areas have been sourced and reviewed by the Hepburn community and reflect their concerns, inputs and experience of how these known climate hazards affect the community.";
@@ -40285,214 +41012,214 @@ var app = (function (exports) {
     			div25 = element("div");
     			create_component(risktable.$$.fragment);
     			attr_dev(div0, "class", "hero-logo__wrapper svelte-wl02pd");
-    			add_location(div0, file$d, 22, 12, 976);
+    			add_location(div0, file$e, 22, 12, 976);
     			attr_dev(div1, "class", "hero-logo svelte-wl02pd");
-    			add_location(div1, file$d, 21, 8, 940);
+    			add_location(div1, file$e, 21, 8, 940);
     			attr_dev(span0, "class", "title--mute svelte-wl02pd");
-    			add_location(span0, file$d, 25, 12, 1090);
-    			add_location(br0, file$d, 25, 58, 1136);
-    			add_location(br1, file$d, 26, 26, 1168);
+    			add_location(span0, file$e, 25, 12, 1090);
+    			add_location(br0, file$e, 25, 58, 1136);
+    			add_location(br1, file$e, 26, 26, 1168);
     			attr_dev(span1, "class", "title--highlight svelte-wl02pd");
-    			add_location(span1, file$d, 27, 12, 1186);
+    			add_location(span1, file$e, 27, 12, 1186);
     			attr_dev(h1, "class", "hero-content__title svelte-wl02pd");
-    			add_location(h1, file$d, 24, 8, 1045);
+    			add_location(h1, file$e, 24, 8, 1045);
     			attr_dev(p0, "class", "svelte-wl02pd");
-    			add_location(p0, file$d, 30, 12, 1304);
+    			add_location(p0, file$e, 30, 12, 1310);
     			attr_dev(div2, "class", "hero-content__text svelte-wl02pd");
-    			add_location(div2, file$d, 29, 8, 1259);
+    			add_location(div2, file$e, 29, 8, 1265);
     			attr_dev(li0, "class", "select__item svelte-wl02pd");
     			attr_dev(li0, "actname", "intro");
-    			add_location(li0, file$d, 36, 16, 1875);
+    			add_location(li0, file$e, 36, 16, 1887);
     			attr_dev(li1, "class", "select__item svelte-wl02pd");
     			attr_dev(li1, "actname", "variables");
-    			add_location(li1, file$d, 37, 16, 1974);
+    			add_location(li1, file$e, 37, 16, 1986);
     			attr_dev(li2, "class", "select__item svelte-wl02pd");
     			attr_dev(li2, "actname", "hazards");
-    			add_location(li2, file$d, 38, 16, 2082);
+    			add_location(li2, file$e, 38, 16, 2094);
     			attr_dev(li3, "class", "select__item svelte-wl02pd");
     			attr_dev(li3, "actname", "climateRisk");
-    			add_location(li3, file$d, 39, 16, 2189);
+    			add_location(li3, file$e, 39, 16, 2201);
     			attr_dev(li4, "class", "select__item svelte-wl02pd");
     			attr_dev(li4, "actname", "communityRisk");
-    			add_location(li4, file$d, 40, 16, 2294);
+    			add_location(li4, file$e, 40, 16, 2306);
     			attr_dev(ul0, "class", "svelte-wl02pd");
-    			add_location(ul0, file$d, 35, 12, 1854);
+    			add_location(ul0, file$e, 35, 12, 1866);
     			attr_dev(div3, "class", "select svelte-wl02pd");
-    			add_location(div3, file$d, 33, 8, 1745);
+    			add_location(div3, file$e, 33, 8, 1757);
     			attr_dev(div4, "class", "hero-content svelte-wl02pd");
-    			add_location(div4, file$d, 19, 4, 870);
+    			add_location(div4, file$e, 19, 4, 870);
     			attr_dev(div5, "class", "hero-wrapper svelte-wl02pd");
-    			add_location(div5, file$d, 18, 0, 837);
+    			add_location(div5, file$e, 18, 0, 837);
     			attr_dev(hr0, "class", "svelte-wl02pd");
-    			add_location(hr0, file$d, 52, 16, 2689);
+    			add_location(hr0, file$e, 52, 16, 2701);
     			attr_dev(h20, "class", "svelte-wl02pd");
-    			add_location(h20, file$d, 53, 16, 2710);
-    			add_location(em0, file$d, 54, 31, 2776);
-    			add_location(strong0, file$d, 54, 153, 2898);
+    			add_location(h20, file$e, 53, 16, 2722);
+    			add_location(em0, file$e, 54, 31, 2788);
+    			add_location(strong0, file$e, 54, 153, 2910);
     			attr_dev(a0, "class", "underline");
     			attr_dev(a0, "href", "https://hepburnznet.org.au/");
     			attr_dev(a0, "target", "_blank");
-    			add_location(a0, file$d, 54, 451, 3196);
-    			add_location(em1, file$d, 54, 593, 3338);
+    			add_location(a0, file$e, 54, 457, 3214);
+    			add_location(em1, file$e, 54, 599, 3356);
     			attr_dev(p1, "class", "svelte-wl02pd");
-    			add_location(p1, file$d, 54, 16, 2761);
-    			add_location(em2, file$d, 56, 274, 3733);
+    			add_location(p1, file$e, 54, 16, 2773);
+    			add_location(em2, file$e, 56, 274, 3751);
     			attr_dev(p2, "class", "svelte-wl02pd");
-    			add_location(p2, file$d, 56, 16, 3475);
+    			add_location(p2, file$e, 56, 16, 3493);
     			attr_dev(p3, "class", "svelte-wl02pd");
-    			add_location(p3, file$d, 58, 16, 3974);
+    			add_location(p3, file$e, 58, 16, 3992);
     			attr_dev(div6, "scene", "0");
-    			add_location(div6, file$d, 51, 12, 2657);
+    			add_location(div6, file$e, 51, 12, 2669);
     			attr_dev(div7, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div7, file$d, 50, 8, 2611);
+    			add_location(div7, file$e, 50, 8, 2623);
     			if (!src_url_equal(img0.src, img0_src_value = "./static/img/christian-bass-11UT32fql64-unsplash.jpg")) attr_dev(img0, "src", img0_src_value);
     			attr_dev(img0, "alt", "");
     			attr_dev(img0, "class", "svelte-wl02pd");
-    			add_location(img0, file$d, 64, 12, 4208);
+    			add_location(img0, file$e, 64, 12, 4226);
     			attr_dev(div8, "class", "vis-wrapper svelte-wl02pd");
-    			add_location(div8, file$d, 63, 8, 4168);
+    			add_location(div8, file$e, 63, 8, 4186);
     			attr_dev(section0, "act", "intro");
     			attr_dev(section0, "class", "section-wrapper col-1-2 svelte-wl02pd");
-    			add_location(section0, file$d, 49, 4, 2544);
+    			add_location(section0, file$e, 49, 4, 2556);
     			attr_dev(hr1, "class", "svelte-wl02pd");
-    			add_location(hr1, file$d, 72, 16, 4498);
+    			add_location(hr1, file$e, 72, 16, 4516);
     			attr_dev(h21, "class", "svelte-wl02pd");
-    			add_location(h21, file$d, 73, 16, 4519);
-    			add_location(strong1, file$d, 74, 65, 4621);
+    			add_location(h21, file$e, 73, 16, 4537);
+    			add_location(strong1, file$e, 74, 65, 4639);
     			attr_dev(p4, "class", "svelte-wl02pd");
-    			add_location(p4, file$d, 74, 16, 4572);
+    			add_location(p4, file$e, 74, 16, 4590);
     			attr_dev(a1, "href", "https://www.climatechange.vic.gov.au/victorias-changing-climate");
     			attr_dev(a1, "target", "_blank");
-    			add_location(a1, file$d, 76, 145, 4971);
+    			add_location(a1, file$e, 76, 145, 4989);
     			attr_dev(a2, "href", "https://www.climatechangeinaustralia.gov.au/en/projects/victorian-climate-projections-2019/vcp19-accessing-datasets/");
     			attr_dev(a2, "target", "_blank");
-    			add_location(a2, file$d, 76, 344, 5170);
-    			add_location(strong2, file$d, 76, 758, 5584);
-    			add_location(strong3, file$d, 76, 786, 5612);
+    			add_location(a2, file$e, 76, 350, 5194);
+    			add_location(strong2, file$e, 76, 764, 5608);
+    			add_location(strong3, file$e, 76, 792, 5636);
     			attr_dev(p5, "class", "svelte-wl02pd");
-    			add_location(p5, file$d, 76, 16, 4842);
-    			add_location(strong4, file$d, 78, 145, 5909);
+    			add_location(p5, file$e, 76, 16, 4860);
+    			add_location(strong4, file$e, 78, 145, 5933);
     			attr_dev(p6, "class", "svelte-wl02pd");
-    			add_location(p6, file$d, 78, 16, 5780);
-    			add_location(strong5, file$d, 80, 56, 6081);
+    			add_location(p6, file$e, 78, 16, 5804);
+    			add_location(strong5, file$e, 80, 56, 6111);
     			attr_dev(a3, "href", "https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf");
     			attr_dev(a3, "target", "_blank");
-    			add_location(a3, file$d, 80, 169, 6194);
+    			add_location(a3, file$e, 80, 169, 6224);
     			attr_dev(a4, "href", "https://adaptgrampians.com.au/");
     			attr_dev(a4, "target", "_blank");
-    			add_location(a4, file$d, 80, 390, 6415);
-    			add_location(strong6, file$d, 80, 516, 6541);
-    			add_location(strong7, file$d, 80, 590, 6615);
+    			add_location(a4, file$e, 80, 390, 6445);
+    			add_location(strong6, file$e, 80, 516, 6571);
+    			add_location(strong7, file$e, 80, 590, 6645);
     			attr_dev(p7, "class", "svelte-wl02pd");
-    			add_location(p7, file$d, 80, 16, 6041);
+    			add_location(p7, file$e, 80, 16, 6071);
     			attr_dev(div9, "scene", "0");
-    			add_location(div9, file$d, 71, 12, 4466);
+    			add_location(div9, file$e, 71, 12, 4484);
     			attr_dev(div10, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div10, file$d, 70, 8, 4420);
+    			add_location(div10, file$e, 70, 8, 4438);
     			attr_dev(div11, "class", "vis-wrapper svelte-wl02pd");
-    			add_location(div11, file$d, 85, 8, 6746);
+    			add_location(div11, file$e, 85, 8, 6776);
     			attr_dev(section1, "act", "variables");
     			attr_dev(section1, "class", "section-wrapper col-2-1 svelte-wl02pd");
-    			add_location(section1, file$d, 69, 4, 4349);
+    			add_location(section1, file$e, 69, 4, 4367);
     			attr_dev(hr2, "class", "svelte-wl02pd");
-    			add_location(hr2, file$d, 94, 16, 7020);
+    			add_location(hr2, file$e, 94, 16, 7050);
     			attr_dev(h22, "class", "svelte-wl02pd");
-    			add_location(h22, file$d, 95, 16, 7041);
-    			add_location(strong8, file$d, 96, 91, 7174);
+    			add_location(h22, file$e, 95, 16, 7071);
+    			add_location(strong8, file$e, 96, 91, 7204);
     			attr_dev(p8, "class", "svelte-wl02pd");
-    			add_location(p8, file$d, 96, 16, 7099);
-    			add_location(strong9, file$d, 98, 24, 7337);
-    			add_location(li5, file$d, 98, 20, 7333);
-    			add_location(strong10, file$d, 99, 24, 7496);
-    			add_location(li6, file$d, 99, 20, 7492);
+    			add_location(p8, file$e, 96, 16, 7129);
+    			add_location(strong9, file$e, 98, 24, 7367);
+    			add_location(li5, file$e, 98, 20, 7363);
+    			add_location(strong10, file$e, 99, 24, 7526);
+    			add_location(li6, file$e, 99, 20, 7522);
     			attr_dev(ul1, "class", "svelte-wl02pd");
-    			add_location(ul1, file$d, 97, 16, 7308);
-    			add_location(strong11, file$d, 101, 115, 7727);
+    			add_location(ul1, file$e, 97, 16, 7338);
+    			add_location(strong11, file$e, 101, 115, 7757);
     			attr_dev(p9, "class", "svelte-wl02pd");
-    			add_location(p9, file$d, 101, 16, 7628);
+    			add_location(p9, file$e, 101, 16, 7658);
     			attr_dev(div12, "scene", "0");
-    			add_location(div12, file$d, 93, 12, 6988);
+    			add_location(div12, file$e, 93, 12, 7018);
     			attr_dev(div13, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div13, file$d, 92, 8, 6942);
+    			add_location(div13, file$e, 92, 8, 6972);
     			attr_dev(div14, "class", "vis-wrapper svelte-wl02pd");
-    			add_location(div14, file$d, 106, 8, 7956);
+    			add_location(div14, file$e, 106, 8, 7992);
     			attr_dev(section2, "act", "hazards");
     			attr_dev(section2, "class", "section-wrapper col-1-2 svelte-wl02pd");
-    			add_location(section2, file$d, 91, 4, 6873);
+    			add_location(section2, file$e, 91, 4, 6903);
     			attr_dev(hr3, "class", "svelte-wl02pd");
-    			add_location(hr3, file$d, 115, 16, 8247);
+    			add_location(hr3, file$e, 115, 16, 8283);
     			attr_dev(h23, "class", "svelte-wl02pd");
-    			add_location(h23, file$d, 116, 16, 8268);
+    			add_location(h23, file$e, 116, 16, 8304);
     			attr_dev(a5, "href", "https://www.ipcc.ch/site/assets/uploads/2021/02/Risk-guidance-FINAL_15Feb2021.pdf");
     			attr_dev(a5, "target", "_blank");
-    			add_location(a5, file$d, 117, 79, 8369);
-    			add_location(strong12, file$d, 117, 211, 8501);
-    			add_location(em3, file$d, 117, 369, 8659);
-    			add_location(em4, file$d, 117, 421, 8711);
+    			add_location(a5, file$e, 117, 79, 8405);
+    			add_location(strong12, file$e, 117, 211, 8537);
+    			add_location(em3, file$e, 117, 369, 8695);
+    			add_location(em4, file$e, 117, 421, 8747);
     			attr_dev(p10, "class", "svelte-wl02pd");
-    			add_location(p10, file$d, 117, 16, 8306);
-    			add_location(strong13, file$d, 119, 165, 8937);
-    			add_location(strong14, file$d, 119, 483, 9255);
-    			add_location(strong15, file$d, 119, 513, 9285);
+    			add_location(p10, file$e, 117, 16, 8342);
+    			add_location(strong13, file$e, 119, 165, 8973);
+    			add_location(strong14, file$e, 119, 483, 9291);
+    			add_location(strong15, file$e, 119, 513, 9321);
     			attr_dev(p11, "class", "svelte-wl02pd");
-    			add_location(p11, file$d, 119, 16, 8788);
-    			add_location(strong16, file$d, 121, 362, 9701);
-    			add_location(strong17, file$d, 121, 402, 9741);
+    			add_location(p11, file$e, 119, 16, 8824);
+    			add_location(strong16, file$e, 121, 362, 9737);
+    			add_location(strong17, file$e, 121, 402, 9777);
     			attr_dev(p12, "class", "svelte-wl02pd");
-    			add_location(p12, file$d, 121, 16, 9355);
-    			add_location(strong18, file$d, 123, 23, 9991);
+    			add_location(p12, file$e, 121, 16, 9391);
+    			add_location(strong18, file$e, 123, 23, 10027);
     			attr_dev(a6, "href", "https://www.sciencedirect.com/science/article/pii/S2590332221001792");
     			attr_dev(a6, "target", "_blank");
-    			add_location(a6, file$d, 123, 76, 10044);
+    			add_location(a6, file$e, 123, 76, 10080);
     			attr_dev(p13, "class", "svelte-wl02pd");
-    			add_location(p13, file$d, 123, 16, 9984);
+    			add_location(p13, file$e, 123, 16, 10020);
     			attr_dev(div15, "scene", "0");
-    			add_location(div15, file$d, 114, 12, 8215);
+    			add_location(div15, file$e, 114, 12, 8251);
     			attr_dev(div16, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div16, file$d, 113, 8, 8169);
+    			add_location(div16, file$e, 113, 8, 8205);
     			attr_dev(div17, "class", "vis-wrapper svelte-wl02pd");
-    			add_location(div17, file$d, 128, 8, 10438);
+    			add_location(div17, file$e, 128, 8, 10480);
     			attr_dev(section3, "act", "climateRisk");
     			attr_dev(section3, "class", "section-wrapper col-2-1 svelte-wl02pd");
-    			add_location(section3, file$d, 112, 4, 8096);
+    			add_location(section3, file$e, 112, 4, 8132);
     			attr_dev(hr4, "class", "svelte-wl02pd");
-    			add_location(hr4, file$d, 137, 16, 10737);
+    			add_location(hr4, file$e, 137, 16, 10779);
     			attr_dev(h24, "class", "svelte-wl02pd");
-    			add_location(h24, file$d, 138, 16, 10758);
+    			add_location(h24, file$e, 138, 16, 10800);
     			attr_dev(p14, "class", "svelte-wl02pd");
-    			add_location(p14, file$d, 139, 16, 10820);
+    			add_location(p14, file$e, 139, 16, 10862);
     			attr_dev(p15, "class", "svelte-wl02pd");
-    			add_location(p15, file$d, 141, 16, 11261);
+    			add_location(p15, file$e, 141, 16, 11309);
     			attr_dev(div18, "scene", "0");
-    			add_location(div18, file$d, 136, 12, 10705);
+    			add_location(div18, file$e, 136, 12, 10747);
     			attr_dev(div19, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div19, file$d, 135, 8, 10659);
+    			add_location(div19, file$e, 135, 8, 10701);
     			if (!src_url_equal(img1.src, img1_src_value = "./static/img/david-clode-Yg_sNKOiXvY-unsplash.jpg")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "");
     			attr_dev(img1, "class", "svelte-wl02pd");
-    			add_location(img1, file$d, 146, 12, 11703);
+    			add_location(img1, file$e, 146, 12, 11751);
     			attr_dev(div20, "class", "vis-wrapper svelte-wl02pd");
-    			add_location(div20, file$d, 145, 8, 11663);
+    			add_location(div20, file$e, 145, 8, 11711);
     			attr_dev(section4, "act", "communityRisk");
     			attr_dev(section4, "class", "section-wrapper col-1-2 svelte-wl02pd");
-    			add_location(section4, file$d, 134, 4, 10584);
+    			add_location(section4, file$e, 134, 4, 10626);
     			attr_dev(div21, "class", "invert-bg-clip svelte-wl02pd");
-    			add_location(div21, file$d, 153, 12, 11963);
+    			add_location(div21, file$e, 153, 12, 12011);
     			attr_dev(div22, "class", "invert-bg svelte-wl02pd");
-    			add_location(div22, file$d, 152, 8, 11924);
+    			add_location(div22, file$e, 152, 8, 11972);
     			attr_dev(h25, "class", "svelte-wl02pd");
-    			add_location(h25, file$d, 157, 16, 12100);
+    			add_location(h25, file$e, 157, 16, 12148);
     			attr_dev(div23, "scene", "0");
-    			add_location(div23, file$d, 156, 12, 12068);
+    			add_location(div23, file$e, 156, 12, 12116);
     			attr_dev(div24, "class", "narrative-wrapper svelte-wl02pd");
-    			add_location(div24, file$d, 155, 8, 12022);
+    			add_location(div24, file$e, 155, 8, 12070);
     			attr_dev(div25, "class", "table-wrapper svelte-wl02pd");
-    			add_location(div25, file$d, 160, 8, 12191);
+    			add_location(div25, file$e, 160, 8, 12239);
     			attr_dev(section5, "act", "communityImpact");
     			attr_dev(section5, "class", "section-wrapper table invert svelte-wl02pd");
-    			add_location(section5, file$d, 151, 4, 11842);
+    			add_location(section5, file$e, 151, 4, 11890);
     			attr_dev(div26, "class", "content-wrapper svelte-wl02pd");
-    			add_location(div26, file$d, 47, 0, 2470);
+    			add_location(div26, file$e, 47, 0, 2482);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40745,7 +41472,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$d.name,
+    		id: create_fragment$e.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40754,7 +41481,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$d($$self, $$props, $$invalidate) {
+    function instance$e($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Adaptation', slots, []);
 
@@ -40786,13 +41513,13 @@ var app = (function (exports) {
     class Adaptation extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$d, create_fragment$d, safe_not_equal, {});
+    		init$1(this, options, instance$e, create_fragment$e, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Adaptation",
     			options,
-    			id: create_fragment$d.name
+    			id: create_fragment$e.name
     		});
     	}
     }
@@ -40802,7 +41529,7 @@ var app = (function (exports) {
     function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
     /*!
-     * Observer 3.10.4
+     * Observer 3.11.4
      * https://greensock.com
      *
      * @license Copyright 2008-2022, GreenSock. All rights reserved.
@@ -40824,6 +41551,7 @@ var app = (function (exports) {
         _root$1,
         _normalizer$1,
         _eventTypes,
+        _context$1,
         _getGSAP$1 = function _getGSAP() {
       return gsap$1 || typeof window !== "undefined" && (gsap$1 = window.gsap) && gsap$1.registerPlugin && gsap$1;
     },
@@ -40925,15 +41653,23 @@ var app = (function (exports) {
         _getScrollFunc = function _getScrollFunc(element, _ref) {
       var s = _ref.s,
           sc = _ref.sc;
+      // we store the scroller functions in an alternating sequenced Array like [element, verticalScrollFunc, horizontalScrollFunc, ...] so that we can minimize memory, maximize performance, and we also record the last position as a ".rec" property in order to revert to that after refreshing to ensure things don't shift around.
+      _isViewport$1(element) && (element = _doc$1.scrollingElement || _docEl$1);
 
-      // we store the scroller functions in a alternating sequenced Array like [element, verticalScrollFunc, horizontalScrollFunc, ...] so that we can minimize memory, maximize performance, and we also record the last position as a ".rec" property in order to revert to that after refreshing to ensure things don't shift around.
       var i = _scrollers.indexOf(element),
           offset = sc === _vertical.sc ? 1 : 2;
 
       !~i && (i = _scrollers.push(element) - 1);
-      return _scrollers[i + offset] || (_scrollers[i + offset] = _scrollCacheFunc(_getProxyProp(element, s), true) || (_isViewport$1(element) ? sc : _scrollCacheFunc(function (value) {
+      _scrollers[i + offset] || element.addEventListener("scroll", _onScroll$1); // clear the cache when a scroll occurs
+
+      var prev = _scrollers[i + offset],
+          func = prev || (_scrollers[i + offset] = _scrollCacheFunc(_getProxyProp(element, s), true) || (_isViewport$1(element) ? sc : _scrollCacheFunc(function (value) {
         return arguments.length ? element[s] = value : element[s];
       })));
+      func.target = element;
+      prev || (func.smooth = gsap$1.getProperty(element, "scrollBehavior") === "smooth"); // only set it the first time (don't reset every time a scrollFunc is requested because perhaps it happens during a refresh() when it's disabled in ScrollTrigger.
+
+      return func;
     },
         _getVelocityProp = function _getVelocityProp(value, minTimeRefresh, useDelta) {
       var v1 = value,
@@ -40999,6 +41735,9 @@ var app = (function (exports) {
         _body$1 = _doc$1.body;
         _root$1 = [_win$1, _doc$1, _docEl$1, _body$1];
         gsap$1.utils.clamp;
+
+        _context$1 = gsap$1.core.context || function () {};
+
         _pointerType = "onpointerenter" in _body$1 ? "pointer" : "mouse"; // isTouch is 0 if no touch, 1 if ONLY touch, and 2 if it can accommodate touch but also other types like mouse/pointer.
 
         _isTouch = Observer.isTouch = _win$1.matchMedia && _win$1.matchMedia("(hover: none), (pointer: coarse)").matches ? 1 : "ontouchstart" in _win$1 || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0 ? 2 : 0;
@@ -41072,7 +41811,7 @@ var app = (function (exports) {
         this.target = target = _getTarget(target) || _docEl$1;
         this.vars = vars;
         ignore && (ignore = gsap$1.utils.toArray(ignore));
-        tolerance = tolerance || 0;
+        tolerance = tolerance || 1e-9;
         dragMinimum = dragMinimum || 0;
         wheelSpeed = wheelSpeed || 1;
         scrollSpeed = scrollSpeed || 1;
@@ -41144,15 +41883,16 @@ var app = (function (exports) {
 
           if (moved || dragged) {
             onMove && onMove(self);
-            onLockAxis && locked && onLockAxis(self);
 
             if (dragged) {
               onDrag(self);
               dragged = false;
             }
 
-            moved = locked = false;
+            moved = false;
           }
+
+          locked && !(locked = false) && onLockAxis && onLockAxis(self);
 
           if (wheeled) {
             onWheel(self);
@@ -41172,6 +41912,11 @@ var app = (function (exports) {
           debounce ? id || (id = requestAnimationFrame(update)) : update();
         },
             onTouchOrPointerDelta = function onTouchOrPointerDelta(x, y) {
+          if (lockAxis && !axis) {
+            self.axis = axis = Math.abs(x) > Math.abs(y) ? "x" : "y";
+            locked = true;
+          }
+
           if (axis !== "y") {
             deltaX[2] += x;
 
@@ -41183,11 +41928,6 @@ var app = (function (exports) {
             deltaY[2] += y;
 
             self._vy.update(y, true);
-          }
-
-          if (lockAxis && !axis) {
-            self.axis = axis = Math.abs(x) > Math.abs(y) ? "x" : "y";
-            locked = true;
           }
 
           debounce ? id || (id = requestAnimationFrame(update)) : update();
@@ -41244,11 +41984,12 @@ var app = (function (exports) {
 
           _removeListener$1(isNormalizer ? target : ownerDoc, _eventTypes[1], _onDrag, true);
 
-          var wasDragging = self.isDragging && (Math.abs(self.x - self.startX) > 3 || Math.abs(self.y - self.startY) > 3),
+          var isTrackingDrag = !isNaN(self.y - self.startY),
+              wasDragging = self.isDragging && (Math.abs(self.x - self.startX) > 3 || Math.abs(self.y - self.startY) > 3),
               // some touch devices need some wiggle room in terms of sensing clicks - the finger may move a few pixels.
           eventData = _getEvent(e);
 
-          if (!wasDragging) {
+          if (!wasDragging && isTrackingDrag) {
             self._vx.reset();
 
             self._vy.reset();
@@ -41338,6 +42079,8 @@ var app = (function (exports) {
         self.scrollY = scrollFuncY;
         self.isDragging = self.isGesturing = self.isPressed = false;
 
+        _context$1(this);
+
         self.enable = function (e) {
           if (!self.isEnabled) {
             _addListener$1(isViewport ? ownerDoc : target, "scroll", _onScroll$1);
@@ -41413,7 +42156,7 @@ var app = (function (exports) {
           }
         };
 
-        self.kill = function () {
+        self.kill = self.revert = function () {
           self.disable();
 
           var i = _observers.indexOf(self);
@@ -41442,7 +42185,7 @@ var app = (function (exports) {
 
       return Observer;
     }();
-    Observer.version = "3.10.4";
+    Observer.version = "3.11.4";
 
     Observer.create = function (vars) {
       return new Observer(vars);
@@ -41463,7 +42206,7 @@ var app = (function (exports) {
     _getGSAP$1() && gsap$1.registerPlugin(Observer);
 
     /*!
-     * ScrollTrigger 3.10.4
+     * ScrollTrigger 3.11.4
      * https://greensock.com
      *
      * @license Copyright 2008-2022, GreenSock. All rights reserved.
@@ -41499,6 +42242,8 @@ var app = (function (exports) {
         _baseScreenHeight,
         _baseScreenWidth,
         _fixIOSBug,
+        _context,
+        _scrollRestoration,
         _limitCallbacks,
         // if true, we'll only trigger callbacks if the active state toggles, so if you scroll immediately past both the start and end positions of a ScrollTrigger (thus inactive to inactive), neither its onEnter nor onLeave will be called. This is useful during startup.
     _startup = 1,
@@ -41574,21 +42319,6 @@ var app = (function (exports) {
     },
         _isObject = function _isObject(value) {
       return typeof value === "object";
-    },
-        _callIfFunc = function _callIfFunc(value) {
-      return _isFunction(value) && value();
-    },
-        _combineFunc = function _combineFunc(f1, f2) {
-      return function () {
-        var result1 = _callIfFunc(f1),
-            result2 = _callIfFunc(f2);
-
-        return function () {
-          _callIfFunc(result1);
-
-          _callIfFunc(result2);
-        };
-      };
     },
         _endAnimation = function _endAnimation(animation, reversed, pause) {
       return animation && animation.progress(reversed ? 0 : 1) && pause && animation.pause();
@@ -41818,14 +42548,21 @@ var app = (function (exports) {
         _ids = {},
         _rafID,
         _sync = function _sync() {
-      return _getTime() - _lastScrollTime > 34 && _updateAll();
+      return _getTime() - _lastScrollTime > 34 && (_rafID || (_rafID = requestAnimationFrame(_updateAll)));
     },
         _onScroll = function _onScroll() {
       // previously, we tried to optimize performance by batching/deferring to the next requestAnimationFrame(), but discovered that Safari has a few bugs that make this unworkable (especially on iOS). See https://codepen.io/GreenSock/pen/16c435b12ef09c38125204818e7b45fc?editors=0010 and https://codepen.io/GreenSock/pen/JjOxYpQ/3dd65ccec5a60f1d862c355d84d14562?editors=0010 and https://codepen.io/GreenSock/pen/ExbrPNa/087cef197dc35445a0951e8935c41503?editors=0010
       if (!_normalizer || !_normalizer.isPressed || _normalizer.startX > _body.clientWidth) {
         // if the user is dragging the scrollbar, allow it.
         _scrollers.cache++;
-        _rafID || (_rafID = requestAnimationFrame(_updateAll));
+
+        if (_normalizer) {
+          _rafID || (_rafID = requestAnimationFrame(_updateAll));
+        } else {
+          _updateAll(); // Safari in particular (on desktop) NEEDS the immediate update rather than waiting for a requestAnimationFrame() whereas iOS seems to benefit from waiting for the requestAnimationFrame() tick, at least when normalizing. See https://codepen.io/GreenSock/pen/qBYozqO?editors=0110
+
+        }
+
         _lastScrollTime || _dispatch("scrollStart");
         _lastScrollTime = _getTime();
       }
@@ -41841,45 +42578,6 @@ var app = (function (exports) {
         // ignore resizes triggered by refresh()
     _listeners = {},
         _emptyArray = [],
-        _media = [],
-        _creatingMedia,
-        // when ScrollTrigger.matchMedia() is called, we record the current media key here (like "(min-width: 800px)") so that we can assign it to everything that's created during that call. Then we can revert just those when necessary. In the ScrollTrigger's init() call, the _creatingMedia is recorded as a "media" property on the instance.
-    _lastMediaTick,
-        _onMediaChange = function _onMediaChange(e) {
-      var tick = gsap.ticker.frame,
-          matches = [],
-          i = 0,
-          index;
-
-      if (_lastMediaTick !== tick || _startup) {
-        _revertAll();
-
-        for (; i < _media.length; i += 4) {
-          index = _win.matchMedia(_media[i]).matches;
-
-          if (index !== _media[i + 3]) {
-            // note: some browsers fire the matchMedia event multiple times, like when going full screen, so we shouldn't call the function multiple times. Check to see if it's already matched.
-            _media[i + 3] = index;
-            index ? matches.push(i) : _revertAll(1, _media[i]) || _isFunction(_media[i + 2]) && _media[i + 2](); // Firefox doesn't update the "matches" property of the MediaQueryList object correctly - it only does so as it calls its change handler - so we must re-create a media query here to ensure it's accurate.
-          }
-        }
-
-        _revertRecorded(); // in case killing/reverting any of the animations actually added inline styles back.
-
-
-        for (i = 0; i < matches.length; i++) {
-          index = matches[i];
-          _creatingMedia = _media[index];
-          _media[index + 2] = _media[index + 1](e);
-        }
-
-        _creatingMedia = 0;
-        _coreInitted && _refreshAll(0, 1);
-        _lastMediaTick = tick;
-
-        _dispatch("matchMedia");
-      }
-    },
         _softRefresh = function _softRefresh() {
       return _removeListener(ScrollTrigger, "scrollEnd", _softRefresh) || _refreshAll(true);
     },
@@ -41892,7 +42590,7 @@ var app = (function (exports) {
         // when ScrollTrigger.saveStyles() is called, the inline styles are recorded in this Array in a sequential format like [element, cssText, gsCache, media]. This keeps it very memory-efficient and fast to iterate through.
     _revertRecorded = function _revertRecorded(media) {
       for (var i = 0; i < _savedStyles.length; i += 5) {
-        if (!media || _savedStyles[i + 4] === media) {
+        if (!media || _savedStyles[i + 4] && _savedStyles[i + 4].query === media) {
           _savedStyles[i].style.cssText = _savedStyles[i + 1];
           _savedStyles[i].getBBox && _savedStyles[i].setAttribute("transform", _savedStyles[i + 2] || "");
           _savedStyles[i + 3].uncache = 1;
@@ -41905,11 +42603,11 @@ var app = (function (exports) {
       for (_i = 0; _i < _triggers.length; _i++) {
         trigger = _triggers[_i];
 
-        if (!media || trigger.media === media) {
+        if (trigger && (!media || trigger._ctx === media)) {
           if (kill) {
             trigger.kill(1);
           } else {
-            trigger.revert();
+            trigger.revert(true, true);
           }
         }
       }
@@ -41917,14 +42615,26 @@ var app = (function (exports) {
       media && _revertRecorded(media);
       media || _dispatch("revert");
     },
-        _clearScrollMemory = function _clearScrollMemory() {
-      return _scrollers.cache++ && _scrollers.forEach(function (obj) {
-        return typeof obj === "function" && (obj.rec = 0);
+        _clearScrollMemory = function _clearScrollMemory(scrollRestoration, force) {
+      // zero-out all the recorded scroll positions. Don't use _triggers because if, for example, .matchMedia() is used to create some ScrollTriggers and then the user resizes and it removes ALL ScrollTriggers, and then go back to a size where there are ScrollTriggers, it would have kept the position(s) saved from the initial state.
+      _scrollers.cache++;
+      (force || !_refreshingAll) && _scrollers.forEach(function (obj) {
+        return _isFunction(obj) && obj.cacheID++ && (obj.rec = 0);
       });
+      _isString(scrollRestoration) && (_win.history.scrollRestoration = _scrollRestoration = scrollRestoration);
     },
-        // zero-out all the recorded scroll positions. Don't use _triggers because if, for example, .matchMedia() is used to create some ScrollTriggers and then the user resizes and it removes ALL ScrollTriggers, and then go back to a size where there are ScrollTriggers, it would have kept the position(s) saved from the initial state.
-    _refreshingAll,
+        _refreshingAll,
         _refreshID = 0,
+        _queueRefreshID,
+        _queueRefreshAll = function _queueRefreshAll() {
+      // we don't want to call _refreshAll() every time we create a new ScrollTrigger (for performance reasons) - it's better to batch them. Some frameworks dynamically load content and we can't rely on the window's "load" or "DOMContentLoaded" events to trigger it.
+      if (_queueRefreshID !== _refreshID) {
+        var id = _queueRefreshID = _refreshID;
+        requestAnimationFrame(function () {
+          return id === _refreshID && _refreshAll(true);
+        });
+      }
+    },
         _refreshAll = function _refreshAll(force, skipRevert) {
       if (_lastScrollTime && !force) {
         _addListener(ScrollTrigger, "scrollEnd", _softRefresh);
@@ -41932,20 +42642,44 @@ var app = (function (exports) {
         return;
       }
 
-      _refreshingAll = true;
+      _refreshingAll = ScrollTrigger.isRefreshing = true;
+
+      _scrollers.forEach(function (obj) {
+        return _isFunction(obj) && obj.cacheID++ && (obj.rec = obj());
+      }); // force the clearing of the cache because some browsers take a little while to dispatch the "scroll" event and the user may have changed the scroll position and then called ScrollTrigger.refresh() right away
+
 
       var refreshInits = _dispatch("refreshInit");
 
       _sort && ScrollTrigger.sort();
       skipRevert || _revertAll();
 
+      _scrollers.forEach(function (obj) {
+        if (_isFunction(obj)) {
+          obj.smooth && (obj.target.style.scrollBehavior = "auto"); // smooth scrolling interferes
+
+          obj(0);
+        }
+      });
+
       _triggers.slice(0).forEach(function (t) {
         return t.refresh();
       }); // don't loop with _i because during a refresh() someone could call ScrollTrigger.update() which would iterate through _i resulting in a skip.
 
 
+      _triggers.forEach(function (t, i) {
+        // nested pins (pinnedContainer) with pinSpacing may expand the container, so we must accommodate that here.
+        if (t._subPinOffset && t.pin) {
+          var prop = t.vars.horizontal ? "offsetWidth" : "offsetHeight",
+              original = t.pin[prop];
+          t.revert(true, 1);
+          t.adjustPinSpacing(t.pin[prop] - original);
+          t.revert(false, 1);
+        }
+      });
+
       _triggers.forEach(function (t) {
-        return t.vars.end === "max" && t.setPositions(t.start, _maxScroll(t.scroller, t._dir));
+        return t.vars.end === "max" && t.setPositions(t.start, Math.max(t.start + 1, _maxScroll(t.scroller, t._dir)));
       }); // the scroller's max scroll position may change after all the ScrollTriggers refreshed (like pinning could push it down), so we need to loop back and correct any with end: "max".
 
 
@@ -41953,22 +42687,38 @@ var app = (function (exports) {
         return result && result.render && result.render(-1);
       }); // if the onRefreshInit() returns an animation (typically a gsap.set()), revert it. This makes it easy to put things in a certain spot before refreshing for measurement purposes, and then put things back.
 
-      _clearScrollMemory();
+      _scrollers.forEach(function (obj) {
+        if (_isFunction(obj)) {
+          obj.smooth && requestAnimationFrame(function () {
+            return obj.target.style.scrollBehavior = "smooth";
+          });
+          obj.rec && obj(obj.rec);
+        }
+      });
+
+      _clearScrollMemory(_scrollRestoration, 1);
 
       _resizeDelay.pause();
 
       _refreshID++;
-      _refreshingAll = false;
+
+      _updateAll(2);
+
+      _triggers.forEach(function (t) {
+        return _isFunction(t.vars.onRefresh) && t.vars.onRefresh(t);
+      });
+
+      _refreshingAll = ScrollTrigger.isRefreshing = false;
 
       _dispatch("refresh");
     },
         _lastScroll = 0,
         _direction = 1,
         _primary,
-        _updateAll = function _updateAll() {
-      if (!_refreshingAll) {
+        _updateAll = function _updateAll(force) {
+      if (!_refreshingAll || force === 2) {
         ScrollTrigger.isUpdating = true;
-        _primary && _primary.update(0); // ScrollSmoother users refreshPriority -9999 to become the primary that gets updated before all others because it affects the scroll position.
+        _primary && _primary.update(0); // ScrollSmoother uses refreshPriority -9999 to become the primary that gets updated before all others because it affects the scroll position.
 
         var l = _triggers.length,
             time = _getTime(),
@@ -42017,7 +42767,7 @@ var app = (function (exports) {
 
       if (cache.spacerIsNative) {
         _setState(cache.spacerState);
-      } else if (pin.parentNode === spacer) {
+      } else if (pin._gsap.swappedIn) {
         var parent = spacer.parentNode;
 
         if (parent) {
@@ -42025,9 +42775,11 @@ var app = (function (exports) {
           parent.removeChild(spacer);
         }
       }
+
+      pin._gsap.swappedIn = false;
     },
         _swapPinIn = function _swapPinIn(pin, spacer, cs, spacerState) {
-      if (pin.parentNode !== spacer) {
+      if (!pin._gsap.swappedIn) {
         var i = _propNamesToCopy.length,
             spacerStyle = spacer.style,
             pinStyle = pin.style,
@@ -42040,7 +42792,8 @@ var app = (function (exports) {
 
         spacerStyle.position = cs.position === "absolute" ? "absolute" : "relative";
         cs.display === "inline" && (spacerStyle.display = "inline-block");
-        pinStyle[_bottom] = pinStyle[_right] = spacerStyle.flexBasis = "auto";
+        pinStyle[_bottom] = pinStyle[_right] = "auto";
+        spacerStyle.flexBasis = cs.flexBasis || "auto";
         spacerStyle.overflow = "visible";
         spacerStyle.boxSizing = "border-box";
         spacerStyle[_width] = _getSize(pin, _horizontal) + _px;
@@ -42052,8 +42805,13 @@ var app = (function (exports) {
         pinStyle[_width] = pinStyle["max" + _Width] = cs[_width];
         pinStyle[_height] = pinStyle["max" + _Height] = cs[_height];
         pinStyle[_padding] = cs[_padding];
-        pin.parentNode.insertBefore(spacer, pin);
-        spacer.appendChild(pin);
+
+        if (pin.parentNode !== spacer) {
+          pin.parentNode.insertBefore(spacer, pin);
+          spacer.appendChild(pin);
+        }
+
+        pin._gsap.swappedIn = true;
       }
     },
         _capsExp = /([A-Z])/g,
@@ -42134,7 +42892,7 @@ var app = (function (exports) {
 
       if (!_isNumber(value)) {
         _isFunction(trigger) && (trigger = trigger(self));
-        var offsets = value.split(" "),
+        var offsets = (value || "0").split(" "),
             bounds,
             localOffset,
             globalOffset,
@@ -42239,9 +42997,9 @@ var app = (function (exports) {
         vars.modifiers = modifiers;
 
         modifiers[prop] = function (value) {
-          value = _round(getScroll()); // round because in some [very uncommon] Windows environments, it can get reported with decimals even though it was set without.
+          value = Math.round(getScroll()); // round because in some [very uncommon] Windows environments, it can get reported with decimals even though it was set without.
 
-          if (value !== lastScroll1 && value !== lastScroll2 && Math.abs(value - lastScroll1) > 2 && Math.abs(value - lastScroll2) > 2) {
+          if (value !== lastScroll1 && value !== lastScroll2 && Math.abs(value - lastScroll1) > 3 && Math.abs(value - lastScroll2) > 3) {
             // if the user scrolls, kill the tween. iOS Safari intermittently misreports the scroll position, it may be the most recently-set one or the one before that! When Safari is zoomed (CMD-+), it often misreports as 1 pixel off too! So if we set the scroll position to 125, for example, it'll actually report it as 124.
             tween.kill();
             getTween.tween = 0;
@@ -42250,7 +43008,13 @@ var app = (function (exports) {
           }
 
           lastScroll2 = lastScroll1;
-          return lastScroll1 = _round(value);
+          return lastScroll1 = Math.round(value);
+        };
+
+        vars.onUpdate = function () {
+          _scrollers.cache++;
+
+          _updateAll();
         };
 
         vars.onComplete = function () {
@@ -42360,6 +43124,7 @@ var app = (function (exports) {
             spacingStart,
             spacerState,
             markerStartSetter,
+            pinMoves,
             markerEndSetter,
             cs,
             snap1,
@@ -42374,7 +43139,8 @@ var app = (function (exports) {
             caMarkerSetter,
             customRevertReturn;
 
-        self.media = _creatingMedia;
+        _context(self);
+
         self._dir = direction;
         anticipatePin *= 45;
         self.scroller = scroller;
@@ -42415,7 +43181,7 @@ var app = (function (exports) {
 
         if (animation) {
           animation.vars.lazy = false;
-          animation._initted || animation.vars.immediateRender !== false && vars.immediateRender !== false && animation.render(0, true, true);
+          animation._initted || animation.vars.immediateRender !== false && vars.immediateRender !== false && animation.duration() && animation.render(0, true, true);
           self.animation = animation.pause();
           animation.scrollTrigger = self;
           self.scrubDuration(scrub);
@@ -42426,6 +43192,7 @@ var app = (function (exports) {
         _triggers.push(self);
 
         if (snap) {
+          // TODO: potential idea: use legitimate CSS scroll snapping by pushing invisible elements into the DOM that serve as snap positions, and toggle the document.scrollingElement.style.scrollSnapType onToggle. See https://codepen.io/GreenSock/pen/JjLrgWM for a quick proof of concept.
           if (!_isObject(snap) || snap.push) {
             snap = {
               snapTo: snap
@@ -42435,6 +43202,11 @@ var app = (function (exports) {
           "scrollBehavior" in _body.style && gsap.set(isViewport ? [_body, _docEl] : scroller, {
             scrollBehavior: "auto"
           }); // smooth scrolling doesn't work with snap.
+
+          _scrollers.forEach(function (o) {
+            return _isFunction(o) && o.target === (isViewport ? _doc.scrollingElement || _docEl : scroller) && (o.smooth = false);
+          }); // note: set smooth to false on both the vertical and horizontal scroll getters/setters
+
 
           snapFunc = _isFunction(snap.snapTo) ? snap.snapTo : snap.snapTo === "labels" ? _getClosestLabel(animation) : snap.snapTo === "labelsDirectional" ? _getLabelAtDirection(animation) : snap.directional !== false ? function (value, st) {
             return _snapDirectional(snap.snapTo)(value, _getTime() - lastRefresh < 500 ? 0 : st.direction);
@@ -42508,12 +43280,9 @@ var app = (function (exports) {
         });
 
         if (pin) {
-          pinSpacing === false || pinSpacing === _margin || (pinSpacing = !pinSpacing && _getComputedStyle(pin.parentNode).display === "flex" ? false : _padding); // if the parent is display: flex, don't apply pinSpacing by default.
+          pinSpacing === false || pinSpacing === _margin || (pinSpacing = !pinSpacing && pin.parentNode && pin.parentNode.style && _getComputedStyle(pin.parentNode).display === "flex" ? false : _padding); // if the parent is display: flex, don't apply pinSpacing by default. We should check that pin.parentNode is an element (not shadow dom window)
 
           self.pin = pin;
-          vars.force3D !== false && gsap.set(pin, {
-            force3D: true
-          });
           pinCache = gsap.core.getCache(pin);
 
           if (!pinCache.spacer) {
@@ -42534,6 +43303,9 @@ var app = (function (exports) {
             pinOriginalState = pinCache.pinState;
           }
 
+          vars.force3D !== false && gsap.set(pin, {
+            force3D: true
+          });
           self.spacer = spacer = pinCache.spacer;
           cs = _getComputedStyle(pin);
           spacingStart = cs[pinSpacing + direction.os2];
@@ -42585,13 +43357,21 @@ var app = (function (exports) {
           return _triggers[_triggers.indexOf(self) + 1];
         };
 
-        self.revert = function (revert) {
+        self.revert = function (revert, temp) {
+          if (!temp) {
+            return self.kill(true);
+          } // for compatibility with gsap.context() and gsap.matchMedia() which call revert()
+
+
           var r = revert !== false || !self.enabled,
               prevRefreshing = _refreshing;
 
           if (r !== self.isReverted) {
             if (r) {
-              self.scroll.rec || !_refreshing || !_refreshingAll || (self.scroll.rec = scrollFunc());
+              // if (!self.scroll.rec && (_refreshing || _refreshingAll)) {
+              // 	self.scroll.rec = scrollFunc();
+              // 	_refreshingAll && scrollFunc(0);
+              // }
               prevScroll = Math.max(scrollFunc(), self.scroll.rec || 0); // record the scroll so we can revert later (repositioning/pinning things can affect scroll position). In the static refresh() method, we first record all the scroll positions as a reference.
 
               prevProgress = self.progress;
@@ -42601,11 +43381,24 @@ var app = (function (exports) {
             markerStart && [markerStart, markerEnd, markerStartTrigger, markerEndTrigger].forEach(function (m) {
               return m.style.display = r ? "none" : "block";
             });
-            r && (_refreshing = 1);
-            self.update(r); // make sure the pin is back in its original position so that all the measurements are correct.
 
-            _refreshing = prevRefreshing;
-            pin && (r ? _swapPinOut(pin, spacer, pinOriginalState) : (!pinReparent || !self.isActive) && _swapPinIn(pin, spacer, _getComputedStyle(pin), spacerState));
+            if (r) {
+              _refreshing = 1;
+              self.update(r); // make sure the pin is back in its original position so that all the measurements are correct. do this BEFORE swapping the pin out
+            }
+
+            if (pin && (!pinReparent || !self.isActive)) {
+              if (r) {
+                _swapPinOut(pin, spacer, pinOriginalState);
+              } else {
+                _swapPinIn(pin, spacer, _getComputedStyle(pin), spacerState);
+              }
+            }
+
+            r || self.update(r); // when we're restoring, the update should run AFTER swapping the pin into its pin-spacer.
+
+            _refreshing = prevRefreshing; // restore. We set it to true during the update() so that things fire properly in there.
+
             self.isReverted = r;
           }
         };
@@ -42631,8 +43424,11 @@ var app = (function (exports) {
           }
 
           scrubTween && scrubTween.pause();
-          invalidateOnRefresh && animation && animation.time(-0.01, true).invalidate();
-          self.isReverted || self.revert();
+          invalidateOnRefresh && animation && animation.revert({
+            kill: false
+          }).invalidate();
+          self.isReverted || self.revert(true, true);
+          self._subPinOffset = false; // we'll set this to true in the sub-pins if we find any
 
           var size = getScrollerSize(),
               scrollerBounds = getScrollerOffsets(),
@@ -42654,7 +43450,8 @@ var app = (function (exports) {
               curPin,
               oppositeScroll,
               initted,
-              revertedPins;
+              revertedPins,
+              forcedOverflow;
 
           while (i--) {
             // user might try to pin the same element more than once, so we must find any prior triggers with the same pin, revert them, and determine how long they're pinning so that we can offset things appropriately. Make sure we revert from last to first so that things "rewind" properly.
@@ -42667,7 +43464,7 @@ var app = (function (exports) {
               revertedPins || (revertedPins = []);
               revertedPins.unshift(curTrigger); // we'll revert from first to last to make sure things reach their end state properly
 
-              curTrigger.revert();
+              curTrigger.revert(true, true);
             }
 
             if (curTrigger !== _triggers[i]) {
@@ -42701,10 +43498,10 @@ var app = (function (exports) {
             curTrigger = _triggers[i];
             curPin = curTrigger.pin;
 
-            if (curPin && curTrigger.start - curTrigger._pinPush < start && !containerAnimation && curTrigger.end > 0) {
+            if (curPin && curTrigger.start - curTrigger._pinPush <= start && !containerAnimation && curTrigger.end > 0) {
               cs = curTrigger.end - curTrigger.start;
 
-              if ((curPin === trigger || curPin === pinnedContainer) && !_isNumber(parsedStart)) {
+              if ((curPin === trigger && curTrigger.start - curTrigger._pinPush < start || curPin === pinnedContainer) && !_isNumber(parsedStart)) {
                 // numeric start values shouldn't be offset at all - treat them as absolute
                 offset += cs * (1 - curTrigger.progress);
               }
@@ -42731,7 +43528,16 @@ var app = (function (exports) {
             scroll = scrollFunc(); // recalculate because the triggers can affect the scroll
 
             pinStart = parseFloat(pinGetter(direction.a)) + otherPinOffset;
-            !max && end > 1 && ((isViewport ? _body : scroller).style["overflow-" + direction.a] = "scroll"); // makes sure the scroller has a scrollbar, otherwise if something has width: 100%, for example, it would be too big (exclude the scrollbar). See https://greensock.com/forums/topic/25182-scrolltrigger-width-of-page-increase-where-markers-are-set-to-false/
+
+            if (!max && end > 1) {
+              // makes sure the scroller has a scrollbar, otherwise if something has width: 100%, for example, it would be too big (exclude the scrollbar). See https://greensock.com/forums/topic/25182-scrolltrigger-width-of-page-increase-where-markers-are-set-to-false/
+              forcedOverflow = (isViewport ? _doc.scrollingElement || _docEl : scroller).style;
+              forcedOverflow = {
+                style: forcedOverflow,
+                value: forcedOverflow["overflow" + direction.a.toUpperCase()]
+              };
+              forcedOverflow["overflow" + direction.a.toUpperCase()] = "scroll";
+            }
 
             _swapPinIn(pin, spacer, cs);
 
@@ -42747,6 +43553,15 @@ var app = (function (exports) {
               i && spacerState.push(direction.d, i + _px); // for box-sizing: border-box (must include padding).
 
               _setState(spacerState);
+
+              if (pinnedContainer) {
+                // in ScrollTrigger.refresh(), we need to re-evaluate the pinContainer's size because this pinSpacing may stretch it out, but we can't just add the exact distance because depending on layout, it may not push things down or it may only do so partially.
+                _triggers.forEach(function (t) {
+                  if (t.pin === pinnedContainer && t.vars.pinSpacing !== false) {
+                    t._subPinOffset = true;
+                  }
+                });
+              }
 
               useFixedPosition && scrollFunc(prevScroll);
             }
@@ -42767,6 +43582,7 @@ var app = (function (exports) {
               override[_padding + _Bottom] = cs[_padding + _Bottom];
               override[_padding + _Left] = cs[_padding + _Left];
               pinActiveState = _copyState(pinOriginalState, override, pinReparent);
+              _refreshingAll && scrollFunc(0);
             }
 
             if (animation) {
@@ -42777,15 +43593,19 @@ var app = (function (exports) {
 
               animation.render(animation.duration(), true, true);
               pinChange = pinGetter(direction.a) - pinStart + change + otherPinOffset;
-              change !== pinChange && useFixedPosition && pinActiveState.splice(pinActiveState.length - 2, 2); // transform is the last property/value set in the state Array. Since the animation is controlling that, we should omit it.
+              pinMoves = Math.abs(change - pinChange) > 1;
+              useFixedPosition && pinMoves && pinActiveState.splice(pinActiveState.length - 2, 2); // transform is the last property/value set in the state Array. Since the animation is controlling that, we should omit it.
 
               animation.render(0, true, true);
-              initted || animation.invalidate();
+              initted || animation.invalidate(true);
+              animation.parent || animation.totalTime(animation.totalTime()); // if, for example, a toggleAction called play() and then refresh() happens and when we render(1) above, it would cause the animation to complete and get removed from its parent, so this makes sure it gets put back in.
 
               _suppressOverwrites(0);
             } else {
               pinChange = change;
             }
+
+            forcedOverflow && (forcedOverflow.value ? forcedOverflow.style["overflow" + direction.a.toUpperCase()] = forcedOverflow.value : forcedOverflow.style.removeProperty("overflow-" + direction.a));
           } else if (trigger && scrollFunc() && !containerAnimation) {
             // it may be INSIDE a pinned element, so walk up the tree and look for any elements with _pinOffset to compensate because anything with pinSpacing that's already scrolled would throw off the measurements in getBoundingClientRect()
             bounds = trigger.parentNode;
@@ -42801,18 +43621,18 @@ var app = (function (exports) {
           }
 
           revertedPins && revertedPins.forEach(function (t) {
-            return t.revert(false);
+            return t.revert(false, true);
           });
           self.start = start;
           self.end = end;
-          scroll1 = scroll2 = scrollFunc(); // reset velocity
+          scroll1 = scroll2 = _refreshingAll ? prevScroll : scrollFunc(); // reset velocity
 
-          if (!containerAnimation) {
+          if (!containerAnimation && !_refreshingAll) {
             scroll1 < prevScroll && scrollFunc(prevScroll);
             self.scroll.rec = 0;
           }
 
-          self.revert(false);
+          self.revert(false, true);
 
           if (snapDelayedCall) {
             lastSnap = -1;
@@ -42828,13 +43648,12 @@ var app = (function (exports) {
             // ensures that the direction is set properly (when refreshing, progress is set back to 0 initially, then back again to wherever it needs to be) and that callbacks are triggered.
             animation && !isToggle && animation.totalProgress(prevProgress, true); // to avoid issues where animation callbacks like onStart aren't triggered.
 
-            self.progress = prevProgress;
-            self.update(0, 0, 1);
+            self.progress = (scroll1 - start) / change === prevProgress ? 0 : prevProgress;
           }
 
           pin && pinSpacing && (spacer._pinOffset = Math.round(self.progress * pinChange)); //			scrubTween && scrubTween.invalidate();
 
-          onRefresh && onRefresh(self);
+          onRefresh && !_refreshingAll && onRefresh(self); // when refreshing all, we do extra work to correct pinnedContainer sizes and ensure things don't exceed the maxScroll, so we should do all the refreshes at the end after all that work so that the start/end values are corrected.
         };
 
         self.getVelocity = function () {
@@ -42869,7 +43688,7 @@ var app = (function (exports) {
             return;
           }
 
-          var scroll = self.scroll(),
+          var scroll = _refreshingAll ? prevScroll : self.scroll(),
               p = reset ? 0 : (scroll - start) / change,
               clipped = p < 0 ? 0 : p > 1 ? 1 : p || 0,
               prevProgress = self.progress,
@@ -42920,7 +43739,7 @@ var app = (function (exports) {
 
             if (!isToggle) {
               if (scrubTween && !_refreshing && !_startup) {
-                (containerAnimation || _primary && _primary !== self) && scrubTween.render(scrubTween._dp._time - scrubTween._start); // if there's a scrub on both the container animation and this one (or a ScrollSmoother), the update order would cause this one not to have rendered yet, so it wouldn't make any progress before we .restart() it heading toward the new progress so it'd appear stuck thus we force a render here.
+                scrubTween._dp._time - scrubTween._start !== scrubTween._time && scrubTween.render(scrubTween._dp._time - scrubTween._start); // if there's a scrub on both the container animation and this one (or a ScrollSmoother), the update order would cause this one not to have rendered yet, so it wouldn't make any progress before we .restart() it heading toward the new progress so it'd appear stuck thus we force a render here.
 
                 if (scrubTween.resetTo) {
                   scrubTween.resetTo("totalProgress", clipped, animation._tTime / animation._tDur);
@@ -42955,7 +43774,7 @@ var app = (function (exports) {
 
                 _setState(isActive || isAtMax ? pinActiveState : pinState);
 
-                pinChange !== change && clipped < 1 && isActive || pinSetter(pinStart + (clipped === 1 && !isAtMax ? pinChange : 0));
+                pinMoves && clipped < 1 && isActive || pinSetter(pinStart + (clipped === 1 && !isAtMax ? pinChange : 0));
               }
             }
 
@@ -42999,7 +43818,7 @@ var app = (function (exports) {
               if (fastScrollEnd && !isActive && Math.abs(self.getVelocity()) > (_isNumber(fastScrollEnd) ? fastScrollEnd : 2500)) {
                 _endAnimation(self.callbackAnimation);
 
-                scrubTween ? scrubTween.progress(1) : _endAnimation(animation, !clipped, 1);
+                scrubTween ? scrubTween.progress(1) : _endAnimation(animation, action === "reverse" ? 1 : !clipped, 1);
               }
             } else if (isToggle && onUpdate && !_refreshing) {
               onUpdate(self);
@@ -43044,6 +43863,7 @@ var app = (function (exports) {
           if (pin) {
             pinStart += newStart - start;
             pinChange += newEnd - newStart - change;
+            pinSpacing === _padding && self.adjustPinSpacing(newEnd - newStart - change);
           }
 
           self.start = start = newStart;
@@ -43052,9 +43872,19 @@ var app = (function (exports) {
           self.update();
         };
 
+        self.adjustPinSpacing = function (amount) {
+          if (spacerState) {
+            var i = spacerState.indexOf(direction.d) + 1;
+            spacerState[i] = parseFloat(spacerState[i]) + amount + _px;
+            spacerState[1] = parseFloat(spacerState[1]) + amount + _px;
+
+            _setState(spacerState);
+          }
+        };
+
         self.disable = function (reset, allowAnimation) {
           if (self.enabled) {
-            reset !== false && self.revert();
+            reset !== false && self.revert(true, true);
             self.enabled = self.isActive = false;
             allowAnimation || scrubTween && scrubTween.pause();
             prevScroll = 0;
@@ -43099,11 +43929,13 @@ var app = (function (exports) {
             return t.scroller === self.scroller && (i = 1);
           });
 
-          i || (self.scroll.rec = 0);
+          i || _refreshingAll || (self.scroll.rec = 0);
 
           if (animation) {
             animation.scrollTrigger = null;
-            revert && animation.render(-1);
+            revert && animation.revert({
+              kill: false
+            });
             allowAnimation || animation.kill();
           }
 
@@ -43131,6 +43963,8 @@ var app = (function (exports) {
         !animation || !animation.add || change ? self.refresh() : gsap.delayedCall(0.01, function () {
           return start || end || self.refresh();
         }) && (change = 0.01) && (start = end = 0); // if the animation is a timeline, it may not have been populated yet, so it wouldn't render at the proper place on the first refresh(), thus we should schedule one for the next tick. If "change" is defined, we know it must be re-enabling, thus we can refresh() right away.
+
+        pin && _queueRefreshAll(); // pinning could affect the positions of other things, so make sure we queue a full refresh()
       };
 
       ScrollTrigger.register = function register(core) {
@@ -43194,7 +44028,9 @@ var app = (function (exports) {
         if (gsap) {
           _toArray = gsap.utils.toArray;
           _clamp = gsap.utils.clamp;
+          _context = gsap.core.context || _passThrough;
           _suppressOverwrites = gsap.core.suppressOverwrites || _passThrough;
+          _scrollRestoration = _win.history.scrollRestoration || "auto";
           gsap.core.globals("ScrollTrigger", ScrollTrigger); // must register the global manually because in Internet Explorer, functions (classes) don't have a "name" property.
 
           if (_body) {
@@ -43208,22 +44044,56 @@ var app = (function (exports) {
 
 
             _root = [_win, _doc, _docEl, _body];
-            ScrollTrigger.matchMedia({
-              // when orientation changes, we should take new base measurements for the ignoreMobileResize feature.
-              "(orientation: portrait)": function orientationPortrait() {
+
+            if (gsap.matchMedia) {
+              ScrollTrigger.matchMedia = function (vars) {
+                var mm = gsap.matchMedia(),
+                    p;
+
+                for (p in vars) {
+                  mm.add(p, vars[p]);
+                }
+
+                return mm;
+              };
+
+              gsap.addEventListener("matchMediaInit", function () {
+                return _revertAll();
+              });
+              gsap.addEventListener("matchMediaRevert", function () {
+                return _revertRecorded();
+              });
+              gsap.addEventListener("matchMedia", function () {
+                _refreshAll(0, 1);
+
+                _dispatch("matchMedia");
+              });
+              gsap.matchMedia("(orientation: portrait)", function () {
+                // when orientation changes, we should take new base measurements for the ignoreMobileResize feature.
                 _setBaseDimensions();
 
                 return _setBaseDimensions;
-              }
-            });
+              });
+            } else {
+              console.warn("Requires GSAP 3.11.0 or later");
+            }
+
+            _setBaseDimensions();
 
             _addListener(_doc, "scroll", _onScroll); // some browsers (like Chrome), the window stops dispatching scroll events on the window if you scroll really fast, but it's consistent on the document!
 
 
             var bodyStyle = _body.style,
                 border = bodyStyle.borderTopStyle,
+                AnimationProto = gsap.core.Animation.prototype,
                 bounds,
                 i;
+            AnimationProto.revert || Object.defineProperty(AnimationProto, "revert", {
+              value: function value() {
+                return this.time(-0.01, true);
+              }
+            }); // only for backwards compatibility (Animation.revert() was added after 3.10.4)
+
             bodyStyle.borderTopStyle = "solid"; // works around an issue where a margin of a child element could throw off the bounds of the _body, making it seem like there's a margin when there actually isn't. The border ensures that the bounds are accurate.
 
             bounds = _getBounds(_body);
@@ -43306,48 +44176,10 @@ var app = (function (exports) {
         }
       };
 
-      ScrollTrigger.matchMedia = function matchMedia(vars) {
-        // _media is populated in the following order: mediaQueryString, onMatch, onUnmatch, isMatched. So if there are two media queries, the Array would have a length of 8
-        var mq, p, i, func, result;
-
-        for (p in vars) {
-          i = _media.indexOf(p);
-          func = vars[p];
-          _creatingMedia = p;
-
-          if (p === "all") {
-            func();
-          } else {
-            mq = _win.matchMedia(p);
-
-            if (mq) {
-              mq.matches && (result = func());
-
-              if (~i) {
-                _media[i + 1] = _combineFunc(_media[i + 1], func);
-                _media[i + 2] = _combineFunc(_media[i + 2], result);
-              } else {
-                i = _media.length;
-
-                _media.push(p, func, result);
-
-                mq.addListener ? mq.addListener(_onMediaChange) : mq.addEventListener("change", _onMediaChange);
-              }
-
-              _media[i + 3] = mq.matches;
-            }
-          }
-
-          _creatingMedia = 0;
-        }
-
-        return _media;
-      };
-
       ScrollTrigger.clearMatchMedia = function clearMatchMedia(query) {
-        query || (_media.length = 0);
-        query = _media.indexOf(query);
-        query >= 0 && _media.splice(query, 4);
+        _triggers.forEach(function (t) {
+          return t._ctx && t._ctx.query === query && t._ctx.kill(true, true);
+        });
       };
 
       ScrollTrigger.isInViewport = function isInViewport(element, ratio, horizontal) {
@@ -43364,9 +44196,23 @@ var app = (function (exports) {
         return horizontal ? (bounds.left + offset) / _win.innerWidth : (bounds.top + offset) / _win.innerHeight;
       };
 
+      ScrollTrigger.killAll = function killAll(allowListeners) {
+        _triggers.slice(0).forEach(function (t) {
+          return t.vars.id !== "ScrollSmoother" && t.kill();
+        });
+
+        if (allowListeners !== true) {
+          var listeners = _listeners.killAll || [];
+          _listeners = {};
+          listeners.forEach(function (f) {
+            return f();
+          });
+        }
+      };
+
       return ScrollTrigger;
     }();
-    ScrollTrigger.version = "3.10.4";
+    ScrollTrigger.version = "3.11.4";
 
     ScrollTrigger.saveStyles = function (targets) {
       return targets ? _toArray(targets).forEach(function (target) {
@@ -43376,7 +44222,7 @@ var app = (function (exports) {
 
           i >= 0 && _savedStyles.splice(i, 5);
 
-          _savedStyles.push(target, target.style.cssText, target.getBBox && target.getAttribute("transform"), gsap.core.getCache(target), _creatingMedia);
+          _savedStyles.push(target, target.style.cssText, target.getBBox && target.getAttribute("transform"), gsap.core.getCache(target), _context());
         }
       }) : _savedStyles;
     };
@@ -43393,7 +44239,10 @@ var app = (function (exports) {
       return safe ? _onResize() : (_coreInitted || ScrollTrigger.register()) && _refreshAll(true);
     };
 
-    ScrollTrigger.update = _updateAll;
+    ScrollTrigger.update = function (force) {
+      return ++_scrollers.cache && _updateAll(force === true ? 2 : 0);
+    };
+
     ScrollTrigger.clearScrollMemory = _clearScrollMemory;
 
     ScrollTrigger.maxScroll = function (element, horizontal) {
@@ -43510,15 +44359,18 @@ var app = (function (exports) {
 
       if (!cache._isScrollT || time - cache._isScrollT > 2000) {
         // cache for 2 seconds to improve performance.
-        while (node && node.scrollHeight <= node.clientHeight) {
+        while (node && node !== _body && (node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth || !(_overflow[(cs = _getComputedStyle(node)).overflowY] || _overflow[cs.overflowX]))) {
           node = node.parentNode;
         }
 
-        cache._isScroll = node && !_isViewport(node) && node !== target && (_overflow[(cs = _getComputedStyle(node)).overflowY] || _overflow[cs.overflowX]);
+        cache._isScroll = node && node !== target && !_isViewport(node) && (_overflow[(cs = _getComputedStyle(node)).overflowY] || _overflow[cs.overflowX]);
         cache._isScrollT = time;
       }
 
-      (cache._isScroll || axis === "x") && (event._gsapAllow = true);
+      if (cache._isScroll || axis === "x") {
+        event.stopPropagation();
+        event._gsapAllow = true;
+      }
     },
         // capture events on scrollable elements INSIDE the <body> and allow those by calling stopPropagation() when we find a scrollable ancestor
     _inputObserver = function _inputObserver(target, type, inputs, nested) {
@@ -43565,7 +44417,8 @@ var app = (function (exports) {
           maxY,
           target = _getTarget(vars.target) || _docEl,
           smoother = gsap.core.globals().ScrollSmoother,
-          content = _fixIOSBug && (vars.content && _getTarget(vars.content) || smoother && smoother.get() && smoother.get().content()),
+          smootherInstance = smoother && smoother.get(),
+          content = _fixIOSBug && (vars.content && _getTarget(vars.content) || smootherInstance && vars.content !== false && !smootherInstance.smooth() && smootherInstance.content()),
           scrollFuncY = _getScrollFunc(target, _vertical),
           scrollFuncX = _getScrollFunc(target, _horizontal),
           scale = 1,
@@ -43576,8 +44429,8 @@ var app = (function (exports) {
       } : function () {
         return momentum || 2.8;
       },
-          skipTouchMove,
           lastRefreshID,
+          skipTouchMove,
           inputObserver = _inputObserver(target, vars.type, true, allowNestedScroll),
           resumeTouchMove = function resumeTouchMove() {
         return skipTouchMove = false;
@@ -43590,17 +44443,25 @@ var app = (function (exports) {
         normalizeScrollX && (scrollClampX = _clamp(0, _maxScroll(target, _horizontal)));
         lastRefreshID = _refreshID;
       },
+          removeContentOffset = function removeContentOffset() {
+        content._gsap.y = _round(parseFloat(content._gsap.y) + scrollFuncY.offset) + "px";
+        content.style.transform = "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, " + parseFloat(content._gsap.y) + ", 0, 1)";
+        scrollFuncY.offset = scrollFuncY.cacheID = 0;
+      },
           ignoreDrag = function ignoreDrag() {
         if (skipTouchMove) {
-          requestAnimationFrame(resumeTouchMove); // we MUST wait for a requestAnimationFrame, otherwise iOS will misreport the value.
+          requestAnimationFrame(resumeTouchMove);
 
           var offset = _round(self.deltaY / 2),
               scroll = scrollClampY(scrollFuncY.v - offset);
 
           if (content && scroll !== scrollFuncY.v + scrollFuncY.offset) {
             scrollFuncY.offset = scroll - scrollFuncY.v;
-            content.style.transform = "translateY(" + -scrollFuncY.offset + "px)";
-            content._gsap && (content._gsap.y = -scrollFuncY.offset + "px");
+
+            var y = _round((parseFloat(content && content._gsap.y) || 0) - scrollFuncY.offset);
+
+            content.style.transform = "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, " + y + ", 0, 1)";
+            content._gsap.y = y + "px";
             scrollFuncY.cacheID = _scrollers.cache;
 
             _updateAll();
@@ -43609,12 +44470,7 @@ var app = (function (exports) {
           return true;
         }
 
-        if (content) {
-          content.style.transform = "translateY(0px)";
-          scrollFuncY.offset = scrollFuncY.cacheID = 0;
-          content._gsap && (content._gsap.y = "0px");
-        }
-
+        scrollFuncY.offset && removeContentOffset();
         skipTouchMove = true;
       },
           tween,
@@ -43630,6 +44486,10 @@ var app = (function (exports) {
         }
       };
 
+      content && gsap.set(content, {
+        y: "+=0"
+      }); // to ensure there's a cache (element._gsap)
+
       vars.ignoreCheck = function (e) {
         return _fixIOSBug && e.type === "touchmove" && ignoreDrag() || scale > 1.05 && e.type !== "touchstart" || self.isGesturing || e.touches && e.touches.length > 1;
       };
@@ -43639,7 +44499,6 @@ var app = (function (exports) {
         scale = _round((_win.visualViewport && _win.visualViewport.scale || 1) / initialScale);
         tween.pause();
         prevScale !== scale && _allowNativePanning(target, scale > 1.01 ? true : normalizeScrollX ? false : "x");
-        skipTouchMove = false;
         startScrollX = scrollFuncX();
         startScrollY = scrollFuncY();
         updateClamps();
@@ -43647,11 +44506,7 @@ var app = (function (exports) {
       };
 
       vars.onRelease = vars.onGestureStart = function (self, wasDragging) {
-        if (content) {
-          content.style.transform = "translateY(0px)";
-          scrollFuncY.offset = scrollFuncY.cacheID = 0;
-          content._gsap && (content._gsap.y = "0px");
-        }
+        scrollFuncY.offset && removeContentOffset();
 
         if (!wasDragging) {
           onStopDelayedCall.restart(true);
@@ -43702,15 +44557,29 @@ var app = (function (exports) {
         _refreshID !== lastRefreshID && updateClamps();
         dx && normalizeScrollX && scrollFuncX(scrollClampX(xArray[2] === dx ? startScrollX + (self.startX - self.x) : scrollFuncX() + dx - xArray[1])); // for more precision, we track pointer/touch movement from the start, otherwise it'll drift.
 
-        dy && scrollFuncY(scrollClampY(yArray[2] === dy ? startScrollY + (self.startY - self.y) : scrollFuncY() + dy - yArray[1]));
+        if (dy) {
+          scrollFuncY.offset && removeContentOffset();
+          var isTouch = yArray[2] === dy,
+              y = isTouch ? startScrollY + self.startY - self.y : scrollFuncY() + dy - yArray[1],
+              yClamped = scrollClampY(y);
+          isTouch && y !== yClamped && (startScrollY += yClamped - y);
+          scrollFuncY(yClamped);
+        }
 
-        _updateAll();
+        (dy || dx) && _updateAll();
       };
 
       vars.onEnable = function () {
         _allowNativePanning(target, normalizeScrollX ? false : "x");
 
+        ScrollTrigger.addEventListener("refresh", onResize);
+
         _addListener(_win, "resize", onResize);
+
+        if (scrollFuncY.smooth) {
+          scrollFuncY.target.style.scrollBehavior = "auto";
+          scrollFuncY.smooth = scrollFuncX.smooth = false;
+        }
 
         inputObserver.enable();
       };
@@ -43720,13 +44589,17 @@ var app = (function (exports) {
 
         _removeListener(_win, "resize", onResize);
 
+        ScrollTrigger.removeEventListener("refresh", onResize);
         inputObserver.kill();
       };
 
+      vars.lockAxis = vars.lockAxis !== false;
       self = new Observer(vars);
       self.iOS = _fixIOSBug; // used in the Observer getCachedScroll() function to work around an iOS bug that wreaks havoc with TouchEvent.clientY if we allow scroll to go all the way back to 0.
 
       _fixIOSBug && !scrollFuncY() && scrollFuncY(1); // iOS bug causes event.clientY values to freak out (wildly inaccurate) if the scroll position is exactly 0.
+
+      _fixIOSBug && gsap.ticker.add(_passThrough); // prevent the ticker from sleeping
 
       onStopDelayedCall = self._dc;
       tween = gsap.to(self, {
@@ -43788,25 +44661,24 @@ var app = (function (exports) {
     };
     _getGSAP() && gsap.registerPlugin(ScrollTrigger);
 
-    var gsapWithCSS = gsap$2.registerPlugin(CSSPlugin) || gsap$2; // to protect from tree shaking
-    	gsapWithCSS.core.Tween;
-
-    //BONUS EXPORTS
-    //export * from "./DrawSVGPlugin.js";
-    //export * from "./Physics2DPlugin.js";
-    //export * from "./PhysicsPropsPlugin.js";
-    //export * from "./ScrambleTextPlugin.js";
-    //export * from "./CustomBounce.js";
-    //export * from "./CustomWiggle.js";
-    //export * from "./GSDevTools.js";
-    //export * from "./InertiaPlugin.js";
-    //export * from "./MorphSVGPlugin.js";
-    //export * from "./MotionPathHelper.js";
-    //export * from "./ScrollSmoother.js";
-    //export * from "./SplitText.js";
+    var gsapWithCSS = gsap$2.registerPlugin(CSSPlugin) || gsap$2;
+        // to protect from tree shaking
+    gsapWithCSS.core.Tween;
+    // export * from "./DrawSVGPlugin.js";
+    // export * from "./Physics2DPlugin.js";
+    // export * from "./PhysicsPropsPlugin.js";
+    // export * from "./ScrambleTextPlugin.js";
+    // export * from "./CustomBounce.js";
+    // export * from "./CustomWiggle.js";
+    // export * from "./GSDevTools.js";
+    // export * from "./InertiaPlugin.js";
+    // export * from "./MorphSVGPlugin.js";
+    // export * from "./MotionPathHelper.js";
+    // export * from "./ScrollSmoother.js";
+    // export * from "./SplitText.js";
 
     /* src/components/byPage/actions/vis/Legend.svelte generated by Svelte v3.48.0 */
-    const file$c = "src/components/byPage/actions/vis/Legend.svelte";
+    const file$d = "src/components/byPage/actions/vis/Legend.svelte";
 
     function get_each_context$6(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -43840,16 +44712,16 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			attr_dev(circle, "r", /*iconRadius*/ ctx[3]);
     			attr_dev(circle, "class", "hazard-circle  svelte-1ks9sl9");
-    			add_location(circle, file$c, 25, 20, 1286);
+    			add_location(circle, file$d, 25, 20, 1286);
     			attr_dev(path, "class", "hazard-icon svelte-1ks9sl9");
     			attr_dev(path, "d", path_d_value = icons[slugify(/*obj*/ ctx[8].Hazard)]);
-    			add_location(path, file$c, 26, 20, 1358);
+    			add_location(path, file$d, 26, 20, 1358);
     			attr_dev(text_1, "class", "hazard-label svelte-1ks9sl9");
     			set_style(text_1, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 25) + "px)");
-    			add_location(text_1, file$c, 27, 20, 1447);
+    			add_location(text_1, file$d, 27, 20, 1447);
     			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*obj*/ ctx[8].Hazard)) + " svelte-1ks9sl9"));
     			set_style(g, "transform", "translate(" + /*i*/ ctx[7] * /*iconRadius*/ ctx[3] * 3.25 + "px, " + 0 + "px)");
-    			add_location(g, file$c, 24, 16, 1169);
+    			add_location(g, file$d, 24, 16, 1169);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -43903,16 +44775,16 @@ var app = (function (exports) {
     			text_1 = svg_element("text");
     			attr_dev(circle0, "r", circle0_r_value = /*$ui*/ ctx[1].vis.nodes.scales.radiusScale(/*scale*/ ctx[5]));
     			attr_dev(circle0, "class", "scale-circle  svelte-1ks9sl9");
-    			add_location(circle0, file$c, 66, 20, 4047);
+    			add_location(circle0, file$d, 66, 20, 4047);
     			attr_dev(circle1, "r", circle1_r_value = /*dims*/ ctx[0].nodeRadius + 2.5);
     			attr_dev(circle1, "class", "scale-node svelte-1ks9sl9");
-    			add_location(circle1, file$c, 67, 20, 4147);
+    			add_location(circle1, file$d, 67, 20, 4147);
     			attr_dev(text_1, "class", "scale-label svelte-1ks9sl9");
     			set_style(text_1, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 25) + "px)");
-    			add_location(text_1, file$c, 68, 20, 4226);
+    			add_location(text_1, file$d, 68, 20, 4226);
     			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*scale*/ ctx[5])) + " svelte-1ks9sl9"));
     			set_style(g, "transform", "translate(" + /*i*/ ctx[7] * /*iconRadius*/ ctx[3] * 3.35 + "px, " + 0 + "px)");
-    			add_location(g, file$c, 65, 16, 3935);
+    			add_location(g, file$d, 65, 16, 3935);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -43951,7 +44823,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$c(ctx) {
+    function create_fragment$d(ctx) {
     	let g10;
     	let g9;
     	let g1;
@@ -44064,74 +44936,74 @@ var app = (function (exports) {
 
     			attr_dev(text0, "class", "legend-title svelte-1ks9sl9");
     			set_style(text0, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text0, file$c, 21, 12, 861);
+    			add_location(text0, file$d, 21, 12, 861);
     			set_style(g0, "transform", "translate(" + -(/*$data*/ ctx[2].schema.hazards.data.length - 1) * 3.25 * 0.5 * /*iconRadius*/ ctx[3] + "px, 0px)");
-    			add_location(g0, file$c, 22, 12, 983);
+    			add_location(g0, file$d, 22, 12, 983);
     			attr_dev(g1, "class", "legend-group svelte-1ks9sl9");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.hazards + "px, 0px)");
     			toggle_class(g1, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.hazards);
-    			add_location(g1, file$c, 20, 8, 682);
+    			add_location(g1, file$d, 20, 8, 682);
     			attr_dev(text1, "class", "legend-title center svelte-1ks9sl9");
     			set_style(text1, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text1, file$c, 35, 12, 1859);
+    			add_location(text1, file$d, 35, 12, 1859);
     			attr_dev(path0, "class", "approach-group risk svelte-1ks9sl9");
     			attr_dev(path0, "d", triangle$1(/*iconRadius*/ ctx[3], 'down'));
-    			add_location(path0, file$c, 38, 20, 2097);
-    			add_location(tspan0, file$c, 40, 24, 2302);
+    			add_location(path0, file$d, 38, 20, 2097);
+    			add_location(tspan0, file$d, 40, 24, 2302);
     			attr_dev(tspan1, "dy", "20");
     			attr_dev(tspan1, "x", "0");
-    			add_location(tspan1, file$c, 41, 24, 2348);
+    			add_location(tspan1, file$d, 41, 24, 2348);
     			attr_dev(text2, "class", "approach-label risk svelte-1ks9sl9");
     			set_style(text2, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text2, file$c, 39, 20, 2186);
+    			add_location(text2, file$d, 39, 20, 2186);
     			set_style(g2, "transform", "translate(" + -/*iconRadius*/ ctx[3] * 3.5 + "px, " + 0 + "px)");
-    			add_location(g2, file$c, 37, 16, 2011);
+    			add_location(g2, file$d, 37, 16, 2011);
     			attr_dev(path1, "class", "approach-group resilience svelte-1ks9sl9");
     			attr_dev(path1, "d", triangle$1(/*iconRadius*/ ctx[3], 'up'));
     			set_style(path1, "transform", "translate(0px, " + 0 + "px)");
-    			add_location(path1, file$c, 45, 20, 2531);
-    			add_location(tspan2, file$c, 47, 24, 2784);
+    			add_location(path1, file$d, 45, 20, 2531);
+    			add_location(tspan2, file$d, 47, 24, 2784);
     			attr_dev(tspan3, "dy", "20");
     			attr_dev(tspan3, "x", "0");
-    			add_location(tspan3, file$c, 47, 45, 2805);
+    			add_location(tspan3, file$d, 47, 45, 2805);
     			attr_dev(text3, "class", "approach-label risk svelte-1ks9sl9");
     			set_style(text3, "transform", "translate(0px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text3, file$c, 46, 20, 2668);
+    			add_location(text3, file$d, 46, 20, 2668);
     			set_style(g3, "transform", "translate(" + /*iconRadius*/ ctx[3] * 3.5 + "px, " + 0 + "px)");
-    			add_location(g3, file$c, 44, 16, 2447);
+    			add_location(g3, file$d, 44, 16, 2447);
     			attr_dev(path2, "class", "approach-group risk svelte-1ks9sl9");
     			attr_dev(path2, "d", triangle$1(/*iconRadius*/ ctx[3], 'down'));
-    			add_location(path2, file$c, 51, 20, 2928);
+    			add_location(path2, file$d, 51, 20, 2928);
     			attr_dev(path3, "class", "approach-group resilience svelte-1ks9sl9");
     			attr_dev(path3, "d", triangle$1(/*iconRadius*/ ctx[3], 'up'));
-    			add_location(path3, file$c, 52, 20, 3019);
-    			add_location(tspan4, file$c, 54, 24, 3242);
+    			add_location(path3, file$d, 52, 20, 3019);
+    			add_location(tspan4, file$d, 54, 24, 3242);
     			attr_dev(tspan5, "dy", "20");
     			attr_dev(tspan5, "x", "0");
-    			add_location(tspan5, file$c, 54, 51, 3269);
+    			add_location(tspan5, file$d, 54, 51, 3269);
     			attr_dev(text4, "class", "approach-label risk resilience svelte-1ks9sl9");
     			set_style(text4, "transform", "translate(" + 0 + "px, " + (/*iconRadius*/ ctx[3] + 10) + "px)");
-    			add_location(text4, file$c, 53, 20, 3113);
-    			add_location(g4, file$c, 50, 16, 2904);
-    			add_location(g5, file$c, 36, 12, 1991);
+    			add_location(text4, file$d, 53, 20, 3113);
+    			add_location(g4, file$d, 50, 16, 2904);
+    			add_location(g5, file$d, 36, 12, 1991);
     			attr_dev(g6, "class", "legend-group svelte-1ks9sl9");
     			set_style(g6, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.approach + "px, 0px)");
     			toggle_class(g6, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.approach);
-    			add_location(g6, file$c, 34, 8, 1678);
+    			add_location(g6, file$d, 34, 8, 1678);
     			attr_dev(text5, "class", "legend-title svelte-1ks9sl9");
     			set_style(text5, "transform", "translate(0px, " + (-/*iconRadius*/ ctx[3] - 20) + "px)");
-    			add_location(text5, file$c, 62, 12, 3607);
+    			add_location(text5, file$d, 62, 12, 3607);
     			set_style(g7, "transform", "translate(" + -(/*$data*/ ctx[2].schema.hazards.data.length - 1) * 3.35 * 0.5 * /*iconRadius*/ ctx[3] + "px, 0px)");
-    			add_location(g7, file$c, 63, 12, 3725);
+    			add_location(g7, file$d, 63, 12, 3725);
     			attr_dev(g8, "class", "legend-group svelte-1ks9sl9");
     			set_style(g8, "transform", "translate(" + /*dims*/ ctx[0].width * /*$ui*/ ctx[1].state.actionVis.legend.scale + "px , 0px)");
     			toggle_class(g8, "hidden", !/*$ui*/ ctx[1].state.actionVis.legend.scale);
-    			add_location(g8, file$c, 61, 8, 3431);
+    			add_location(g8, file$d, 61, 8, 3431);
     			set_style(g9, "transform", "translate( 0px, " + (/*dims*/ ctx[0].height - 70) + "px)");
-    			add_location(g9, file$c, 18, 4, 578);
+    			add_location(g9, file$d, 18, 4, 578);
     			attr_dev(g10, "id", "legend-container");
     			attr_dev(g10, "class", "svelte-1ks9sl9");
-    			add_location(g10, file$c, 16, 0, 529);
+    			add_location(g10, file$d, 16, 0, 529);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44299,7 +45171,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$c.name,
+    		id: create_fragment$d.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44310,7 +45182,7 @@ var app = (function (exports) {
 
     const func$1 = d => d.Scale;
 
-    function instance$c($$self, $$props, $$invalidate) {
+    function instance$d($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -44365,13 +45237,13 @@ var app = (function (exports) {
     class Legend extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$c, create_fragment$c, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$d, create_fragment$d, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Legend",
     			options,
-    			id: create_fragment$c.name
+    			id: create_fragment$d.name
     		});
     	}
 
@@ -44385,7 +45257,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Force.svelte generated by Svelte v3.48.0 */
-    const file$b = "src/components/byPage/actions/vis/Force.svelte";
+    const file$c = "src/components/byPage/actions/vis/Force.svelte";
 
     function get_each_context$5(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -44420,7 +45292,7 @@ var app = (function (exports) {
     			circle = svg_element("circle");
     			attr_dev(circle, "class", circle_class_value = "node-shadow " + slugify(/*$data*/ ctx[2].schema.actionScale.data.filter(func)[0].Scale) + " svelte-ky4swr");
     			attr_dev(circle, "r", circle_r_value = /*$ui*/ ctx[3].vis.nodes.scales.radiusScale(/*$data*/ ctx[2].schema.actionScale.data.filter(func_1)[0].Scale));
-    			add_location(circle, file$b, 115, 16, 3919);
+    			add_location(circle, file$c, 115, 16, 3919);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, circle, anchor);
@@ -44472,7 +45344,7 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g, "class", "node-arcs");
-    			add_location(g, file$b, 126, 16, 4532);
+    			add_location(g, file$c, 126, 16, 4532);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -44545,7 +45417,7 @@ var app = (function (exports) {
     				endAngle: /*i*/ ctx[19] * (2 * Math.PI / /*node*/ ctx[17]["Hazard"].length) + 2 * Math.PI / /*node*/ ctx[17]["Hazard"].length
     			}));
 
-    			add_location(path, file$b, 128, 24, 4637);
+    			add_location(path, file$c, 128, 24, 4637);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -44592,7 +45464,7 @@ var app = (function (exports) {
     			g = svg_element("g");
     			if (if_block) if_block.c();
     			attr_dev(g, "class", "approach-triangles");
-    			add_location(g, file$b, 141, 16, 5299);
+    			add_location(g, file$c, 141, 16, 5299);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -44711,7 +45583,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "class", "approach-triangle resilience svelte-ky4swr");
     			attr_dev(path, "d", path_d_value = triangle$1(/*dims*/ ctx[0].nodeRadius, 'up'));
-    			add_location(path, file$b, 144, 24, 5505);
+    			add_location(path, file$c, 144, 24, 5505);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -44747,7 +45619,7 @@ var app = (function (exports) {
     			path = svg_element("path");
     			attr_dev(path, "class", "approach-triangle risk svelte-ky4swr");
     			attr_dev(path, "d", path_d_value = triangle$1(/*dims*/ ctx[0].nodeRadius, 'down'));
-    			add_location(path, file$b, 147, 24, 5726);
+    			add_location(path, file$c, 147, 24, 5726);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -44790,7 +45662,7 @@ var app = (function (exports) {
     				endAngle: 2 * Math.PI
     			}));
 
-    			add_location(path, file$b, 156, 16, 6040);
+    			add_location(path, file$c, 156, 16, 6040);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -44858,20 +45730,20 @@ var app = (function (exports) {
     			attr_dev(circle, "class", "node-base svelte-ky4swr");
     			attr_dev(circle, "r", circle_r_value = /*dims*/ ctx[0].nodeRadius);
     			toggle_class(circle, "node-color", !/*$ui*/ ctx[3].state.actionVis.nodes.base);
-    			add_location(circle, file$b, 121, 16, 4292);
+    			add_location(circle, file$c, 121, 16, 4292);
     			attr_dev(g0, "class", "node-scale-wrapper");
     			set_style(g0, "transform", "scale(1)");
-    			add_location(g0, file$b, 112, 12, 3744);
+    			add_location(g0, file$c, 112, 12, 3744);
     			attr_dev(text_1, "class", "label-text svelte-ky4swr");
-    			add_location(text_1, file$b, 169, 16, 6457);
+    			add_location(text_1, file$c, 169, 16, 6457);
     			attr_dev(g1, "class", "label svelte-ky4swr");
-    			add_location(g1, file$b, 168, 12, 6421);
+    			add_location(g1, file$c, 168, 12, 6421);
     			attr_dev(g2, "class", "node-wrapper svelte-ky4swr");
-    			add_location(g2, file$b, 110, 8, 3704);
+    			add_location(g2, file$c, 110, 8, 3704);
     			attr_dev(g3, "class", "node-group svelte-ky4swr");
     			attr_dev(g3, "index", /*i*/ ctx[19]);
     			attr_dev(g3, "style", g3_style_value = /*move*/ ctx[6](/*node*/ ctx[17].x, /*node*/ ctx[17].y));
-    			add_location(g3, file$b, 107, 4, 3516);
+    			add_location(g3, file$c, 107, 4, 3516);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g3, anchor);
@@ -44987,7 +45859,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$b(ctx) {
+    function create_fragment$c(ctx) {
     	let g;
     	let defs;
     	let linearGradient;
@@ -45026,36 +45898,36 @@ var app = (function (exports) {
     			attr_dev(stop0, "offset", "0%");
     			set_style(stop0, "stop-color", "var(--heat)");
     			set_style(stop0, "stop-opacity", "1");
-    			add_location(stop0, file$b, 97, 8, 2968);
+    			add_location(stop0, file$c, 97, 8, 2968);
     			attr_dev(stop1, "offset", "33%");
     			set_style(stop1, "stop-color", "var(--heat)");
     			set_style(stop1, "stop-opacity", "1");
-    			add_location(stop1, file$b, 98, 8, 3043);
+    			add_location(stop1, file$c, 98, 8, 3043);
     			attr_dev(stop2, "offset", "33%");
     			set_style(stop2, "stop-color", "var(--flood)");
     			set_style(stop2, "stop-opacity", "1");
-    			add_location(stop2, file$b, 99, 8, 3119);
+    			add_location(stop2, file$c, 99, 8, 3119);
     			attr_dev(stop3, "offset", "67%");
     			set_style(stop3, "stop-color", "var(--flood)");
     			set_style(stop3, "stop-opacity", "1");
-    			add_location(stop3, file$b, 100, 8, 3196);
+    			add_location(stop3, file$c, 100, 8, 3196);
     			attr_dev(stop4, "offset", "67%");
     			set_style(stop4, "stop-color", "var(--drought)");
     			set_style(stop4, "stop-opacity", "1");
-    			add_location(stop4, file$b, 101, 8, 3273);
+    			add_location(stop4, file$c, 101, 8, 3273);
     			attr_dev(stop5, "offset", "100%");
     			set_style(stop5, "stop-color", "var(--drought)");
     			set_style(stop5, "stop-opacity", "1");
-    			add_location(stop5, file$b, 102, 8, 3352);
+    			add_location(stop5, file$c, 102, 8, 3352);
     			attr_dev(linearGradient, "id", "solids");
     			attr_dev(linearGradient, "x1", "0%");
     			attr_dev(linearGradient, "y1", "0%");
     			attr_dev(linearGradient, "x2", "100%");
     			attr_dev(linearGradient, "y2", "0%");
-    			add_location(linearGradient, file$b, 96, 8, 2897);
-    			add_location(defs, file$b, 95, 4, 2882);
+    			add_location(linearGradient, file$c, 96, 8, 2897);
+    			add_location(defs, file$c, 95, 4, 2882);
     			attr_dev(g, "id", "force-vis-container");
-    			add_location(g, file$b, 94, 0, 2832);
+    			add_location(g, file$c, 94, 0, 2832);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45126,7 +45998,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$b.name,
+    		id: create_fragment$c.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45139,7 +46011,7 @@ var app = (function (exports) {
     	this.classList.remove('selected');
     }
 
-    function instance$b($$self, $$props, $$invalidate) {
+    function instance$c($$self, $$props, $$invalidate) {
     	let simulation$1;
     	let drag$1;
     	let $data;
@@ -45306,13 +46178,13 @@ var app = (function (exports) {
     class Force extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$b, create_fragment$b, safe_not_equal, { dims: 0, nodes: 8, forces: 9 });
+    		init$1(this, options, instance$c, create_fragment$c, safe_not_equal, { dims: 0, nodes: 8, forces: 9 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Force",
     			options,
-    			id: create_fragment$b.name
+    			id: create_fragment$c.name
     		});
     	}
 
@@ -45342,9 +46214,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Intro.svelte generated by Svelte v3.48.0 */
-    const file$a = "src/components/byPage/actions/vis/Intro.svelte";
+    const file$b = "src/components/byPage/actions/vis/Intro.svelte";
 
-    function create_fragment$a(ctx) {
+    function create_fragment$b(ctx) {
     	let g1;
     	let g0;
     	let text0;
@@ -45365,19 +46237,19 @@ var app = (function (exports) {
     			text2 = svg_element("text");
     			t1 = text$1("actions");
     			attr_dev(text0, "class", "number svelte-1txt3xe");
-    			add_location(text0, file$a, 18, 8, 609);
+    			add_location(text0, file$b, 18, 8, 609);
     			attr_dev(text1, "y", "100");
     			attr_dev(text1, "class", "svelte-1txt3xe");
-    			add_location(text1, file$a, 21, 8, 703);
+    			add_location(text1, file$b, 21, 8, 703);
     			attr_dev(text2, "y", "200");
     			attr_dev(text2, "class", "svelte-1txt3xe");
-    			add_location(text2, file$a, 22, 8, 744);
+    			add_location(text2, file$b, 22, 8, 744);
     			attr_dev(g0, "class", "container svelte-1txt3xe");
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.5 + "px)");
     			toggle_class(g0, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
-    			add_location(g0, file$a, 15, 4, 440);
+    			add_location(g0, file$b, 15, 4, 440);
     			attr_dev(g1, "id", "intro-vis-container");
-    			add_location(g1, file$a, 14, 0, 398);
+    			add_location(g1, file$b, 14, 0, 398);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45418,7 +46290,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$a.name,
+    		id: create_fragment$b.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45427,7 +46299,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$a($$self, $$props, $$invalidate) {
+    function instance$b($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -45473,13 +46345,13 @@ var app = (function (exports) {
     class Intro extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$a, create_fragment$a, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$b, create_fragment$b, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Intro",
     			options,
-    			id: create_fragment$a.name
+    			id: create_fragment$b.name
     		});
     	}
 
@@ -45493,7 +46365,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Hazard.svelte generated by Svelte v3.48.0 */
-    const file$9 = "src/components/byPage/actions/vis/Hazard.svelte";
+    const file$a = "src/components/byPage/actions/vis/Hazard.svelte";
 
     function get_each_context$4(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -45549,46 +46421,46 @@ var app = (function (exports) {
     				endAngle: /*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) + 2 * Math.PI / /*hazards*/ ctx[3].length
     			}));
 
-    			add_location(path0, file$9, 26, 16, 935);
+    			add_location(path0, file$a, 26, 16, 935);
     			attr_dev(path1, "class", "hazard-icon " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-19c4ts1");
     			attr_dev(path1, "d", icons[slugify(/*hazard*/ ctx[6].Hazard)]);
     			set_style(path1, "transform", "translate( " + (/*dims*/ ctx[0].width * 0.3 + 200) * Math.cos(/*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) - Math.PI / 4) + "px, " + (/*dims*/ ctx[0].width * 0.3 + 200) * Math.sin(/*i*/ ctx[8] * (2 * Math.PI / /*hazards*/ ctx[3].length) - Math.PI / 4) + "px ) scale(2.5) rotate(" + (45 * /*i*/ ctx[8] * 2 + 45) + "deg)");
-    			add_location(path1, file$9, 34, 16, 1337);
+    			add_location(path1, file$a, 34, 16, 1337);
     			attr_dev(path2, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-labelPath"));
     			attr_dev(path2, "class", "label-path svelte-19c4ts1");
     			attr_dev(path2, "d", path2_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 + 60));
     			set_style(path2, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path2, file$9, 41, 16, 1849);
+    			add_location(path2, file$a, 41, 16, 1849);
     			attr_dev(textPath0, "class", "hazard-label " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-19c4ts1");
     			attr_dev(textPath0, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-labelPath");
     			attr_dev(textPath0, "startOffset", "50%");
-    			add_location(textPath0, file$9, 43, 20, 2081);
+    			add_location(textPath0, file$a, 43, 20, 2081);
     			attr_dev(text0, "class", "svelte-19c4ts1");
-    			add_location(text0, file$9, 42, 16, 2054);
+    			add_location(text0, file$a, 42, 16, 2054);
     			attr_dev(path3, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-event-labelPath"));
     			attr_dev(path3, "class", "label-path svelte-19c4ts1");
     			attr_dev(path3, "d", path3_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 - 27.5));
     			set_style(path3, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path3, file$9, 46, 16, 2312);
+    			add_location(path3, file$a, 46, 16, 2312);
     			attr_dev(textPath1, "class", "event-label " + slugify(/*hazard*/ ctx[6].Hazard) + " svelte-19c4ts1");
     			attr_dev(textPath1, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-event-labelPath");
     			attr_dev(textPath1, "startOffset", "50%");
-    			add_location(textPath1, file$9, 48, 20, 2552);
+    			add_location(textPath1, file$a, 48, 20, 2552);
     			attr_dev(text1, "class", "svelte-19c4ts1");
-    			add_location(text1, file$9, 47, 16, 2525);
+    			add_location(text1, file$a, 47, 16, 2525);
     			attr_dev(path4, "id", "" + (slugify(/*hazard*/ ctx[6].Hazard) + "-actionCount-labelPath"));
     			attr_dev(path4, "class", "label-path svelte-19c4ts1");
     			attr_dev(path4, "d", path4_d_value = circleClockwise({ x: 0, y: 0 }, /*dims*/ ctx[0].width * 0.3 + arcWidth * 0.5 - 10));
     			set_style(path4, "transform", "rotate(" + (/*i*/ ctx[8] * 360 / /*hazards*/ ctx[3].length + 135) + "deg)");
-    			add_location(path4, file$9, 54, 16, 2962);
+    			add_location(path4, file$a, 54, 16, 2962);
     			html_tag.a = t;
     			attr_dev(textPath2, "class", "actionCount-label svelte-19c4ts1");
     			attr_dev(textPath2, "href", "#" + slugify(/*hazard*/ ctx[6].Hazard) + "-actionCount-labelPath");
     			attr_dev(textPath2, "startOffset", "50%");
-    			add_location(textPath2, file$9, 56, 20, 3272);
+    			add_location(textPath2, file$a, 56, 20, 3272);
     			attr_dev(text2, "class", "svelte-19c4ts1");
     			toggle_class(text2, "hidden", /*$ui*/ ctx[2].state.actionVis.scene === 0);
-    			add_location(text2, file$9, 55, 16, 3196);
+    			add_location(text2, file$a, 55, 16, 3196);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -45661,7 +46533,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$9(ctx) {
+    function create_fragment$a(ctx) {
     	let g2;
     	let g1;
     	let g0;
@@ -45686,13 +46558,13 @@ var app = (function (exports) {
 
     			attr_dev(g0, "class", "node-arcs-wrapper svelte-19c4ts1");
     			toggle_class(g0, "rotate", /*$ui*/ ctx[2].state.actionVis.scene > 1);
-    			add_location(g0, file$9, 24, 8, 797);
+    			add_location(g0, file$a, 24, 8, 797);
     			attr_dev(g1, "class", "node-arcs svelte-19c4ts1");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.5 + "px)");
     			toggle_class(g1, "coloured", /*$ui*/ ctx[2].state.actionVis.scene > 1);
-    			add_location(g1, file$9, 21, 4, 622);
+    			add_location(g1, file$a, 21, 4, 622);
     			attr_dev(g2, "id", "hazard-vis-container");
-    			add_location(g2, file$9, 19, 0, 555);
+    			add_location(g2, file$a, 19, 0, 555);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45760,7 +46632,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$9.name,
+    		id: create_fragment$a.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45771,7 +46643,7 @@ var app = (function (exports) {
 
     const arcWidth = 50;
 
-    function instance$9($$self, $$props, $$invalidate) {
+    function instance$a($$self, $$props, $$invalidate) {
     	let $data;
     	let $ui;
     	validate_store(data, 'data');
@@ -45826,13 +46698,13 @@ var app = (function (exports) {
     class Hazard extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$9, create_fragment$9, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$a, create_fragment$a, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Hazard",
     			options,
-    			id: create_fragment$9.name
+    			id: create_fragment$a.name
     		});
     	}
 
@@ -45910,7 +46782,7 @@ var app = (function (exports) {
     };
 
     /* src/components/byPage/actions/vis/Scale.svelte generated by Svelte v3.48.0 */
-    const file$8 = "src/components/byPage/actions/vis/Scale.svelte";
+    const file$9 = "src/components/byPage/actions/vis/Scale.svelte";
 
     function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -46036,19 +46908,19 @@ var app = (function (exports) {
     			if_block.c();
     			attr_dev(path, "class", "map-layer svelte-rv79ei");
     			attr_dev(path, "d", path_d_value = mapShapes[/*obj*/ ctx[2].Scale].path(mapShapes[/*obj*/ ctx[2].Scale].shape));
-    			add_location(path, file$8, 20, 12, 816);
+    			add_location(path, file$9, 20, 12, 816);
     			set_style(g0, "transform", "translate(" + /*dims*/ ctx[0].width * 0.25 + "px, " + (/*obj*/ ctx[2].yPos * /*dims*/ ctx[0].height + 30) + "px)");
-    			add_location(g0, file$8, 19, 8, 713);
+    			add_location(g0, file$9, 19, 8, 713);
     			attr_dev(text0, "class", text0_class_value = "scale-label " + slugify(/*obj*/ ctx[2].Scale) + " svelte-rv79ei");
     			attr_dev(text0, "x", "0");
     			attr_dev(text0, "dy", "-10");
-    			add_location(text0, file$8, 23, 12, 1023);
+    			add_location(text0, file$9, 23, 12, 1023);
     			attr_dev(text1, "class", text1_class_value = "action-label " + slugify(/*obj*/ ctx[2].Scale) + " svelte-rv79ei");
     			attr_dev(text1, "x", "0");
     			attr_dev(text1, "dy", "20");
-    			add_location(text1, file$8, 24, 12, 1129);
+    			add_location(text1, file$9, 24, 12, 1129);
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.25 + "px, " + /*dims*/ ctx[0].height * /*obj*/ ctx[2].yPos + "px)");
-    			add_location(g1, file$8, 22, 8, 927);
+    			add_location(g1, file$9, 22, 8, 927);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g0, anchor);
@@ -46111,7 +46983,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$8(ctx) {
+    function create_fragment$9(ctx) {
     	let g1;
     	let t;
     	let g0;
@@ -46135,9 +47007,9 @@ var app = (function (exports) {
     			}
 
     			attr_dev(g0, "class", "scale-group svelte-rv79ei");
-    			add_location(g0, file$8, 17, 4, 645);
+    			add_location(g0, file$9, 17, 4, 645);
     			attr_dev(g1, "id", "scale-vis-container");
-    			add_location(g1, file$8, 15, 0, 516);
+    			add_location(g1, file$9, 15, 0, 516);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46193,7 +47065,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$8.name,
+    		id: create_fragment$9.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46202,7 +47074,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$8($$self, $$props, $$invalidate) {
+    function instance$9($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Scale', slots, []);
     	let { dims = {} } = $$props;
@@ -46245,13 +47117,13 @@ var app = (function (exports) {
     class Scale extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$8, create_fragment$8, safe_not_equal, { dims: 0, scaleData: 1 });
+    		init$1(this, options, instance$9, create_fragment$9, safe_not_equal, { dims: 0, scaleData: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Scale",
     			options,
-    			id: create_fragment$8.name
+    			id: create_fragment$9.name
     		});
     	}
 
@@ -46273,9 +47145,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Approach.svelte generated by Svelte v3.48.0 */
-    const file$7 = "src/components/byPage/actions/vis/Approach.svelte";
+    const file$8 = "src/components/byPage/actions/vis/Approach.svelte";
 
-    function create_fragment$7(ctx) {
+    function create_fragment$8(ctx) {
     	let g6;
     	let g4;
     	let g1;
@@ -46401,94 +47273,94 @@ var app = (function (exports) {
     			attr_dev(path0, "class", "approach-shape risk svelte-16h0c1o");
     			attr_dev(path0, "d", path0_d_value = triangle$1(/*dims*/ ctx[0].width * 0.333, 'down'));
     			set_style(path0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + /*approachData*/ ctx[1][0].standard.y + "px)");
-    			add_location(path0, file$7, 44, 12, 1689);
+    			add_location(path0, file$8, 44, 12, 1689);
     			attr_dev(text0, "class", "risk label-main svelte-16h0c1o");
     			set_style(text0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y - /*dims*/ ctx[0].height * 0.175 + 40) + "px)");
-    			add_location(text0, file$7, 46, 12, 1893);
+    			add_location(text0, file$8, 46, 12, 1893);
     			attr_dev(g0, "class", "risk-label-group risk svelte-16h0c1o");
     			set_style(g0, "transform", "translate(" + /*approachData*/ ctx[1][0].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y - /*dims*/ ctx[0].height * 0.175 + 30) + "px)");
-    			add_location(g0, file$7, 49, 12, 2109);
+    			add_location(g0, file$8, 49, 12, 2109);
     			attr_dev(g1, "class", "approach-group risk-group svelte-16h0c1o");
     			toggle_class(g1, "reset", /*$ui*/ ctx[2].state.actionVis.scene > 0);
-    			add_location(g1, file$7, 43, 8, 1590);
+    			add_location(g1, file$8, 43, 8, 1590);
     			attr_dev(path1, "class", "approach-shape resilience svelte-16h0c1o");
     			attr_dev(path1, "d", path1_d_value = triangle$1(/*dims*/ ctx[0].width * 0.333, 'up'));
     			set_style(path1, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + /*approachData*/ ctx[1][1].standard.y + "px)");
-    			add_location(path1, file$7, 52, 12, 2397);
+    			add_location(path1, file$8, 52, 12, 2397);
     			attr_dev(text1, "class", "resilience label-main svelte-16h0c1o");
     			set_style(text1, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + (/*approachData*/ ctx[1][1].standard.y + /*dims*/ ctx[0].height * 0.175 + 20) + "px)");
-    			add_location(text1, file$7, 54, 12, 2602);
+    			add_location(text1, file$8, 54, 12, 2602);
     			attr_dev(g2, "class", "resilience-label-group resilience svelte-16h0c1o");
     			set_style(g2, "transform", "translate(" + /*approachData*/ ctx[1][1].standard.x + "px, " + (/*approachData*/ ctx[1][0].standard.y + /*dims*/ ctx[0].height * 0.175) + "px)");
-    			add_location(g2, file$7, 57, 12, 2831);
+    			add_location(g2, file$8, 57, 12, 2831);
     			attr_dev(g3, "class", "approach-group resilience-group svelte-16h0c1o");
     			toggle_class(g3, "reset", /*$ui*/ ctx[2].state.actionVis.scene > 0);
-    			add_location(g3, file$7, 51, 8, 2292);
+    			add_location(g3, file$8, 51, 8, 2292);
     			attr_dev(g4, "class", "svelte-16h0c1o");
     			toggle_class(g4, "hidden", /*$ui*/ ctx[2].state.actionVis.scene === 2);
-    			add_location(g4, file$7, 42, 4, 1529);
+    			add_location(g4, file$8, 42, 4, 1529);
     			html_tag.a = t2;
     			attr_dev(tspan0, "class", "label-number svelte-16h0c1o");
-    			add_location(tspan0, file$7, 63, 12, 3215);
+    			add_location(tspan0, file$8, 63, 12, 3215);
     			attr_dev(tspan1, "class", "label svelte-16h0c1o");
     			attr_dev(tspan1, "x", "0");
     			attr_dev(tspan1, "dy", "60");
-    			add_location(tspan1, file$7, 64, 12, 3346);
+    			add_location(tspan1, file$8, 64, 12, 3346);
     			attr_dev(tspan2, "class", "label svelte-16h0c1o");
     			attr_dev(tspan2, "x", "0");
     			attr_dev(tspan2, "dy", "60");
-    			add_location(tspan2, file$7, 65, 12, 3413);
+    			add_location(tspan2, file$8, 65, 12, 3413);
     			set_style(text2, "transform", "translate(" + /*approachData*/ ctx[1][1].wide.x + "px, " + (/*approachData*/ ctx[1][1].wide.y + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text2, "class", "svelte-16h0c1o");
-    			add_location(text2, file$7, 62, 8, 3087);
+    			add_location(text2, file$8, 62, 8, 3087);
     			html_tag_1.a = t8;
     			attr_dev(tspan3, "class", "label-number svelte-16h0c1o");
-    			add_location(tspan3, file$7, 68, 12, 3621);
+    			add_location(tspan3, file$8, 68, 12, 3621);
     			attr_dev(tspan4, "class", "label svelte-16h0c1o");
     			attr_dev(tspan4, "x", "0");
     			attr_dev(tspan4, "dy", "60");
-    			add_location(tspan4, file$7, 69, 12, 3744);
+    			add_location(tspan4, file$8, 69, 12, 3744);
     			attr_dev(tspan5, "class", "label svelte-16h0c1o");
     			attr_dev(tspan5, "x", "0");
     			attr_dev(tspan5, "dy", "60");
-    			add_location(tspan5, file$7, 70, 12, 3808);
+    			add_location(tspan5, file$8, 70, 12, 3808);
     			set_style(text3, "transform", "translate(" + /*approachData*/ ctx[1][0].wide.x + "px, " + (/*approachData*/ ctx[1][0].wide.y + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text3, "class", "svelte-16h0c1o");
-    			add_location(text3, file$7, 67, 8, 3494);
+    			add_location(text3, file$8, 67, 8, 3494);
     			html_tag_2.a = t14;
     			attr_dev(tspan6, "class", "label-number svelte-16h0c1o");
-    			add_location(tspan6, file$7, 73, 12, 4036);
+    			add_location(tspan6, file$8, 73, 12, 4036);
     			attr_dev(tspan7, "class", "label svelte-16h0c1o");
     			attr_dev(tspan7, "x", "0");
     			attr_dev(tspan7, "dy", "60");
-    			add_location(tspan7, file$7, 74, 12, 4175);
+    			add_location(tspan7, file$8, 74, 12, 4175);
     			attr_dev(tspan8, "class", "label svelte-16h0c1o");
     			attr_dev(tspan8, "x", "0");
     			attr_dev(tspan8, "dy", "60");
-    			add_location(tspan8, file$7, 75, 12, 4245);
+    			add_location(tspan8, file$8, 75, 12, 4245);
     			set_style(text4, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + ((/*approachData*/ ctx[1][0].wide.y + /*approachData*/ ctx[1][1].wide.y) * 0.5 + /*dims*/ ctx[0].height * 0.15) + "px)");
     			attr_dev(text4, "class", "svelte-16h0c1o");
-    			add_location(text4, file$7, 72, 8, 3882);
+    			add_location(text4, file$8, 72, 8, 3882);
     			html_tag_3.a = t20;
     			attr_dev(tspan9, "class", "label-number svelte-16h0c1o");
-    			add_location(tspan9, file$7, 78, 12, 4455);
+    			add_location(tspan9, file$8, 78, 12, 4455);
     			attr_dev(tspan10, "class", "label-small svelte-16h0c1o");
     			attr_dev(tspan10, "x", "0");
     			attr_dev(tspan10, "dy", "30");
-    			add_location(tspan10, file$7, 79, 12, 4575);
+    			add_location(tspan10, file$8, 79, 12, 4575);
     			attr_dev(tspan11, "class", "label-small svelte-16h0c1o");
     			attr_dev(tspan11, "x", "0");
     			attr_dev(tspan11, "dy", "30");
-    			add_location(tspan11, file$7, 80, 12, 4667);
+    			add_location(tspan11, file$8, 80, 12, 4667);
     			set_style(text5, "transform", "translate(" + /*approachData*/ ctx[1][2].wide.x + "px, " + (/*approachData*/ ctx[1][2].wide.y + /*dims*/ ctx[0].height * 0.1) + "px)");
     			attr_dev(text5, "class", "svelte-16h0c1o");
-    			add_location(text5, file$7, 77, 8, 4329);
+    			add_location(text5, file$8, 77, 8, 4329);
     			attr_dev(g5, "class", "svelte-16h0c1o");
     			toggle_class(g5, "hidden", /*$ui*/ ctx[2].state.actionVis.scene !== 2);
-    			add_location(g5, file$7, 61, 4, 3026);
+    			add_location(g5, file$8, 61, 4, 3026);
     			attr_dev(g6, "id", "approach-vis-container");
     			attr_dev(g6, "class", "svelte-16h0c1o");
-    			add_location(g6, file$7, 41, 0, 1484);
+    			add_location(g6, file$8, 41, 0, 1484);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46640,7 +47512,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$7.name,
+    		id: create_fragment$8.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46649,7 +47521,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$7($$self, $$props, $$invalidate) {
+    function instance$8($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -46718,13 +47590,13 @@ var app = (function (exports) {
     class Approach extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$7, create_fragment$7, safe_not_equal, { dims: 0, approachData: 1 });
+    		init$1(this, options, instance$8, create_fragment$8, safe_not_equal, { dims: 0, approachData: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Approach",
     			options,
-    			id: create_fragment$7.name
+    			id: create_fragment$8.name
     		});
     	}
 
@@ -46746,7 +47618,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/FocusArea.svelte generated by Svelte v3.48.0 */
-    const file$6 = "src/components/byPage/actions/vis/FocusArea.svelte";
+    const file$7 = "src/components/byPage/actions/vis/FocusArea.svelte";
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -46779,17 +47651,17 @@ var app = (function (exports) {
     			attr_dev(text0, "class", "focus-area-label svelte-1gdaapf");
     			attr_dev(text0, "name", /*obj*/ ctx[5]["Focus area"]);
     			attr_dev(text0, "index", /*i*/ ctx[7]);
-    			add_location(text0, file$6, 62, 16, 2994);
+    			add_location(text0, file$7, 62, 16, 2994);
     			html_tag.a = t;
     			attr_dev(text1, "class", "focus-area-action-label " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1gdaapf");
     			attr_dev(text1, "dy", "-80");
-    			add_location(text1, file$6, 65, 16, 3173);
+    			add_location(text1, file$7, 65, 16, 3173);
     			attr_dev(path, "class", "icon " + slugify(/*obj*/ ctx[5]["Focus area"]) + " svelte-1gdaapf");
     			attr_dev(path, "d", icons[slugify(/*obj*/ ctx[5]["Alias"])]);
     			set_style(path, "transform", "translate(" + 0 + "px, " + -250 + "px) scale(3)");
-    			add_location(path, file$6, 66, 16, 3343);
+    			add_location(path, file$7, 66, 16, 3343);
     			set_style(g, "transform", "translate(" + 0 + "px, " + 100 * (/*i*/ ctx[7] - (/*sortedFocus*/ ctx[1].length - 1) * 0.5) + "px)");
-    			add_location(g, file$6, 61, 12, 2886);
+    			add_location(g, file$7, 61, 12, 2886);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -46824,7 +47696,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$6(ctx) {
+    function create_fragment$7(ctx) {
     	let g3;
     	let g1;
     	let g0;
@@ -46855,17 +47727,17 @@ var app = (function (exports) {
     			g2 = svg_element("g");
     			attr_dev(text_1, "class", "instruction svelte-1gdaapf");
     			attr_dev(text_1, "y", -100 * /*sortedFocus*/ ctx[1].length * 0.5 - 50);
-    			add_location(text_1, file$6, 59, 12, 2678);
+    			add_location(text_1, file$7, 59, 12, 2678);
     			attr_dev(g0, "class", "selector-wrapper svelte-1gdaapf");
-    			add_location(g0, file$6, 58, 8, 2635);
+    			add_location(g0, file$7, 58, 8, 2635);
     			attr_dev(g1, "class", "selector-container");
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.25 + "px)");
-    			add_location(g1, file$6, 57, 4, 2516);
+    			add_location(g1, file$7, 57, 4, 2516);
     			attr_dev(g2, "class", "focus-area-description-container");
     			set_style(g2, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.575 + "px)");
-    			add_location(g2, file$6, 71, 4, 3551);
+    			add_location(g2, file$7, 71, 4, 3551);
     			attr_dev(g3, "id", "focus-area-vis-container");
-    			add_location(g3, file$6, 56, 0, 2465);
+    			add_location(g3, file$7, 56, 0, 2465);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46933,7 +47805,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$6.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46944,7 +47816,7 @@ var app = (function (exports) {
 
     const func = (a, b) => a.Alias < b.Alias;
 
-    function instance$6($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -47033,13 +47905,13 @@ var app = (function (exports) {
     class FocusArea extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$6, create_fragment$6, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$7, create_fragment$7, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "FocusArea",
     			options,
-    			id: create_fragment$6.name
+    			id: create_fragment$7.name
     		});
     	}
 
@@ -47053,7 +47925,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Screening.svelte generated by Svelte v3.48.0 */
-    const file$5 = "src/components/byPage/actions/vis/Screening.svelte";
+    const file$6 = "src/components/byPage/actions/vis/Screening.svelte";
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -47081,10 +47953,10 @@ var app = (function (exports) {
     			circle = svg_element("circle");
     			attr_dev(circle, "r", /*radius*/ ctx[3]);
     			attr_dev(circle, "class", "svelte-1mjtdpn");
-    			add_location(circle, file$5, 21, 12, 928);
+    			add_location(circle, file$6, 21, 12, 928);
     			attr_dev(g, "class", g_class_value = "" + (null_to_empty(slugify(/*lens*/ ctx[4].Screen)) + " svelte-1mjtdpn"));
     			set_style(g, "transform", "translate(" + /*dims*/ ctx[0].width * /*lens*/ ctx[4].xPos + "px, " + /*dims*/ ctx[0].height * /*lens*/ ctx[4].yPos + "px)");
-    			add_location(g, file$5, 20, 8, 793);
+    			add_location(g, file$6, 20, 8, 793);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, g, anchor);
@@ -47153,7 +48025,7 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 95
     			));
 
-    			add_location(path0, file$5, 47, 16, 2838);
+    			add_location(path0, file$6, 47, 16, 2838);
     			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1mjtdpn");
 
@@ -47165,17 +48037,17 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 25
     			));
 
-    			add_location(path1, file$5, 48, 16, 3023);
+    			add_location(path1, file$6, 48, 16, 3023);
     			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "12.5%");
-    			add_location(textPath0, file$5, 50, 20, 3238);
-    			add_location(text0, file$5, 49, 16, 3211);
+    			add_location(textPath0, file$6, 50, 20, 3238);
+    			add_location(text0, file$6, 49, 16, 3211);
     			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "12.5%");
-    			add_location(textPath1, file$5, 53, 20, 3473);
-    			add_location(text1, file$5, 52, 16, 3446);
+    			add_location(textPath1, file$6, 53, 20, 3473);
+    			add_location(text1, file$6, 52, 16, 3446);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -47291,7 +48163,7 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 95
     			));
 
-    			add_location(path0, file$5, 37, 16, 1963);
+    			add_location(path0, file$6, 37, 16, 1963);
     			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1mjtdpn");
 
@@ -47303,17 +48175,17 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 25
     			));
 
-    			add_location(path1, file$5, 38, 16, 2148);
+    			add_location(path1, file$6, 38, 16, 2148);
     			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "32.5%");
-    			add_location(textPath0, file$5, 40, 20, 2363);
-    			add_location(text0, file$5, 39, 16, 2336);
+    			add_location(textPath0, file$6, 40, 20, 2363);
+    			add_location(text0, file$6, 39, 16, 2336);
     			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "32.5%");
-    			add_location(textPath1, file$5, 44, 20, 2599);
-    			add_location(text1, file$5, 43, 16, 2572);
+    			add_location(textPath1, file$6, 44, 20, 2599);
+    			add_location(text1, file$6, 43, 16, 2572);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -47429,7 +48301,7 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 45
     			));
 
-    			add_location(path0, file$5, 27, 16, 1101);
+    			add_location(path0, file$6, 27, 16, 1101);
     			attr_dev(path1, "id", path1_id_value = "" + (slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath"));
     			attr_dev(path1, "class", "label-path svelte-1mjtdpn");
 
@@ -47441,17 +48313,17 @@ var app = (function (exports) {
     				/*radius*/ ctx[3] + 15
     			));
 
-    			add_location(path1, file$5, 28, 16, 1282);
+    			add_location(path1, file$6, 28, 16, 1282);
     			attr_dev(textPath0, "class", textPath0_class_value = "lens-question-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath0, "href", textPath0_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensQuestionPath");
     			attr_dev(textPath0, "startOffset", "75%");
-    			add_location(textPath0, file$5, 30, 20, 1493);
-    			add_location(text0, file$5, 29, 16, 1466);
+    			add_location(textPath0, file$6, 30, 20, 1493);
+    			add_location(text0, file$6, 29, 16, 1466);
     			attr_dev(textPath1, "class", textPath1_class_value = "lens-label " + slugify(/*lens*/ ctx[4].Screen) + " svelte-1mjtdpn");
     			attr_dev(textPath1, "href", textPath1_href_value = "#" + slugify(/*lens*/ ctx[4].Screen) + "-lensLabelPath");
     			attr_dev(textPath1, "startOffset", "75%");
-    			add_location(textPath1, file$5, 33, 20, 1726);
-    			add_location(text1, file$5, 32, 16, 1699);
+    			add_location(textPath1, file$6, 33, 20, 1726);
+    			add_location(text1, file$6, 32, 16, 1699);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path0, anchor);
@@ -47584,7 +48456,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$5(ctx) {
+    function create_fragment$6(ctx) {
     	let g2;
     	let g1;
     	let each0_anchor;
@@ -47641,26 +48513,26 @@ var app = (function (exports) {
     			t3 = text$1("robust, viable and flexible");
     			attr_dev(path, "d", "M0,0 v" + -/*radius*/ ctx[3] * 0.33 + " q" + 0 + ", " + -/*radius*/ ctx[3] * 0.5 + " " + /*radius*/ ctx[3] * 0.5 + ", " + -/*radius*/ ctx[3] * 0.5 + " h" + /*radius*/ ctx[3] * 0.5);
     			attr_dev(path, "class", "svelte-1mjtdpn");
-    			add_location(path, file$5, 59, 12, 3783);
+    			add_location(path, file$6, 59, 12, 3783);
     			attr_dev(text0, "class", "no-regrets-label svelte-1mjtdpn");
     			attr_dev(text0, "x", /*radius*/ ctx[3] + 10);
     			attr_dev(text0, "y", -0.833 * /*radius*/ ctx[3]);
-    			add_location(text0, file$5, 60, 12, 3902);
+    			add_location(text0, file$6, 60, 12, 3902);
     			attr_dev(text1, "class", "no-regrets-number svelte-1mjtdpn");
     			attr_dev(text1, "x", /*radius*/ ctx[3] + 10);
     			attr_dev(text1, "y", -0.833 * /*radius*/ ctx[3] + 35);
-    			add_location(text1, file$5, 61, 12, 4014);
+    			add_location(text1, file$6, 61, 12, 4014);
     			attr_dev(text2, "class", "no-regrets-number svelte-1mjtdpn");
     			attr_dev(text2, "x", /*radius*/ ctx[3] + 10);
     			attr_dev(text2, "y", -0.833 * /*radius*/ ctx[3] + 65);
-    			add_location(text2, file$5, 62, 12, 4167);
+    			add_location(text2, file$6, 62, 12, 4167);
     			attr_dev(g0, "class", "no-regrets-group svelte-1mjtdpn");
     			toggle_class(g0, "hidden", /*$ui*/ ctx[2].state.actionVis.scene !== 2);
-    			add_location(g0, file$5, 58, 8, 3691);
+    			add_location(g0, file$6, 58, 8, 3691);
     			set_style(g1, "transform", "translate(" + /*dims*/ ctx[0].width * 0.5 + "px, " + /*dims*/ ctx[0].height * 0.425 + "px)");
-    			add_location(g1, file$5, 18, 4, 640);
+    			add_location(g1, file$6, 18, 4, 640);
     			attr_dev(g2, "id", "screening-vis-container");
-    			add_location(g2, file$5, 17, 0, 594);
+    			add_location(g2, file$6, 17, 0, 594);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47766,7 +48638,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$5.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47775,7 +48647,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$5($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let $data;
     	let $ui;
     	validate_store(data, 'data');
@@ -47831,13 +48703,13 @@ var app = (function (exports) {
     class Screening extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$5, create_fragment$5, safe_not_equal, { dims: 0 });
+    		init$1(this, options, instance$6, create_fragment$6, safe_not_equal, { dims: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Screening",
     			options,
-    			id: create_fragment$5.name
+    			id: create_fragment$6.name
     		});
     	}
 
@@ -47851,9 +48723,9 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/vis/Rating.svelte generated by Svelte v3.48.0 */
-    const file$4 = "src/components/byPage/actions/vis/Rating.svelte";
+    const file$5 = "src/components/byPage/actions/vis/Rating.svelte";
 
-    function create_fragment$4(ctx) {
+    function create_fragment$5(ctx) {
     	let g11;
     	let g10;
     	let g3;
@@ -47924,94 +48796,94 @@ var app = (function (exports) {
     			text7 = svg_element("text");
     			attr_dev(path0, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path0, "class", "svelte-1m9jpvu");
-    			add_location(path0, file$4, 20, 16, 809);
+    			add_location(path0, file$5, 20, 16, 809);
     			attr_dev(text0, "x", markerWidth + 10);
     			attr_dev(text0, "y", "15");
     			attr_dev(text0, "class", "svelte-1m9jpvu");
-    			add_location(text0, file$4, 21, 16, 861);
+    			add_location(text0, file$5, 21, 16, 861);
     			attr_dev(g0, "class", "no-regrets scale-group svelte-1m9jpvu");
     			set_style(g0, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].noRegrets.y + "px)");
-    			add_location(g0, file$4, 19, 12, 691);
+    			add_location(g0, file$5, 19, 12, 691);
     			attr_dev(path1, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path1, "class", "svelte-1m9jpvu");
-    			add_location(path1, file$4, 24, 16, 1084);
+    			add_location(path1, file$5, 24, 16, 1084);
     			attr_dev(text1, "x", markerWidth + 10);
     			attr_dev(text1, "y", "15");
     			attr_dev(text1, "class", "svelte-1m9jpvu");
-    			add_location(text1, file$4, 25, 16, 1136);
+    			add_location(text1, file$5, 25, 16, 1136);
     			attr_dev(g1, "class", "for-rating scale-group svelte-1m9jpvu");
     			set_style(g1, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].forRating.y + "px)");
-    			add_location(g1, file$4, 23, 12, 966);
+    			add_location(g1, file$5, 23, 12, 966);
     			attr_dev(path2, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path2, "class", "svelte-1m9jpvu");
-    			add_location(path2, file$4, 28, 16, 1355);
+    			add_location(path2, file$5, 28, 16, 1355);
     			attr_dev(text2, "x", markerWidth + 10);
     			attr_dev(text2, "y", "15");
     			attr_dev(text2, "class", "svelte-1m9jpvu");
-    			add_location(text2, file$4, 29, 16, 1407);
+    			add_location(text2, file$5, 29, 16, 1407);
     			attr_dev(g2, "class", "discard scale-group svelte-1m9jpvu");
     			set_style(g2, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
-    			add_location(g2, file$4, 27, 12, 1242);
+    			add_location(g2, file$5, 27, 12, 1242);
     			attr_dev(g3, "class", "svelte-1m9jpvu");
     			toggle_class(g3, "hidden", /*$ui*/ ctx[1].state.actionVis.scene !== 0);
-    			add_location(g3, file$4, 18, 8, 627);
+    			add_location(g3, file$5, 18, 8, 627);
     			attr_dev(path3, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path3, "class", "svelte-1m9jpvu");
-    			add_location(path3, file$4, 35, 16, 1703);
+    			add_location(path3, file$5, 35, 16, 1703);
     			attr_dev(text3, "x", markerWidth + 10);
     			attr_dev(text3, "y", "15");
     			attr_dev(text3, "class", "svelte-1m9jpvu");
-    			add_location(text3, file$4, 36, 16, 1755);
+    			add_location(text3, file$5, 36, 16, 1755);
     			attr_dev(g4, "class", "no-regrets scale-group svelte-1m9jpvu");
     			set_style(g4, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].noRegrets.y + "px)");
-    			add_location(g4, file$4, 34, 12, 1585);
+    			add_location(g4, file$5, 34, 12, 1585);
     			attr_dev(path4, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path4, "class", "svelte-1m9jpvu");
-    			add_location(path4, file$4, 39, 16, 1983);
+    			add_location(path4, file$5, 39, 16, 1983);
     			attr_dev(text4, "x", markerWidth + 10);
     			attr_dev(text4, "y", "15");
     			attr_dev(text4, "class", "svelte-1m9jpvu");
-    			add_location(text4, file$4, 40, 16, 2035);
+    			add_location(text4, file$5, 40, 16, 2035);
     			attr_dev(g5, "class", "two-criteria scale-group svelte-1m9jpvu");
     			set_style(g5, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].twoCriteria.y + "px)");
-    			add_location(g5, file$4, 38, 12, 1861);
+    			add_location(g5, file$5, 38, 12, 1861);
     			attr_dev(path5, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path5, "class", "svelte-1m9jpvu");
-    			add_location(path5, file$4, 43, 16, 2266);
+    			add_location(path5, file$5, 43, 16, 2266);
     			attr_dev(text5, "x", markerWidth + 10);
     			attr_dev(text5, "y", "15");
     			attr_dev(text5, "class", "svelte-1m9jpvu");
-    			add_location(text5, file$4, 44, 16, 2318);
+    			add_location(text5, file$5, 44, 16, 2318);
     			attr_dev(g6, "class", "one-criteria scale-group svelte-1m9jpvu");
     			set_style(g6, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].oneCriteria.y + "px)");
-    			add_location(g6, file$4, 42, 12, 2144);
+    			add_location(g6, file$5, 42, 12, 2144);
     			attr_dev(path6, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path6, "class", "svelte-1m9jpvu");
-    			add_location(path6, file$4, 47, 16, 2551);
+    			add_location(path6, file$5, 47, 16, 2551);
     			attr_dev(text6, "x", markerWidth + 10);
     			attr_dev(text6, "y", "15");
     			attr_dev(text6, "class", "svelte-1m9jpvu");
-    			add_location(text6, file$4, 48, 16, 2603);
+    			add_location(text6, file$5, 48, 16, 2603);
     			attr_dev(g7, "class", "zero-criteria scale-group svelte-1m9jpvu");
     			set_style(g7, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].zeroCriteria.y + "px)");
-    			add_location(g7, file$4, 46, 12, 2427);
+    			add_location(g7, file$5, 46, 12, 2427);
     			attr_dev(path7, "d", "M5, 0 h" + markerWidth);
     			attr_dev(path7, "class", "svelte-1m9jpvu");
-    			add_location(path7, file$4, 51, 16, 2826);
+    			add_location(path7, file$5, 51, 16, 2826);
     			attr_dev(text7, "x", markerWidth + 10);
     			attr_dev(text7, "y", "15");
     			attr_dev(text7, "class", "svelte-1m9jpvu");
-    			add_location(text7, file$4, 52, 16, 2878);
+    			add_location(text7, file$5, 52, 16, 2878);
     			attr_dev(g8, "class", "exclude scale-group svelte-1m9jpvu");
     			set_style(g8, "transform", "translate(" + 50 + "px , " + /*ratingData*/ ctx[0].discard.y + "px)");
-    			add_location(g8, file$4, 50, 12, 2713);
+    			add_location(g8, file$5, 50, 12, 2713);
     			attr_dev(g9, "class", "svelte-1m9jpvu");
     			toggle_class(g9, "hidden", /*$ui*/ ctx[1].state.actionVis.scene === 0);
-    			add_location(g9, file$4, 33, 8, 1521);
+    			add_location(g9, file$5, 33, 8, 1521);
     			attr_dev(g10, "class", "rating-scale-group");
-    			add_location(g10, file$4, 17, 4, 586);
+    			add_location(g10, file$5, 17, 4, 586);
     			attr_dev(g11, "id", "rating-vis-container");
-    			add_location(g11, file$4, 15, 0, 542);
+    			add_location(g11, file$5, 15, 0, 542);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48119,7 +48991,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$5.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48130,7 +49002,7 @@ var app = (function (exports) {
 
     const markerWidth = 25;
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$5($$self, $$props, $$invalidate) {
     	let $ui;
     	validate_store(ui, 'ui');
     	component_subscribe($$self, ui, $$value => $$invalidate(1, $ui = $$value));
@@ -48179,13 +49051,13 @@ var app = (function (exports) {
     class Rating extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$4, create_fragment$4, safe_not_equal, { dims: 2, ratingData: 0 });
+    		init$1(this, options, instance$5, create_fragment$5, safe_not_equal, { dims: 2, ratingData: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Rating",
     			options,
-    			id: create_fragment$4.name
+    			id: create_fragment$5.name
     		});
     	}
 
@@ -48207,7 +49079,7 @@ var app = (function (exports) {
     }
 
     /* src/components/byPage/actions/ActionVis.svelte generated by Svelte v3.48.0 */
-    const file$3 = "src/components/byPage/actions/ActionVis.svelte";
+    const file$4 = "src/components/byPage/actions/ActionVis.svelte";
 
     // (523:64) 
     function create_if_block_7(ctx) {
@@ -48573,7 +49445,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$3(ctx) {
+    function create_fragment$4(ctx) {
     	let section;
     	let div;
     	let figure;
@@ -48652,12 +49524,12 @@ var app = (function (exports) {
     			if (if_block1) if_block1.c();
     			attr_dev(svg, "viewBox", `0 0 ${/*dims*/ ctx[3].width} ${/*dims*/ ctx[3].height}`);
     			attr_dev(svg, "class", "svelte-191vh3m");
-    			add_location(svg, file$3, 508, 12, 28568);
+    			add_location(svg, file$4, 508, 12, 28568);
     			attr_dev(figure, "class", "svelte-191vh3m");
-    			add_location(figure, file$3, 507, 8, 28547);
-    			add_location(div, file$3, 506, 4, 28511);
+    			add_location(figure, file$4, 507, 8, 28547);
+    			add_location(div, file$4, 506, 4, 28511);
     			attr_dev(section, "class", "svelte-191vh3m");
-    			add_location(section, file$3, 504, 0, 28470);
+    			add_location(section, file$4, 504, 0, 28470);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48792,7 +49664,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$3.name,
+    		id: create_fragment$4.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48801,7 +49673,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$3($$self, $$props, $$invalidate) {
+    function instance$4($$self, $$props, $$invalidate) {
     	let collisionType;
     	let forceCollide;
     	let focus;
@@ -48917,7 +49789,7 @@ var app = (function (exports) {
     	};
 
     	const centerForce = {
-    		x: x$2().x(centerPos.x),
+    		x: x$1().x(centerPos.x),
     		y: y$1().y(centerPos.y)
     	};
 
@@ -49083,7 +49955,7 @@ var app = (function (exports) {
     						return [
     							[
     								"x",
-    								x$2().x((d, i) => i / $data.actions.length * dims.width * 0.5 + dims.width * 0.25).strength(0.5)
+    								x$1().x((d, i) => i / $data.actions.length * dims.width * 0.5 + dims.width * 0.25).strength(0.5)
     							],
     							[
     								"y",
@@ -49093,13 +49965,13 @@ var app = (function (exports) {
     						];
     					case "left-line":
     						return [
-    							["x", x$2().x(0).strength(2)],
+    							["x", x$1().x(0).strength(2)],
     							["y", y$1().y(dims.height * 0.5).strength(0.04)],
     							["collide", forceCollide]
     						];
     					case "right-line":
     						return [
-    							["x", x$2().x(dims.width).strength(0.2)],
+    							["x", x$1().x(dims.width).strength(0.2)],
     							["y", y$1().y(dims.height * 0.5).strength(0.001)],
     							["collide", forceCollide]
     						];
@@ -49122,7 +49994,7 @@ var app = (function (exports) {
     						return [
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									const type = schema.filter(e => e.recordID === d["Action type"][0])[0].Type;
     									return ($data.schema.actionTypeNodes.data.filter(d => d.Name === type)[0].xPos * 0.5 + 0.5) * dims.width;
     								})
@@ -49140,7 +50012,7 @@ var app = (function (exports) {
     					case "cluster-concrete-abstract":
     						$$invalidate(9, schema = $data.schema.actionTypes.data);
     						return [
-    							["x", x$2().x(dims.width * 0.5)],
+    							["x", x$1().x(dims.width * 0.5)],
     							[
     								"y",
     								y$1().y(d => {
@@ -49155,7 +50027,7 @@ var app = (function (exports) {
     						$$invalidate(9, schema = $data.schema.actionTypes.data);
     						return [
     							["collide", forceCollide],
-    							["x", x$2().x(dims.width)],
+    							["x", x$1().x(dims.width)],
     							[
     								"y",
     								y$1().y(d => {
@@ -49169,7 +50041,7 @@ var app = (function (exports) {
     						$$invalidate(9, schema = $data.schema.actionScale.data);
     						return [
     							["collide", forceCollide],
-    							["x", x$2().x(dims.width * 0.75).strength(0.02)],
+    							["x", x$1().x(dims.width * 0.75).strength(0.02)],
     							[
     								"y",
     								y$1().y(d => schema.filter(e => e.recordID === d["Scale"][0])[0].yPos * dims.height).strength(0.1)
@@ -49181,7 +50053,7 @@ var app = (function (exports) {
     							["collide", forceCollide],
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									if ([...new Set(d['Linked approach theme'])].length === 1) {
     										return approachData.filter(e => e.name === [...new Set(d['Linked approach theme'])][0])[0].standard.x;
     									} else {
@@ -49206,7 +50078,7 @@ var app = (function (exports) {
     							["collide", forceCollide],
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									if ([...new Set(d['Linked approach theme'])].length === 1) {
     										return approachData.filter(e => e.name === [...new Set(d['Linked approach theme'])][0])[0].wide.x;
     									} else {
@@ -49231,7 +50103,7 @@ var app = (function (exports) {
     							["collide", forceCollide],
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									const hazard = d["Hazard"].length === 1
     										? schema.filter(e => e.recordID === d["Hazard"][0])[0]["Hazard"]
     										: null,
@@ -49273,7 +50145,7 @@ var app = (function (exports) {
     							["collide", forceCollide],
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									const screen = {};
 
     									for (const obj of schema) {
@@ -49351,7 +50223,7 @@ var app = (function (exports) {
     							["collide", forceCollide],
     							[
     								"x",
-    								x$2().x(d => {
+    								x$1().x(d => {
     									const screen = {};
 
     									for (const obj of schema) {
@@ -49411,7 +50283,7 @@ var app = (function (exports) {
     					case "cluster-rating":
     						return [
     							["collide", forceCollide],
-    							["x", x$2().x(dims.width * 0.65).strength(0.15)],
+    							["x", x$1().x(dims.width * 0.65).strength(0.15)],
     							[
     								"y",
     								y$1().y(d => {
@@ -49477,20 +50349,20 @@ var app = (function (exports) {
     class ActionVis extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+    		init$1(this, options, instance$4, create_fragment$4, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ActionVis",
     			options,
-    			id: create_fragment$3.name
+    			id: create_fragment$4.name
     		});
     	}
     }
 
     /* src/components/shared/Switch.svelte generated by Svelte v3.48.0 */
 
-    const file$2 = "src/components/shared/Switch.svelte";
+    const file$3 = "src/components/shared/Switch.svelte";
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -49525,10 +50397,10 @@ var app = (function (exports) {
     			input.value = input.__value;
     			attr_dev(input, "class", "svelte-3d9wqu");
     			/*$$binding_groups*/ ctx[4][0].push(input);
-    			add_location(input, file$2, 28, 12, 1080);
+    			add_location(input, file$3, 28, 12, 1080);
     			attr_dev(label, "for", label_for_value = `${/*option*/ ctx[8]}-${/*uniqueID*/ ctx[2]}`);
     			attr_dev(label, "class", "svelte-3d9wqu");
-    			add_location(label, file$2, 29, 12, 1176);
+    			add_location(label, file$3, 29, 12, 1176);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, input, anchor);
@@ -49584,7 +50456,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function create_fragment$2(ctx) {
+    function create_fragment$3(ctx) {
     	let div1;
     	let div0;
     	let each_value = /*options*/ ctx[1];
@@ -49608,9 +50480,9 @@ var app = (function (exports) {
     			attr_dev(div0, "class", "group-container svelte-3d9wqu");
     			attr_dev(div0, "aria-labelledby", `label-${/*uniqueID*/ ctx[2]}`);
     			attr_dev(div0, "id", `group-${/*uniqueID*/ ctx[2]}`);
-    			add_location(div0, file$2, 25, 4, 846);
+    			add_location(div0, file$3, 25, 4, 846);
     			attr_dev(div1, "class", "s s--multi svelte-3d9wqu");
-    			add_location(div1, file$2, 24, 0, 817);
+    			add_location(div1, file$3, 24, 0, 817);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49658,7 +50530,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$2.name,
+    		id: create_fragment$3.name,
     		type: "component",
     		source: "",
     		ctx
@@ -49667,7 +50539,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$2($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Switch', slots, []);
     	let { options = [] } = $$props;
@@ -49726,13 +50598,13 @@ var app = (function (exports) {
     class Switch extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$2, create_fragment$2, safe_not_equal, { options: 1, value: 0 });
+    		init$1(this, options, instance$3, create_fragment$3, safe_not_equal, { options: 1, value: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Switch",
     			options,
-    			id: create_fragment$2.name
+    			id: create_fragment$3.name
     		});
     	}
 
@@ -49754,9 +50626,9 @@ var app = (function (exports) {
     }
 
     /* src/pages/Actions.svelte generated by Svelte v3.48.0 */
-    const file$1 = "src/pages/Actions.svelte";
+    const file$2 = "src/pages/Actions.svelte";
 
-    function create_fragment$1(ctx) {
+    function create_fragment$2(ctx) {
     	let div5;
     	let div4;
     	let div1;
@@ -50152,7 +51024,7 @@ var app = (function (exports) {
     			em3.textContent = "right places?";
     			t45 = space();
     			p4 = element("p");
-    			p4.textContent = "This guide walks you through some key ways to view Hepburn's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.";
+    			p4.textContent = "This guide walks you through some key ways to view Hepburn Shire's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.";
     			t47 = space();
     			div13 = element("div");
     			div10 = element("div");
@@ -50165,7 +51037,7 @@ var app = (function (exports) {
     			t51 = text$1("There are ");
     			strong0 = element("strong");
     			strong0.textContent = "four climate hazards";
-    			t53 = text$1(" facing Hepburn, each of which increases the likelihood of climate events that pose risks to the community.");
+    			t53 = text$1(" facing Hepburn Shire, each of which increases the likelihood of climate events that pose risks to the community.");
     			t54 = space();
     			div11 = element("div");
     			p6 = element("p");
@@ -50246,7 +51118,7 @@ var app = (function (exports) {
     			p13 = element("p");
     			t98 = text$1("How might we visualise scale? The obvious indicator for scale is size — maybe we could adjust the overall size of each action? However, ");
     			strong5 = element("strong");
-    			strong5.textContent = "we're interested in how these actions affect Hepburn";
+    			strong5.textContent = "we're interested in how these actions affect Hepburn Shire";
     			t100 = text$1(", so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!");
     			t101 = space();
     			div24 = element("div");
@@ -50306,7 +51178,7 @@ var app = (function (exports) {
     			t132 = text$1(".");
     			t133 = space();
     			p19 = element("p");
-    			t134 = text$1("For Hepburn, we've added a sixth important focus area of ");
+    			t134 = text$1("For Hepburn Shire, we've added a sixth important focus area of ");
     			strong9 = element("strong");
     			strong9.textContent = "healing country";
     			t136 = text$1(" to highlight the importance of actions that embrace the views and practices of Traditional Owners to manage climate risk.");
@@ -50422,106 +51294,106 @@ var app = (function (exports) {
     			p32 = element("p");
     			p32.textContent = "At the moment there is no \"print to PDF-able\" version of this content as it has been designed for digital media and features interactive content.";
     			attr_dev(div0, "class", "hero-logo__wrapper svelte-5ht2kh");
-    			add_location(div0, file$1, 133, 12, 6164);
+    			add_location(div0, file$2, 133, 12, 6164);
     			attr_dev(div1, "class", "hero-logo svelte-5ht2kh");
-    			add_location(div1, file$1, 132, 8, 6128);
+    			add_location(div1, file$2, 132, 8, 6128);
     			attr_dev(span0, "class", "title--mute svelte-5ht2kh");
-    			add_location(span0, file$1, 136, 12, 6278);
-    			add_location(br0, file$1, 136, 60, 6326);
-    			add_location(br1, file$1, 137, 22, 6354);
+    			add_location(span0, file$2, 136, 12, 6278);
+    			add_location(br0, file$2, 136, 60, 6326);
+    			add_location(br1, file$2, 137, 22, 6354);
     			attr_dev(span1, "class", "title--highlight svelte-5ht2kh");
-    			add_location(span1, file$1, 138, 12, 6372);
+    			add_location(span1, file$2, 138, 12, 6372);
     			attr_dev(h1, "class", "hero-content__title svelte-5ht2kh");
-    			add_location(h1, file$1, 135, 8, 6233);
-    			add_location(p0, file$1, 141, 12, 6487);
+    			add_location(h1, file$2, 135, 8, 6233);
+    			add_location(p0, file$2, 141, 12, 6487);
     			attr_dev(div2, "class", "hero-content__text svelte-5ht2kh");
-    			add_location(div2, file$1, 140, 8, 6442);
+    			add_location(div2, file$2, 140, 8, 6442);
     			attr_dev(li0, "class", "select__item svelte-5ht2kh");
     			attr_dev(li0, "actname", "intro");
-    			add_location(li0, file$1, 146, 16, 6976);
+    			add_location(li0, file$2, 146, 16, 6976);
     			attr_dev(li1, "class", "select__item svelte-5ht2kh");
     			attr_dev(li1, "actname", "hazards");
-    			add_location(li1, file$1, 147, 16, 7075);
+    			add_location(li1, file$2, 147, 16, 7075);
     			attr_dev(li2, "class", "select__item svelte-5ht2kh");
     			attr_dev(li2, "actname", "approach");
-    			add_location(li2, file$1, 148, 16, 7171);
+    			add_location(li2, file$2, 148, 16, 7171);
     			attr_dev(li3, "class", "select__item svelte-5ht2kh");
     			attr_dev(li3, "actname", "scale");
-    			add_location(li3, file$1, 149, 16, 7269);
+    			add_location(li3, file$2, 149, 16, 7269);
     			attr_dev(li4, "class", "select__item svelte-5ht2kh");
     			attr_dev(li4, "actname", "type");
-    			add_location(li4, file$1, 150, 16, 7361);
+    			add_location(li4, file$2, 150, 16, 7361);
     			attr_dev(li5, "class", "select__item svelte-5ht2kh");
     			attr_dev(li5, "actname", "focusArea");
-    			add_location(li5, file$1, 151, 16, 7451);
+    			add_location(li5, file$2, 151, 16, 7451);
     			attr_dev(li6, "class", "select__item svelte-5ht2kh");
     			attr_dev(li6, "actname", "screening");
-    			add_location(li6, file$1, 152, 16, 7553);
+    			add_location(li6, file$2, 152, 16, 7553);
     			attr_dev(li7, "class", "select__item svelte-5ht2kh");
     			attr_dev(li7, "actname", "rating");
-    			add_location(li7, file$1, 153, 16, 7663);
+    			add_location(li7, file$2, 153, 16, 7663);
     			attr_dev(li8, "class", "select__item svelte-5ht2kh");
     			attr_dev(li8, "actname", "beyond");
-    			add_location(li8, file$1, 154, 16, 7765);
-    			add_location(ul0, file$1, 145, 12, 6955);
+    			add_location(li8, file$2, 154, 16, 7765);
+    			add_location(ul0, file$2, 145, 12, 6955);
     			attr_dev(div3, "class", "select svelte-5ht2kh");
-    			add_location(div3, file$1, 144, 8, 6921);
+    			add_location(div3, file$2, 144, 8, 6921);
     			attr_dev(div4, "class", "hero-content svelte-5ht2kh");
-    			add_location(div4, file$1, 130, 4, 6058);
+    			add_location(div4, file$2, 130, 4, 6058);
     			attr_dev(div5, "class", "hero-wrapper");
-    			add_location(div5, file$1, 129, 0, 6025);
+    			add_location(div5, file$2, 129, 0, 6025);
     			attr_dev(hr0, "class", "svelte-5ht2kh");
-    			add_location(hr0, file$1, 166, 16, 8160);
+    			add_location(hr0, file$2, 166, 16, 8160);
     			attr_dev(h20, "class", "svelte-5ht2kh");
-    			add_location(h20, file$1, 167, 16, 8181);
+    			add_location(h20, file$2, 167, 16, 8181);
     			html_tag.a = t30;
     			attr_dev(span2, "class", "action-dot svelte-5ht2kh");
-    			add_location(span2, file$1, 168, 195, 8420);
-    			add_location(p1, file$1, 168, 16, 8241);
+    			add_location(span2, file$2, 168, 195, 8420);
+    			add_location(p1, file$2, 168, 16, 8241);
     			attr_dev(div6, "scene", "0");
     			attr_dev(div6, "force", "cluster-center");
-    			add_location(div6, file$1, 165, 12, 8105);
+    			add_location(div6, file$2, 165, 12, 8105);
     			html_tag_1.a = t35;
-    			add_location(em0, file$1, 171, 90, 8634);
-    			add_location(p2, file$1, 171, 16, 8560);
+    			add_location(em0, file$2, 171, 90, 8634);
+    			add_location(p2, file$2, 171, 16, 8560);
     			attr_dev(div7, "scene", "1");
     			attr_dev(div7, "force", "ring-outer");
-    			add_location(div7, file$1, 170, 12, 8509);
-    			add_location(em1, file$1, 174, 67, 9000);
-    			add_location(em2, file$1, 174, 161, 9094);
-    			add_location(em3, file$1, 174, 209, 9142);
-    			add_location(p3, file$1, 174, 16, 8949);
-    			add_location(p4, file$1, 176, 16, 9202);
+    			add_location(div7, file$2, 170, 12, 8509);
+    			add_location(em1, file$2, 174, 67, 9000);
+    			add_location(em2, file$2, 174, 161, 9094);
+    			add_location(em3, file$2, 174, 209, 9142);
+    			add_location(p3, file$2, 174, 16, 8949);
+    			add_location(p4, file$2, 176, 16, 9202);
     			attr_dev(div8, "scene", "2");
     			attr_dev(div8, "act", "intro");
     			attr_dev(div8, "force", "arrow-down");
-    			add_location(div8, file$1, 173, 12, 8884);
+    			add_location(div8, file$2, 173, 12, 8884);
     			attr_dev(div9, "act", "intro");
     			attr_dev(div9, "class", "act-narrative svelte-5ht2kh");
-    			add_location(div9, file$1, 164, 8, 8049);
+    			add_location(div9, file$2, 164, 8, 8049);
     			attr_dev(hr1, "class", "svelte-5ht2kh");
-    			add_location(hr1, file$1, 183, 16, 9802);
+    			add_location(hr1, file$2, 183, 16, 9808);
     			attr_dev(h21, "class", "svelte-5ht2kh");
-    			add_location(h21, file$1, 184, 16, 9823);
-    			add_location(strong0, file$1, 185, 29, 9888);
-    			add_location(p5, file$1, 185, 16, 9875);
+    			add_location(h21, file$2, 184, 16, 9829);
+    			add_location(strong0, file$2, 185, 29, 9894);
+    			add_location(p5, file$2, 185, 16, 9881);
     			attr_dev(div10, "act", "hazards");
     			attr_dev(div10, "scene", "0");
     			attr_dev(div10, "force", "cluster-center");
-    			add_location(div10, file$1, 182, 12, 9732);
-    			add_location(em4, file$1, 189, 93, 10294);
-    			add_location(strong1, file$1, 189, 268, 10469);
-    			add_location(p6, file$1, 189, 16, 10217);
+    			add_location(div10, file$2, 182, 12, 9738);
+    			add_location(em4, file$2, 189, 93, 10306);
+    			add_location(strong1, file$2, 189, 268, 10481);
+    			add_location(p6, file$2, 189, 16, 10229);
     			attr_dev(div11, "scene", "1");
     			attr_dev(div11, "force", "cluster-hazard");
     			attr_dev(div11, "nodebase", "true");
     			attr_dev(div11, "nodearcs", "false");
     			attr_dev(div11, "nodeshapes", "false");
     			attr_dev(div11, "nodeshadow", "false");
-    			add_location(div11, file$1, 188, 12, 10085);
+    			add_location(div11, file$2, 188, 12, 10097);
     			attr_dev(span3, "class", "text-arcs svelte-5ht2kh");
-    			add_location(span3, file$1, 193, 79, 10786);
-    			add_location(p7, file$1, 193, 16, 10723);
+    			add_location(span3, file$2, 193, 79, 10798);
+    			add_location(p7, file$2, 193, 16, 10735);
     			attr_dev(div12, "act", "hazards");
     			attr_dev(div12, "scene", "2");
     			attr_dev(div12, "force", "cluster-center");
@@ -50529,34 +51401,34 @@ var app = (function (exports) {
     			attr_dev(div12, "nodearcs", "true");
     			attr_dev(div12, "nodeshapes", "false");
     			attr_dev(div12, "nodeshadow", "false");
-    			add_location(div12, file$1, 192, 12, 10577);
+    			add_location(div12, file$2, 192, 12, 10589);
     			attr_dev(div13, "act", "hazards");
     			attr_dev(div13, "class", "act-narrative svelte-5ht2kh");
     			attr_dev(div13, "legendhazards", "false");
-    			add_location(div13, file$1, 181, 8, 9649);
+    			add_location(div13, file$2, 181, 8, 9655);
     			attr_dev(hr2, "class", "svelte-5ht2kh");
-    			add_location(hr2, file$1, 200, 16, 11151);
+    			add_location(hr2, file$2, 200, 16, 11163);
     			attr_dev(h22, "class", "svelte-5ht2kh");
-    			add_location(h22, file$1, 201, 16, 11172);
-    			add_location(p8, file$1, 202, 16, 11219);
-    			add_location(strong2, file$1, 204, 32, 11333);
-    			add_location(li9, file$1, 204, 20, 11321);
-    			add_location(strong3, file$1, 205, 32, 11404);
-    			add_location(li10, file$1, 205, 20, 11392);
-    			add_location(ul1, file$1, 203, 16, 11296);
-    			add_location(p9, file$1, 207, 16, 11484);
+    			add_location(h22, file$2, 201, 16, 11184);
+    			add_location(p8, file$2, 202, 16, 11231);
+    			add_location(strong2, file$2, 204, 32, 11345);
+    			add_location(li9, file$2, 204, 20, 11333);
+    			add_location(strong3, file$2, 205, 32, 11416);
+    			add_location(li10, file$2, 205, 20, 11404);
+    			add_location(ul1, file$2, 203, 16, 11308);
+    			add_location(p9, file$2, 207, 16, 11496);
     			attr_dev(div14, "scene", "0");
     			attr_dev(div14, "force", "diagonal-up");
-    			add_location(div14, file$1, 199, 12, 11097);
-    			add_location(p10, file$1, 211, 16, 11899);
+    			add_location(div14, file$2, 199, 12, 11109);
+    			add_location(p10, file$2, 211, 16, 11911);
     			attr_dev(div15, "scene", "1");
     			attr_dev(div15, "force", "cluster-approach");
     			attr_dev(div15, "nodebase", "false");
     			attr_dev(div15, "nodearcs", "true");
     			attr_dev(div15, "nodeshapes", "false");
     			attr_dev(div15, "nodeshadow", "false");
-    			add_location(div15, file$1, 210, 12, 11764);
-    			add_location(p11, file$1, 215, 16, 12395);
+    			add_location(div15, file$2, 210, 12, 11776);
+    			add_location(p11, file$2, 215, 16, 12407);
     			attr_dev(div16, "act", "approach");
     			attr_dev(div16, "scene", "2");
     			attr_dev(div16, "force", "cluster-approach-wide");
@@ -50564,22 +51436,22 @@ var app = (function (exports) {
     			attr_dev(div16, "nodearcs", "true");
     			attr_dev(div16, "nodeshapes", "true");
     			attr_dev(div16, "nodeshadow", "false");
-    			add_location(div16, file$1, 214, 12, 12239);
+    			add_location(div16, file$2, 214, 12, 12251);
     			attr_dev(div17, "act", "approach");
     			attr_dev(div17, "class", "act-narrative svelte-5ht2kh");
     			attr_dev(div17, "legendhazards", "0.5");
     			attr_dev(div17, "legendapproach", "false");
-    			add_location(div17, file$1, 198, 8, 10993);
+    			add_location(div17, file$2, 198, 8, 11005);
     			attr_dev(hr3, "class", "svelte-5ht2kh");
-    			add_location(hr3, file$1, 222, 16, 12870);
+    			add_location(hr3, file$2, 222, 16, 12882);
     			attr_dev(h23, "class", "svelte-5ht2kh");
-    			add_location(h23, file$1, 223, 16, 12891);
-    			add_location(strong4, file$1, 224, 82, 12996);
-    			add_location(em5, file$1, 224, 171, 13085);
-    			add_location(em6, file$1, 224, 256, 13170);
-    			add_location(em7, file$1, 224, 333, 13247);
-    			add_location(em8, file$1, 224, 363, 13277);
-    			add_location(p12, file$1, 224, 16, 12930);
+    			add_location(h23, file$2, 223, 16, 12903);
+    			add_location(strong4, file$2, 224, 82, 13008);
+    			add_location(em5, file$2, 224, 171, 13097);
+    			add_location(em6, file$2, 224, 256, 13182);
+    			add_location(em7, file$2, 224, 333, 13259);
+    			add_location(em8, file$2, 224, 363, 13289);
+    			add_location(p12, file$2, 224, 16, 12942);
     			attr_dev(div18, "scene", "0");
     			attr_dev(div18, "force", "cluster-scale");
     			attr_dev(div18, "nodebase", "false");
@@ -50587,9 +51459,9 @@ var app = (function (exports) {
     			attr_dev(div18, "nodeshapes", "true");
     			attr_dev(div18, "nodeshadow", "false");
     			attr_dev(div18, "nodesymbol", "false");
-    			add_location(div18, file$1, 221, 12, 12719);
-    			add_location(strong5, file$1, 228, 161, 13650);
-    			add_location(p13, file$1, 228, 16, 13505);
+    			add_location(div18, file$2, 221, 12, 12731);
+    			add_location(strong5, file$2, 228, 161, 13662);
+    			add_location(p13, file$2, 228, 16, 13517);
     			attr_dev(div19, "scene", "1");
     			attr_dev(div19, "force", "cluster-scale");
     			attr_dev(div19, "nodebase", "false");
@@ -50597,143 +51469,143 @@ var app = (function (exports) {
     			attr_dev(div19, "nodeshapes", "true");
     			attr_dev(div19, "nodeshadow", "true");
     			attr_dev(div19, "nodesymbol", "false");
-    			add_location(div19, file$1, 227, 12, 13354);
+    			add_location(div19, file$2, 227, 12, 13366);
     			attr_dev(div20, "act", "scale");
     			attr_dev(div20, "class", "act-narrative svelte-5ht2kh");
     			attr_dev(div20, "legendhazards", "0.35");
     			attr_dev(div20, "legendapproach", "0.65");
     			attr_dev(div20, "legendscale", "false");
-    			add_location(div20, file$1, 220, 8, 12596);
+    			add_location(div20, file$2, 220, 8, 12608);
     			attr_dev(hr4, "class", "svelte-5ht2kh");
-    			add_location(hr4, file$1, 235, 16, 14149);
+    			add_location(hr4, file$2, 235, 16, 14167);
     			attr_dev(h24, "class", "svelte-5ht2kh");
-    			add_location(h24, file$1, 236, 16, 14170);
+    			add_location(h24, file$2, 236, 16, 14188);
     			attr_dev(div21, "scene", "0");
     			attr_dev(div21, "force", "right-line");
-    			add_location(div21, file$1, 234, 12, 14095);
-    			add_location(p14, file$1, 239, 16, 14302);
-    			add_location(strong6, file$1, 240, 63, 14570);
-    			add_location(em9, file$1, 240, 145, 14652);
-    			add_location(em10, file$1, 240, 193, 14700);
-    			add_location(p15, file$1, 240, 16, 14523);
+    			add_location(div21, file$2, 234, 12, 14113);
+    			add_location(p14, file$2, 239, 16, 14320);
+    			add_location(strong6, file$2, 240, 63, 14588);
+    			add_location(em9, file$2, 240, 145, 14670);
+    			add_location(em10, file$2, 240, 193, 14718);
+    			add_location(p15, file$2, 240, 16, 14541);
     			attr_dev(div22, "scene", "1");
     			attr_dev(div22, "force", "cluster-concrete-abstract-right");
-    			add_location(div22, file$1, 238, 12, 14227);
-    			add_location(p16, file$1, 243, 16, 14834);
-    			add_location(em11, file$1, 245, 142, 15176);
-    			add_location(p17, file$1, 245, 16, 15050);
+    			add_location(div22, file$2, 238, 12, 14245);
+    			add_location(p16, file$2, 243, 16, 14852);
+    			add_location(em11, file$2, 245, 142, 15194);
+    			add_location(p17, file$2, 245, 16, 15068);
     			attr_dev(div23, "scene", "2");
     			attr_dev(div23, "force", "cluster-type");
-    			add_location(div23, file$1, 242, 12, 14780);
+    			add_location(div23, file$2, 242, 12, 14798);
     			attr_dev(div24, "act", "type");
     			attr_dev(div24, "class", "act-narrative svelte-5ht2kh");
     			attr_dev(div24, "legendhazards", "0.2");
     			attr_dev(div24, "legendapproach", "0.5");
     			attr_dev(div24, "legendscale", "0.8");
-    			add_location(div24, file$1, 233, 8, 13978);
+    			add_location(div24, file$2, 233, 8, 13996);
     			attr_dev(hr5, "class", "svelte-5ht2kh");
-    			add_location(hr5, file$1, 253, 16, 15493);
+    			add_location(hr5, file$2, 253, 16, 15511);
     			attr_dev(h25, "class", "svelte-5ht2kh");
-    			add_location(h25, file$1, 254, 16, 15514);
-    			add_location(strong7, file$1, 255, 19, 15565);
+    			add_location(h25, file$2, 254, 16, 15532);
+    			add_location(strong7, file$2, 255, 19, 15583);
     			attr_dev(a0, "href", "https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf");
     			attr_dev(a0, "target", "_blank");
-    			add_location(a0, file$1, 255, 84, 15630);
+    			add_location(a0, file$2, 255, 84, 15648);
     			attr_dev(a1, "href", "https://adaptgrampians.com.au/");
     			attr_dev(a1, "target", "_blank");
-    			add_location(a1, file$1, 255, 305, 15851);
-    			add_location(strong8, file$1, 255, 491, 16037);
-    			add_location(p18, file$1, 255, 16, 15562);
-    			add_location(strong9, file$1, 256, 76, 16171);
-    			add_location(p19, file$1, 256, 16, 16111);
-    			add_location(strong10, file$1, 257, 166, 16496);
-    			add_location(p20, file$1, 257, 16, 16346);
+    			add_location(a1, file$2, 255, 305, 15869);
+    			add_location(strong8, file$2, 255, 491, 16055);
+    			add_location(p18, file$2, 255, 16, 15580);
+    			add_location(strong9, file$2, 256, 82, 16195);
+    			add_location(p19, file$2, 256, 16, 16129);
+    			add_location(strong10, file$2, 257, 166, 16520);
+    			add_location(p20, file$2, 257, 16, 16370);
     			attr_dev(div25, "scene", "0");
     			attr_dev(div25, "force", "ring-focusArea");
-    			add_location(div25, file$1, 252, 12, 15437);
+    			add_location(div25, file$2, 252, 12, 15455);
     			attr_dev(div26, "act", "focusArea");
     			attr_dev(div26, "class", "act-narrative svelte-5ht2kh");
-    			add_location(div26, file$1, 251, 8, 15376);
+    			add_location(div26, file$2, 251, 8, 15394);
     			attr_dev(hr6, "class", "svelte-5ht2kh");
-    			add_location(hr6, file$1, 263, 16, 16764);
+    			add_location(hr6, file$2, 263, 16, 16788);
     			attr_dev(h26, "class", "svelte-5ht2kh");
-    			add_location(h26, file$1, 264, 16, 16785);
+    			add_location(h26, file$2, 264, 16, 16809);
     			attr_dev(div27, "scene", "0");
     			attr_dev(div27, "force", "cluster-screening");
-    			add_location(div27, file$1, 262, 12, 16705);
-    			add_location(p21, file$1, 267, 16, 16907);
-    			add_location(strong11, file$1, 269, 103, 17276);
-    			add_location(strong12, file$1, 269, 282, 17455);
-    			add_location(strong13, file$1, 269, 307, 17480);
-    			add_location(strong14, file$1, 269, 340, 17513);
-    			add_location(p22, file$1, 269, 16, 17189);
+    			add_location(div27, file$2, 262, 12, 16729);
+    			add_location(p21, file$2, 267, 16, 16931);
+    			add_location(strong11, file$2, 269, 103, 17300);
+    			add_location(strong12, file$2, 269, 282, 17479);
+    			add_location(strong13, file$2, 269, 307, 17504);
+    			add_location(strong14, file$2, 269, 340, 17537);
+    			add_location(p22, file$2, 269, 16, 17213);
     			attr_dev(div28, "scene", "1");
     			attr_dev(div28, "force", "cluster-screening");
-    			add_location(div28, file$1, 266, 12, 16849);
-    			add_location(strong15, file$1, 272, 79, 17694);
-    			add_location(p23, file$1, 272, 16, 17631);
-    			add_location(em12, file$1, 273, 47, 17866);
-    			add_location(p24, file$1, 273, 16, 17835);
+    			add_location(div28, file$2, 266, 12, 16873);
+    			add_location(strong15, file$2, 272, 79, 17718);
+    			add_location(p23, file$2, 272, 16, 17655);
+    			add_location(em12, file$2, 273, 47, 17890);
+    			add_location(p24, file$2, 273, 16, 17859);
     			attr_dev(div29, "scene", "2");
     			attr_dev(div29, "force", "cluster-screening");
-    			add_location(div29, file$1, 271, 12, 17573);
+    			add_location(div29, file$2, 271, 12, 17597);
     			attr_dev(div30, "act", "screening");
     			attr_dev(div30, "class", "act-narrative svelte-5ht2kh");
-    			add_location(div30, file$1, 261, 8, 16645);
+    			add_location(div30, file$2, 261, 8, 16669);
     			attr_dev(hr7, "class", "svelte-5ht2kh");
-    			add_location(hr7, file$1, 279, 16, 18309);
+    			add_location(hr7, file$2, 279, 16, 18333);
     			attr_dev(h27, "class", "svelte-5ht2kh");
-    			add_location(h27, file$1, 280, 16, 18330);
-    			add_location(p25, file$1, 281, 16, 18387);
+    			add_location(h27, file$2, 280, 16, 18354);
+    			add_location(p25, file$2, 281, 16, 18411);
     			attr_dev(div31, "scene", "0");
     			attr_dev(div31, "force", "cluster-noregets-vs-others");
-    			add_location(div31, file$1, 278, 12, 18242);
-    			add_location(p26, file$1, 285, 16, 18604);
+    			add_location(div31, file$2, 278, 12, 18266);
+    			add_location(p26, file$2, 285, 16, 18628);
     			attr_dev(div32, "scene", "1");
     			attr_dev(div32, "force", "cluster-adaptation-criteria");
-    			add_location(div32, file$1, 284, 12, 18536);
-    			add_location(em13, file$1, 289, 495, 19485);
-    			add_location(p27, file$1, 289, 16, 19006);
-    			add_location(p28, file$1, 291, 16, 19561);
+    			add_location(div32, file$2, 284, 12, 18560);
+    			add_location(em13, file$2, 289, 495, 19509);
+    			add_location(p27, file$2, 289, 16, 19030);
+    			add_location(p28, file$2, 291, 16, 19585);
     			attr_dev(div33, "scene", "2");
     			attr_dev(div33, "force", "cluster-rating");
-    			add_location(div33, file$1, 288, 12, 18951);
+    			add_location(div33, file$2, 288, 12, 18975);
     			attr_dev(div34, "act", "rating");
     			attr_dev(div34, "class", "act-narrative svelte-5ht2kh");
-    			add_location(div34, file$1, 277, 8, 18185);
+    			add_location(div34, file$2, 277, 8, 18209);
     			attr_dev(hr8, "class", "svelte-5ht2kh");
-    			add_location(hr8, file$1, 298, 16, 19814);
+    			add_location(hr8, file$2, 298, 16, 19838);
     			attr_dev(h28, "class", "svelte-5ht2kh");
-    			add_location(h28, file$1, 299, 16, 19835);
-    			add_location(strong16, file$1, 300, 69, 19940);
-    			add_location(p29, file$1, 300, 16, 19887);
-    			add_location(strong17, file$1, 302, 84, 20240);
-    			add_location(p30, file$1, 302, 16, 20172);
-    			add_location(li11, file$1, 305, 20, 20460);
-    			add_location(li12, file$1, 306, 20, 20547);
-    			add_location(li13, file$1, 307, 20, 20630);
-    			add_location(li14, file$1, 308, 20, 20706);
-    			add_location(ul2, file$1, 304, 16, 20435);
-    			add_location(p31, file$1, 310, 16, 20834);
+    			add_location(h28, file$2, 299, 16, 19859);
+    			add_location(strong16, file$2, 300, 69, 19964);
+    			add_location(p29, file$2, 300, 16, 19911);
+    			add_location(strong17, file$2, 302, 84, 20264);
+    			add_location(p30, file$2, 302, 16, 20196);
+    			add_location(li11, file$2, 305, 20, 20484);
+    			add_location(li12, file$2, 306, 20, 20571);
+    			add_location(li13, file$2, 307, 20, 20654);
+    			add_location(li14, file$2, 308, 20, 20730);
+    			add_location(ul2, file$2, 304, 16, 20459);
+    			add_location(p31, file$2, 310, 16, 20858);
     			attr_dev(div35, "scene", "0");
     			attr_dev(div35, "force", "ring-mid");
-    			add_location(div35, file$1, 297, 12, 19765);
+    			add_location(div35, file$2, 297, 12, 19789);
     			attr_dev(div36, "act", "beyond");
     			attr_dev(div36, "class", "act-narrative svelte-5ht2kh");
-    			add_location(div36, file$1, 296, 8, 19708);
+    			add_location(div36, file$2, 296, 8, 19732);
     			attr_dev(div37, "class", "narrative-wrapper svelte-5ht2kh");
-    			add_location(div37, file$1, 163, 4, 8007);
+    			add_location(div37, file$2, 163, 4, 8007);
     			attr_dev(div38, "class", "action-vis-wrapper svelte-5ht2kh");
-    			add_location(div38, file$1, 318, 8, 21492);
+    			add_location(div38, file$2, 318, 8, 21516);
     			attr_dev(div39, "class", "vis-wrapper svelte-5ht2kh");
-    			add_location(div39, file$1, 317, 4, 21456);
+    			add_location(div39, file$2, 317, 4, 21480);
     			attr_dev(div40, "class", "content-wrapper svelte-5ht2kh");
-    			add_location(div40, file$1, 161, 0, 7935);
-    			add_location(p32, file$1, 327, 8, 21681);
+    			add_location(div40, file$2, 161, 0, 7935);
+    			add_location(p32, file$2, 327, 8, 21705);
     			attr_dev(div41, "class", "print-message svelte-5ht2kh");
-    			add_location(div41, file$1, 326, 4, 21643);
+    			add_location(div41, file$2, 326, 4, 21667);
     			attr_dev(div42, "class", "print-wrapper svelte-5ht2kh");
-    			add_location(div42, file$1, 325, 0, 21609);
+    			add_location(div42, file$2, 325, 0, 21633);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51082,7 +51954,7 @@ var app = (function (exports) {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$1.name,
+    		id: create_fragment$2.name,
     		type: "component",
     		source: "",
     		ctx
@@ -51091,7 +51963,7 @@ var app = (function (exports) {
     	return block;
     }
 
-    function instance$1($$self, $$props, $$invalidate) {
+    function instance$2($$self, $$props, $$invalidate) {
     	let $ui;
     	let $data;
     	validate_store(ui, 'ui');
@@ -51290,11 +52162,1350 @@ var app = (function (exports) {
     class Actions extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init$1(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+    		init$1(this, options, instance$2, create_fragment$2, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Actions",
+    			options,
+    			id: create_fragment$2.name
+    		});
+    	}
+    }
+
+    /* src/components/shared/LogoGroup.svelte generated by Svelte v3.48.0 */
+
+    const file$1 = "src/components/shared/LogoGroup.svelte";
+
+    function create_fragment$1(ctx) {
+    	let section;
+    	let div0;
+    	let svg0;
+    	let g0;
+    	let path0;
+    	let path1;
+    	let rect0;
+    	let path2;
+    	let path3;
+    	let path4;
+    	let path5;
+    	let path6;
+    	let path7;
+    	let path8;
+    	let rect1;
+    	let path9;
+    	let path10;
+    	let path11;
+    	let t0;
+    	let div1;
+    	let svg1;
+    	let g1;
+    	let path12;
+    	let path13;
+    	let path14;
+    	let path15;
+    	let path16;
+    	let path17;
+    	let path18;
+    	let path19;
+    	let path20;
+    	let path21;
+    	let path22;
+    	let path23;
+    	let path24;
+    	let path25;
+    	let path26;
+    	let path27;
+    	let path28;
+    	let path29;
+    	let path30;
+    	let path31;
+    	let path32;
+    	let path33;
+    	let path34;
+    	let path35;
+    	let path36;
+    	let path37;
+    	let path38;
+    	let path39;
+    	let path40;
+    	let path41;
+    	let path42;
+    	let path43;
+    	let path44;
+    	let path45;
+    	let path46;
+    	let path47;
+    	let path48;
+    	let path49;
+    	let path50;
+    	let path51;
+    	let path52;
+    	let path53;
+    	let path54;
+    	let path55;
+    	let path56;
+    	let path57;
+    	let path58;
+    	let path59;
+    	let path60;
+    	let path61;
+    	let path62;
+    	let path63;
+    	let path64;
+    	let path65;
+    	let path66;
+    	let path67;
+    	let path68;
+    	let path69;
+    	let path70;
+    	let path71;
+    	let path72;
+    	let path73;
+    	let path74;
+    	let path75;
+    	let path76;
+    	let path77;
+    	let rect2;
+    	let path78;
+    	let path79;
+    	let path80;
+    	let path81;
+    	let path82;
+    	let t1;
+    	let div2;
+    	let svg2;
+    	let g23;
+    	let g2;
+    	let path83;
+    	let g3;
+    	let path84;
+    	let g4;
+    	let path85;
+    	let g5;
+    	let path86;
+    	let g6;
+    	let path87;
+    	let g7;
+    	let path88;
+    	let g8;
+    	let path89;
+    	let g9;
+    	let path90;
+    	let g10;
+    	let path91;
+    	let g11;
+    	let path92;
+    	let g12;
+    	let path93;
+    	let g13;
+    	let path94;
+    	let g14;
+    	let path95;
+    	let g15;
+    	let path96;
+    	let g16;
+    	let path97;
+    	let g17;
+    	let path98;
+    	let g18;
+    	let path99;
+    	let g19;
+    	let path100;
+    	let g20;
+    	let path101;
+    	let g21;
+    	let path102;
+    	let g22;
+    	let path103;
+    	let t2;
+    	let div3;
+    	let svg3;
+    	let g42;
+    	let g24;
+    	let rect3;
+    	let g25;
+    	let rect4;
+    	let g26;
+    	let rect5;
+    	let g27;
+    	let rect6;
+    	let g28;
+    	let rect7;
+    	let g29;
+    	let path104;
+    	let g30;
+    	let path105;
+    	let g31;
+    	let path106;
+    	let g32;
+    	let path107;
+    	let g33;
+    	let path108;
+    	let g34;
+    	let path109;
+    	let g35;
+    	let path110;
+    	let g36;
+    	let path111;
+    	let g37;
+    	let path112;
+    	let g38;
+    	let path113;
+    	let g39;
+    	let path114;
+    	let g40;
+    	let path115;
+    	let g41;
+    	let path116;
+    	let t3;
+    	let div4;
+    	let svg4;
+    	let g43;
+    	let path117;
+    	let path118;
+    	let path119;
+    	let path120;
+    	let path121;
+    	let path122;
+    	let path123;
+    	let path124;
+    	let path125;
+    	let path126;
+    	let path127;
+    	let path128;
+    	let path129;
+    	let path130;
+    	let path131;
+    	let path132;
+    	let path133;
+    	let path134;
+    	let path135;
+    	let path136;
+    	let path137;
+    	let path138;
+    	let path139;
+    	let path140;
+    	let path141;
+    	let path142;
+
+    	const block = {
+    		c: function create() {
+    			section = element("section");
+    			div0 = element("div");
+    			svg0 = svg_element("svg");
+    			g0 = svg_element("g");
+    			path0 = svg_element("path");
+    			path1 = svg_element("path");
+    			rect0 = svg_element("rect");
+    			path2 = svg_element("path");
+    			path3 = svg_element("path");
+    			path4 = svg_element("path");
+    			path5 = svg_element("path");
+    			path6 = svg_element("path");
+    			path7 = svg_element("path");
+    			path8 = svg_element("path");
+    			rect1 = svg_element("rect");
+    			path9 = svg_element("path");
+    			path10 = svg_element("path");
+    			path11 = svg_element("path");
+    			t0 = space();
+    			div1 = element("div");
+    			svg1 = svg_element("svg");
+    			g1 = svg_element("g");
+    			path12 = svg_element("path");
+    			path13 = svg_element("path");
+    			path14 = svg_element("path");
+    			path15 = svg_element("path");
+    			path16 = svg_element("path");
+    			path17 = svg_element("path");
+    			path18 = svg_element("path");
+    			path19 = svg_element("path");
+    			path20 = svg_element("path");
+    			path21 = svg_element("path");
+    			path22 = svg_element("path");
+    			path23 = svg_element("path");
+    			path24 = svg_element("path");
+    			path25 = svg_element("path");
+    			path26 = svg_element("path");
+    			path27 = svg_element("path");
+    			path28 = svg_element("path");
+    			path29 = svg_element("path");
+    			path30 = svg_element("path");
+    			path31 = svg_element("path");
+    			path32 = svg_element("path");
+    			path33 = svg_element("path");
+    			path34 = svg_element("path");
+    			path35 = svg_element("path");
+    			path36 = svg_element("path");
+    			path37 = svg_element("path");
+    			path38 = svg_element("path");
+    			path39 = svg_element("path");
+    			path40 = svg_element("path");
+    			path41 = svg_element("path");
+    			path42 = svg_element("path");
+    			path43 = svg_element("path");
+    			path44 = svg_element("path");
+    			path45 = svg_element("path");
+    			path46 = svg_element("path");
+    			path47 = svg_element("path");
+    			path48 = svg_element("path");
+    			path49 = svg_element("path");
+    			path50 = svg_element("path");
+    			path51 = svg_element("path");
+    			path52 = svg_element("path");
+    			path53 = svg_element("path");
+    			path54 = svg_element("path");
+    			path55 = svg_element("path");
+    			path56 = svg_element("path");
+    			path57 = svg_element("path");
+    			path58 = svg_element("path");
+    			path59 = svg_element("path");
+    			path60 = svg_element("path");
+    			path61 = svg_element("path");
+    			path62 = svg_element("path");
+    			path63 = svg_element("path");
+    			path64 = svg_element("path");
+    			path65 = svg_element("path");
+    			path66 = svg_element("path");
+    			path67 = svg_element("path");
+    			path68 = svg_element("path");
+    			path69 = svg_element("path");
+    			path70 = svg_element("path");
+    			path71 = svg_element("path");
+    			path72 = svg_element("path");
+    			path73 = svg_element("path");
+    			path74 = svg_element("path");
+    			path75 = svg_element("path");
+    			path76 = svg_element("path");
+    			path77 = svg_element("path");
+    			rect2 = svg_element("rect");
+    			path78 = svg_element("path");
+    			path79 = svg_element("path");
+    			path80 = svg_element("path");
+    			path81 = svg_element("path");
+    			path82 = svg_element("path");
+    			t1 = space();
+    			div2 = element("div");
+    			svg2 = svg_element("svg");
+    			g23 = svg_element("g");
+    			g2 = svg_element("g");
+    			path83 = svg_element("path");
+    			g3 = svg_element("g");
+    			path84 = svg_element("path");
+    			g4 = svg_element("g");
+    			path85 = svg_element("path");
+    			g5 = svg_element("g");
+    			path86 = svg_element("path");
+    			g6 = svg_element("g");
+    			path87 = svg_element("path");
+    			g7 = svg_element("g");
+    			path88 = svg_element("path");
+    			g8 = svg_element("g");
+    			path89 = svg_element("path");
+    			g9 = svg_element("g");
+    			path90 = svg_element("path");
+    			g10 = svg_element("g");
+    			path91 = svg_element("path");
+    			g11 = svg_element("g");
+    			path92 = svg_element("path");
+    			g12 = svg_element("g");
+    			path93 = svg_element("path");
+    			g13 = svg_element("g");
+    			path94 = svg_element("path");
+    			g14 = svg_element("g");
+    			path95 = svg_element("path");
+    			g15 = svg_element("g");
+    			path96 = svg_element("path");
+    			g16 = svg_element("g");
+    			path97 = svg_element("path");
+    			g17 = svg_element("g");
+    			path98 = svg_element("path");
+    			g18 = svg_element("g");
+    			path99 = svg_element("path");
+    			g19 = svg_element("g");
+    			path100 = svg_element("path");
+    			g20 = svg_element("g");
+    			path101 = svg_element("path");
+    			g21 = svg_element("g");
+    			path102 = svg_element("path");
+    			g22 = svg_element("g");
+    			path103 = svg_element("path");
+    			t2 = space();
+    			div3 = element("div");
+    			svg3 = svg_element("svg");
+    			g42 = svg_element("g");
+    			g24 = svg_element("g");
+    			rect3 = svg_element("rect");
+    			g25 = svg_element("g");
+    			rect4 = svg_element("rect");
+    			g26 = svg_element("g");
+    			rect5 = svg_element("rect");
+    			g27 = svg_element("g");
+    			rect6 = svg_element("rect");
+    			g28 = svg_element("g");
+    			rect7 = svg_element("rect");
+    			g29 = svg_element("g");
+    			path104 = svg_element("path");
+    			g30 = svg_element("g");
+    			path105 = svg_element("path");
+    			g31 = svg_element("g");
+    			path106 = svg_element("path");
+    			g32 = svg_element("g");
+    			path107 = svg_element("path");
+    			g33 = svg_element("g");
+    			path108 = svg_element("path");
+    			g34 = svg_element("g");
+    			path109 = svg_element("path");
+    			g35 = svg_element("g");
+    			path110 = svg_element("path");
+    			g36 = svg_element("g");
+    			path111 = svg_element("path");
+    			g37 = svg_element("g");
+    			path112 = svg_element("path");
+    			g38 = svg_element("g");
+    			path113 = svg_element("path");
+    			g39 = svg_element("g");
+    			path114 = svg_element("path");
+    			g40 = svg_element("g");
+    			path115 = svg_element("path");
+    			g41 = svg_element("g");
+    			path116 = svg_element("path");
+    			t3 = space();
+    			div4 = element("div");
+    			svg4 = svg_element("svg");
+    			g43 = svg_element("g");
+    			path117 = svg_element("path");
+    			path118 = svg_element("path");
+    			path119 = svg_element("path");
+    			path120 = svg_element("path");
+    			path121 = svg_element("path");
+    			path122 = svg_element("path");
+    			path123 = svg_element("path");
+    			path124 = svg_element("path");
+    			path125 = svg_element("path");
+    			path126 = svg_element("path");
+    			path127 = svg_element("path");
+    			path128 = svg_element("path");
+    			path129 = svg_element("path");
+    			path130 = svg_element("path");
+    			path131 = svg_element("path");
+    			path132 = svg_element("path");
+    			path133 = svg_element("path");
+    			path134 = svg_element("path");
+    			path135 = svg_element("path");
+    			path136 = svg_element("path");
+    			path137 = svg_element("path");
+    			path138 = svg_element("path");
+    			path139 = svg_element("path");
+    			path140 = svg_element("path");
+    			path141 = svg_element("path");
+    			path142 = svg_element("path");
+    			attr_dev(path0, "d", "M221.711,406.714C229.232,408.51 233.143,411.171 233.143,417.043C233.143,423.66 227.913,427.576 220.443,427.576C214.992,427.576 209.853,425.718 205.578,421.954L209.353,417.543C212.758,420.454 216.163,422.108 220.591,422.108C224.451,422.108 226.895,420.351 226.895,417.634C226.895,415.082 225.468,413.729 218.857,412.222C211.285,410.42 207.011,408.215 207.011,401.695C207.011,395.572 212.098,391.457 219.164,391.457C224.349,391.457 228.47,393.014 232.08,395.868L228.72,400.529C225.514,398.176 222.308,396.925 219.062,396.925C215.407,396.925 213.264,398.778 213.264,401.143C213.264,403.9 214.89,405.1 221.711,406.714Z");
+    			attr_dev(path0, "class", "svelte-9kfwom");
+    			add_location(path0, file$1, 8, 16, 451);
+    			attr_dev(path1, "d", "M250.595,412.279L250.595,427.07L244.336,427.07L244.336,391.962L250.595,391.962L250.595,406.554L267.569,406.554L267.569,391.962L273.822,391.962L273.822,427.07L267.569,427.07L267.569,412.279L250.595,412.279Z");
+    			attr_dev(path1, "class", "svelte-9kfwom");
+    			add_location(path1, file$1, 9, 16, 1095);
+    			attr_dev(rect0, "x", "287.154");
+    			attr_dev(rect0, "y", "391.965");
+    			attr_dev(rect0, "width", "6.253");
+    			attr_dev(rect0, "height", "35.108");
+    			attr_dev(rect0, "class", "svelte-9kfwom");
+    			add_location(rect0, file$1, 10, 16, 1329);
+    			attr_dev(path2, "d", "M329.557,427.07L320.814,414.826L312.981,414.826L312.981,427.07L306.728,427.07L306.728,391.963L322.599,391.963C330.779,391.963 335.816,396.22 335.816,403.104C335.816,408.914 332.303,412.421 327.329,413.78L336.924,427.07L329.557,427.07ZM322.082,397.573L312.981,397.573L312.981,409.363L322.139,409.363C326.607,409.363 329.455,407.061 329.455,403.445C329.455,399.586 326.709,397.573 322.082,397.573Z");
+    			attr_dev(path2, "class", "svelte-9kfwom");
+    			add_location(path2, file$1, 11, 16, 1408);
+    			attr_dev(path3, "d", "M373.693,397.479L353.564,397.479L353.564,406.614L371.408,406.614L371.408,412.128L353.564,412.128L353.564,421.553L373.955,421.553L373.955,427.073L347.3,427.073L347.3,391.959L373.693,391.959L373.693,397.479Z");
+    			attr_dev(path3, "class", "svelte-9kfwom");
+    			add_location(path3, file$1, 12, 16, 1833);
+    			attr_dev(path4, "d", "M420.789,427.666C410.403,427.666 402.678,419.702 402.678,409.567C402.678,399.539 410.256,391.353 421.039,391.353C427.599,391.353 431.556,393.616 434.972,396.828L430.959,401.381C428.099,398.783 425.058,397.021 420.982,397.021C414.178,397.021 409.238,402.546 409.238,409.47C409.238,416.382 414.178,422.01 420.982,422.01C425.354,422.01 428.151,420.254 431.209,417.44L435.228,421.459C431.516,425.262 427.452,427.666 420.789,427.666Z");
+    			attr_dev(path4, "class", "svelte-9kfwom");
+    			add_location(path4, file$1, 13, 16, 2067);
+    			attr_dev(path5, "d", "M461.558,427.666C450.626,427.666 443.003,419.492 443.003,409.567C443.003,399.641 450.746,391.353 461.666,391.353C472.597,391.353 480.231,399.539 480.231,409.47C480.231,419.401 472.5,427.666 461.558,427.666ZM461.558,397.021C454.503,397.021 449.569,402.597 449.569,409.47C449.569,416.343 454.605,422.01 461.666,422.01C468.737,422.01 473.672,416.439 473.672,409.567C473.672,402.694 468.629,397.021 461.558,397.021Z");
+    			attr_dev(path5, "class", "svelte-9kfwom");
+    			add_location(path5, file$1, 14, 16, 2525);
+    			attr_dev(path6, "d", "M521.517,411.88C521.517,422.351 515.52,427.62 506.203,427.62C496.954,427.62 491.059,422.351 491.059,412.164L491.059,391.961L497.312,391.961L497.312,411.919C497.312,418.451 500.717,421.953 506.305,421.953C511.859,421.953 515.258,418.644 515.258,412.164L515.258,391.961L521.517,391.961L521.517,411.88Z");
+    			attr_dev(path6, "class", "svelte-9kfwom");
+    			add_location(path6, file$1, 15, 16, 2966);
+    			attr_dev(path7, "d", "M558.798,391.962L564.938,391.962L564.938,427.07L559.708,427.07L540.085,402.092L540.085,427.07L533.923,427.07L533.923,391.962L539.715,391.962L558.798,416.235L558.798,391.962Z");
+    			attr_dev(path7, "class", "svelte-9kfwom");
+    			add_location(path7, file$1, 16, 16, 3295);
+    			attr_dev(path8, "d", "M594.438,427.666C584.069,427.666 576.338,419.702 576.338,409.567C576.338,399.539 583.91,391.353 594.693,391.353C601.259,391.353 605.221,393.616 608.615,396.828L604.607,401.381C601.759,398.783 598.695,397.021 594.642,397.021C587.826,397.021 582.898,402.546 582.898,409.47C582.898,416.382 587.826,422.01 594.642,422.01C599.008,422.01 601.81,420.254 604.863,417.44L608.876,421.459C605.17,425.262 601.1,427.666 594.438,427.666Z");
+    			attr_dev(path8, "class", "svelte-9kfwom");
+    			add_location(path8, file$1, 17, 16, 3497);
+    			attr_dev(rect1, "x", "619.604");
+    			attr_dev(rect1, "y", "391.965");
+    			attr_dev(rect1, "width", "6.258");
+    			attr_dev(rect1, "height", "35.108");
+    			attr_dev(rect1, "class", "svelte-9kfwom");
+    			add_location(rect1, file$1, 18, 16, 3950);
+    			attr_dev(path9, "d", "M639.186,391.962L645.445,391.962L645.445,421.459L664.153,421.459L664.153,427.07L639.186,427.07L639.186,391.962Z");
+    			attr_dev(path9, "class", "svelte-9kfwom");
+    			add_location(path9, file$1, 19, 16, 4029);
+    			attr_dev(path10, "d", "M240.285,319.537C240.319,319.446 240.336,319.378 240.353,319.355C240.353,319.605 240.33,319.633 240.285,319.537ZM231.746,249.361C231.388,244.376 231.036,239.339 230.735,234.291C234.134,234.428 237.51,234.581 240.904,234.558C244.002,234.535 268.434,225.906 266.894,224.707C258.708,218.403 243.735,218.528 230.104,220.108C229.751,206.841 230.143,193.544 232.338,180.618C233.884,171.471 236.681,162.893 239.455,154.298C243.394,142.093 236.181,122.203 234.288,123.465C218.922,133.714 217.933,165.769 217.075,182.698C216.677,190.617 217.12,205.169 217.956,221.842C215.363,222.28 212.931,222.7 210.782,223.07C198.702,225.156 174.526,231.665 152.487,237.821C151.731,211.115 147.985,193.851 137.644,178.946C137.644,178.946 129.692,171.113 116.97,169.544C88.569,166.043 55.354,166.605 44.679,209.876C47.231,210.086 50.966,211.866 54.212,211.445C70.117,178.503 97.892,164.047 124.786,188.445C126.247,190.315 127.941,192.362 129.259,194.636C132.051,199.479 134,204.8 135.473,210.172C138.281,220.319 139.401,230.909 139.611,241.448C129.021,244.444 119.732,247.115 113.718,248.775C107.329,250.549 111.302,261.458 115.884,259.423C115.884,259.423 125.621,256.029 139.549,251.731C138.798,277.585 134.114,305.575 121.75,328.592C127.503,332.833 128.85,341.07 139.191,341.144C139.191,341.144 149.571,309.373 152.009,274.651C152.146,271.212 152.669,260.707 152.635,247.82C173.349,241.806 198.514,235.468 216.091,234.246C216.938,234.189 217.785,234.149 218.615,234.121C220.275,263.623 222.714,296.065 223.544,309.424C224.004,316.803 240.29,321.1 241.962,321.316C241.837,321.288 242.155,320.02 242.291,319.537C241.496,317.729 232.44,259.013 231.746,249.361Z");
+    			attr_dev(path10, "class", "svelte-9kfwom");
+    			add_location(path10, file$1, 20, 16, 4170);
+    			attr_dev(path11, "d", "M574.65,266.221C574.616,266.483 574.588,266.75 574.531,267.017C574.349,267.915 573.4,269.035 572.536,269.632C570.79,270.866 568.744,269.388 568.318,267.961C567.851,266.449 568.465,264.453 569.483,263.106C570.341,261.986 572.621,260.696 573.94,261.952C575.082,263.021 574.724,264.88 574.65,266.221ZM275.665,271.355C276.956,271.252 278.309,272.685 277.967,274.322C277.649,275.828 267.349,281.871 266.371,281.575C265.689,281.365 265.82,280.7 265.82,280.08C265.842,277.073 272.584,271.593 275.665,271.355ZM428.745,181.789C431.928,181.232 433.002,184.443 433.787,189.156C429.546,225.906 440.711,236.77 410.372,256.376C411.072,208.819 411.196,213.696 428.745,181.789ZM796.217,274.112C786.679,299.209 776.077,308.884 751.701,301.562C730.669,295.246 734.676,269.99 719.112,263.658C688.887,251.373 678.564,283.525 668.224,293.462C670.213,277.71 671.055,269.007 671.918,252.158C657.559,249.577 651.255,264.709 644.371,271.502C636.129,283.815 616.284,305.166 603.022,304.444C593.483,303.916 607.535,260.315 601.851,261.247C598.758,261.759 585.257,269.564 581.125,268.182C583.802,260.906 581.909,258.007 576.958,254.898C571.205,251.271 563.736,255.051 561.371,258.973C558.5,263.675 555.067,273.139 567.38,280.08C552.725,304.791 526.747,318.519 529.179,282.184C529.435,278.216 531.857,251.186 524.814,252.317C522.136,252.738 514.893,279.296 511.557,285.879C508.385,292.115 504.185,300.073 496.249,300.801C488.717,288.095 506.805,263.106 492.258,255.489C483.174,260.395 485.272,269.422 474.289,271.246C452.427,274.896 456.275,269.018 441.984,266.176C427.699,263.311 421.19,269.018 426.022,271.167C430.871,273.299 431.854,277.164 431.854,277.164C430.916,292.348 427.784,304.069 415.38,308.628C408.24,294.678 408.957,275.76 412.748,265.391C453.115,246.218 451.284,200.911 435.737,166.037C427.363,165.286 421.059,167.071 418.006,169.976C391.301,195.528 399.31,223.888 394.655,260.321C394.006,265.414 378.715,262.686 368.505,260.798C364.941,258.837 361.036,257.825 358.205,259.366C352.219,262.674 346.853,267.841 342.271,273.912C342.317,269.172 342.226,265.238 341.606,264.539C339.588,263.43 337.928,262.958 335.927,262.867C330.919,262.657 325.832,263.823 320.659,265.482C309.051,269.427 298.046,279.722 295.232,282.081C287.489,288.573 275.41,299.476 266.61,296.981C266.462,296.941 266.32,296.867 266.201,296.776C265.274,296.031 265.132,293.814 265.28,291.688C265.388,291.54 265.444,291.387 265.57,291.239C265.57,291.239 270.691,289.232 273.574,287.567C278.718,284.599 286.432,279.808 287.666,273.884C289.109,266.983 283.465,260.992 278.019,261.412C265.189,262.407 258.726,270.058 253.251,280.336C249.397,287.555 248.778,302.784 257.122,307.963C259.463,309.424 261.698,309.981 263.893,309.964C270.646,310.299 277.757,306.059 282.907,302.301C288.228,298.436 311.131,271.582 330.209,269.092C330.891,269.353 331.266,269.848 331.204,270.695C330.356,281.979 324.297,294.263 323.035,310.93C321.773,327.62 318.982,354.559 334.813,365.894C336.774,367.293 343.556,373.739 336.825,344.56C334.807,335.829 329.021,327.796 334.256,311.766L336.183,305.632C341.123,293.274 347.461,280.086 358.574,267.313C369.466,272.281 370.535,287.243 362.11,299.044C362.11,299.044 354.277,303.66 344.738,304.444C337.502,305.047 349.502,311.505 361.212,311.038C364.134,310.925 366.533,309.486 368.761,307.724C374.156,303.45 379.357,295.724 380.392,289.232C381.307,283.491 381.102,277.016 378.777,271.508C385.013,270.746 391.744,268.472 397.156,268.199C395.439,285.083 399.646,307.253 412.396,316.547C441.006,319.002 441.455,295.326 445.713,275.192C459.646,280.006 471.458,274.083 482.276,277.164C473.124,327.734 505.446,311.232 520.175,290.699C522.927,286.845 522.482,307.463 537.553,311.823C548.115,314.887 564.361,304.228 575.259,283.309C578.766,285.555 596.365,277.346 595.541,280.08C584.143,317.774 601.572,316.496 608.32,312.812C623.151,304.706 631.496,298.032 639.062,290.847C647.543,283.525 651.523,279.608 651.523,279.608C652.21,279.319 657.087,275.362 657.889,274.896C658.964,287.612 651.71,310.595 656.03,320.122C672.697,321.481 688.841,265.164 710.363,272.543C728.656,278.818 725.461,305.49 742.964,313.329C762.263,321.987 789.862,310.186 800.992,285.884C798.428,285.782 799.463,273.56 796.217,274.112Z");
+    			attr_dev(path11, "class", "svelte-9kfwom");
+    			add_location(path11, file$1, 21, 16, 5835);
+    			attr_dev(g0, "transform", "matrix(4.16667,0,0,4.16667,0,0)");
+    			add_location(g0, file$1, 7, 12, 387);
+    			attr_dev(svg0, "width", "100%");
+    			attr_dev(svg0, "height", "100%");
+    			attr_dev(svg0, "viewBox", "0 0 3509 2484");
+    			attr_dev(svg0, "version", "1.1");
+    			attr_dev(svg0, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg0, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg0, "xml:space", "preserve");
+    			attr_dev(svg0, "xmlns:serif", "http://www.serif.com/");
+    			set_style(svg0, "fill-rule", "evenodd");
+    			set_style(svg0, "clip-rule", "evenodd");
+    			set_style(svg0, "stroke-linejoin", "round");
+    			set_style(svg0, "stroke-miterlimit", "2");
+    			attr_dev(svg0, "class", "svelte-9kfwom");
+    			add_location(svg0, file$1, 6, 8, 82);
+    			attr_dev(div0, "class", "logo-container hepburn svelte-9kfwom");
+    			add_location(div0, file$1, 5, 4, 35);
+    			attr_dev(path12, "d", "M49.31,2.8C53.093,2.8 56.16,5.867 56.16,9.65C56.16,13.434 53.093,16.5 49.31,16.5C45.526,16.5 42.46,13.434 42.46,9.65C42.46,5.867 45.526,2.8 49.31,2.8Z");
+    			attr_dev(path12, "class", "svelte-9kfwom");
+    			add_location(path12, file$1, 28, 16, 10483);
+    			attr_dev(path13, "d", "M69.05,0.05C72.833,0.05 75.9,3.117 75.9,6.9C75.9,10.684 72.833,13.75 69.05,13.75C65.266,13.75 62.2,10.684 62.2,6.9C62.2,3.117 65.266,0.05 69.05,0.05Z");
+    			attr_dev(path13, "class", "svelte-9kfwom");
+    			add_location(path13, file$1, 29, 16, 10662);
+    			attr_dev(path14, "d", "M88.79,5.21C92.573,5.21 95.64,8.277 95.64,12.06C95.64,15.844 92.573,18.91 88.79,18.91C85.006,18.91 81.94,15.844 81.94,12.06C81.94,8.277 85.006,5.21 88.79,5.21Z");
+    			attr_dev(path14, "class", "svelte-9kfwom");
+    			add_location(path14, file$1, 30, 16, 10840);
+    			attr_dev(path15, "d", "M105.65,19.79C109.433,19.79 112.5,22.857 112.5,26.64C112.5,30.424 109.433,33.49 105.65,33.49C101.867,33.49 98.8,30.424 98.8,26.64C98.8,22.857 101.867,19.79 105.65,19.79Z");
+    			attr_dev(path15, "class", "svelte-9kfwom");
+    			add_location(path15, file$1, 31, 16, 11028);
+    			attr_dev(path16, "d", "M30.43,13.02C34.213,13.02 37.28,16.087 37.28,19.87C37.28,23.654 34.213,26.72 30.43,26.72C26.646,26.72 23.58,23.654 23.58,19.87C23.58,16.087 26.646,13.02 30.43,13.02Z");
+    			attr_dev(path16, "class", "svelte-9kfwom");
+    			add_location(path16, file$1, 32, 16, 11226);
+    			attr_dev(path17, "d", "M17.92,29.66C21.703,29.66 24.77,32.727 24.77,36.51C24.77,40.294 21.703,43.36 17.92,43.36C14.136,43.36 11.07,40.294 11.07,36.51C11.07,32.727 14.136,29.66 17.92,29.66Z");
+    			attr_dev(path17, "class", "svelte-9kfwom");
+    			add_location(path17, file$1, 33, 16, 11420);
+    			attr_dev(path18, "d", "M13.21,49.16C16.993,49.16 20.06,52.227 20.06,56.01C20.06,59.794 16.993,62.86 13.21,62.86C9.426,62.86 6.36,59.794 6.36,56.01C6.36,52.227 9.426,49.16 13.21,49.16Z");
+    			attr_dev(path18, "class", "svelte-9kfwom");
+    			add_location(path18, file$1, 34, 16, 11614);
+    			attr_dev(path19, "d", "M16.44,68.9C20.223,68.9 23.29,71.967 23.29,75.75C23.29,79.534 20.223,82.6 16.44,82.6C12.656,82.6 9.59,79.534 9.59,75.75C9.59,71.967 12.656,68.9 16.44,68.9Z");
+    			attr_dev(path19, "class", "svelte-9kfwom");
+    			add_location(path19, file$1, 35, 16, 11803);
+    			attr_dev(path20, "d", "M65.489,62.8L60.95,51.5L56.41,62.8L65.489,62.8ZM68.42,70.17L53.48,70.17L50.7,77.03L40.51,77.03L56.1,41.71L65.94,41.71L81.58,77.03L71.18,77.03L68.4,70.17L68.42,70.17Z");
+    			attr_dev(path20, "class", "svelte-9kfwom");
+    			add_location(path20, file$1, 36, 16, 11988);
+    			attr_dev(path21, "d", "M101.73,68.12C102.81,66.96 103.34,65.35 103.34,63.3C103.34,61.25 102.81,59.7 101.75,58.56C100.69,57.42 99.32,56.84 97.64,56.84C95.96,56.84 94.58,57.41 93.5,58.56C92.42,59.7 91.89,61.29 91.89,63.3C91.89,65.31 92.43,66.96 93.5,68.12C94.58,69.28 95.96,69.86 97.64,69.86C99.32,69.86 100.65,69.28 101.73,68.12ZM112.78,39.58L112.78,77.02L103.65,77.02L103.65,74.29C101.87,76.41 99.19,77.47 95.63,77.47C93.14,77.47 90.87,76.89 88.82,75.73C86.77,74.57 85.14,72.91 83.95,70.76C82.76,68.61 82.16,66.12 82.16,63.29C82.16,60.46 82.76,57.98 83.95,55.85C85.14,53.71 86.77,52.07 88.82,50.93C90.87,49.79 93.14,49.21 95.63,49.21C98.89,49.21 101.42,50.15 103.2,52.04L103.2,39.58L112.79,39.58L112.78,39.58Z");
+    			attr_dev(path21, "class", "svelte-9kfwom");
+    			add_location(path21, file$1, 37, 16, 12182);
+    			attr_dev(path22, "d", "M133.16,70.62C134,70.08 134.61,69.29 134.98,68.25L134.98,65.88L130.84,65.88C128.05,65.88 126.65,66.81 126.65,68.66C126.65,69.5 126.97,70.17 127.61,70.68C128.25,71.18 129.119,71.44 130.229,71.44C131.34,71.44 132.32,71.17 133.16,70.63L133.16,70.62ZM140.98,52.33C143.37,54.4 144.56,57.57 144.56,61.84L144.56,77.03L135.63,77.03L135.63,73.5C134.25,76.16 131.56,77.49 127.56,77.49C125.44,77.49 123.61,77.12 122.06,76.38C120.51,75.64 119.34,74.64 118.55,73.38C117.76,72.12 117.36,70.68 117.36,69.07C117.36,66.48 118.35,64.47 120.34,63.04C122.32,61.61 125.39,60.9 129.52,60.9L134.97,60.9C134.8,58.01 132.87,56.56 129.17,56.56C127.86,56.56 126.53,56.77 125.18,57.19C123.83,57.61 122.69,58.19 121.75,58.93L118.52,52.42C120.03,51.41 121.88,50.63 124.05,50.07C126.22,49.51 128.399,49.24 130.59,49.24C135.13,49.24 138.6,50.27 140.98,52.34L140.98,52.33Z");
+    			attr_dev(path22, "class", "svelte-9kfwom");
+    			add_location(path22, file$1, 38, 16, 12898);
+    			attr_dev(path23, "d", "M169.95,68.12C171.03,66.96 171.56,65.37 171.56,63.35C171.56,61.33 171.02,59.74 169.95,58.58C168.87,57.42 167.49,56.84 165.81,56.84C164.13,56.84 162.75,57.42 161.67,58.58C160.59,59.74 160.06,61.33 160.06,63.35C160.06,65.37 160.6,66.96 161.67,68.12C162.75,69.28 164.13,69.86 165.81,69.86C167.49,69.86 168.87,69.28 169.95,68.12ZM174.62,50.96C176.65,52.12 178.27,53.77 179.46,55.91C180.65,58.05 181.25,60.53 181.25,63.35C181.25,66.17 180.65,68.66 179.46,70.79C178.27,72.93 176.65,74.57 174.62,75.74C172.58,76.9 170.32,77.48 167.83,77.48C164.63,77.48 162.09,76.52 160.21,74.6L160.21,86.81L150.62,86.81L150.62,49.68L159.75,49.68L159.75,52.41C161.53,50.29 164.22,49.23 167.82,49.23C170.31,49.23 172.57,49.81 174.61,50.97L174.62,50.96Z");
+    			attr_dev(path23, "class", "svelte-9kfwom");
+    			add_location(path23, file$1, 39, 16, 13767);
+    			attr_dev(path24, "d", "M204.57,75.92C203.76,76.42 202.78,76.81 201.62,77.08C200.46,77.35 199.22,77.48 197.91,77.48C194.34,77.48 191.6,76.61 189.68,74.86C187.76,73.11 186.8,70.5 186.8,67.04L186.8,57.86L182.81,57.86L182.81,50.69L186.8,50.69L186.8,43.57L196.39,43.57L196.39,50.69L202.65,50.69L202.65,57.86L196.39,57.86L196.39,66.94C196.39,67.92 196.65,68.68 197.17,69.24C197.69,69.8 198.39,70.07 199.26,70.07C200.37,70.07 201.35,69.78 202.19,69.21L204.56,75.92L204.57,75.92Z");
+    			attr_dev(path24, "class", "svelte-9kfwom");
+    			add_location(path24, file$1, 40, 16, 14524);
+    			attr_dev(path25, "d", "M20.19,102.07L23.77,102.07L23.77,112.24C22.48,113.31 20.98,114.13 19.26,114.7C17.55,115.27 15.76,115.56 13.9,115.56C11.27,115.56 8.9,114.98 6.79,113.83C4.68,112.68 3.02,111.09 1.819,109.06C0.619,107.04 0.009,104.76 0.009,102.23C0.009,99.7 0.609,97.41 1.819,95.38C3.02,93.34 4.69,91.76 6.81,90.61C8.93,89.47 11.32,88.9 13.98,88.9C16.07,88.9 17.96,89.24 19.66,89.92C21.36,90.6 22.81,91.6 24,92.92L21.69,95.23C19.6,93.22 17.08,92.21 14.13,92.21C12.14,92.21 10.36,92.64 8.79,93.49C7.21,94.35 5.98,95.54 5.08,97.07C4.19,98.6 3.74,100.32 3.74,102.23C3.74,104.14 4.19,105.82 5.08,107.35C5.97,108.88 7.21,110.07 8.79,110.94C10.37,111.81 12.14,112.24 14.1,112.24C16.43,112.24 18.47,111.68 20.21,110.56L20.21,102.07L20.19,102.07Z");
+    			attr_dev(path25, "class", "svelte-9kfwom");
+    			add_location(path25, file$1, 41, 16, 15002);
+    			attr_dev(path26, "d", "M36.54,96.22C37.76,95.62 39.23,95.33 40.97,95.33L40.97,98.79C40.77,98.77 40.5,98.75 40.15,98.75C38.21,98.75 36.69,99.33 35.59,100.48C34.48,101.63 33.93,103.28 33.93,105.41L33.93,115.24L30.35,115.24L30.35,95.5L33.78,95.5L33.78,98.81C34.4,97.67 35.32,96.8 36.54,96.2L36.54,96.22Z");
+    			attr_dev(path26, "class", "svelte-9kfwom");
+    			add_location(path26, file$1, 42, 16, 15751);
+    			attr_dev(path27, "d", "M55.23,111.81C56.22,111.2 56.94,110.34 57.39,109.22L57.39,106.46L51.88,106.46C48.85,106.46 47.34,107.48 47.34,109.51C47.34,110.5 47.72,111.29 48.49,111.86C49.26,112.43 50.33,112.72 51.69,112.72C53.05,112.72 54.23,112.42 55.23,111.81ZM58.79,97.34C60.24,98.68 60.97,100.68 60.97,103.34L60.97,115.26L57.58,115.26L57.58,112.65C56.98,113.57 56.13,114.27 55.03,114.75C53.92,115.23 52.62,115.48 51.1,115.48C48.89,115.48 47.12,114.95 45.79,113.88C44.46,112.81 43.8,111.41 43.8,109.67C43.8,107.93 44.43,106.54 45.7,105.48C46.97,104.42 48.98,103.9 51.73,103.9L57.39,103.9L57.39,103.19C57.39,101.65 56.94,100.47 56.05,99.65C55.16,98.83 53.84,98.42 52.1,98.42C50.93,98.42 49.79,98.61 48.67,99C47.55,99.39 46.61,99.9 45.84,100.55L44.35,97.87C45.37,97.05 46.58,96.42 48,95.99C49.42,95.56 50.92,95.34 52.51,95.34C55.24,95.34 57.33,96.01 58.78,97.35L58.79,97.34Z");
+    			attr_dev(path27, "class", "svelte-9kfwom");
+    			add_location(path27, file$1, 43, 16, 16058);
+    			attr_dev(path28, "d", "M98.19,97.49C99.64,98.93 100.37,101.07 100.37,103.9L100.37,115.26L96.79,115.26L96.79,104.31C96.79,102.4 96.35,100.96 95.47,99.99C94.59,99.02 93.33,98.54 91.69,98.54C89.88,98.54 88.44,99.1 87.37,100.23C86.3,101.36 85.77,102.98 85.77,105.09L85.77,115.26L82.19,115.26L82.19,104.31C82.19,102.4 81.75,100.96 80.87,99.99C79.99,99.02 78.73,98.54 77.09,98.54C75.28,98.54 73.84,99.1 72.77,100.23C71.7,101.36 71.17,102.98 71.17,105.09L71.17,115.26L67.59,115.26L67.59,95.52L71.02,95.52L71.02,98.46C71.74,97.44 72.68,96.67 73.85,96.13C75.02,95.6 76.35,95.33 77.83,95.33C79.31,95.33 80.73,95.64 81.93,96.26C83.12,96.88 84.04,97.79 84.69,98.98C85.43,97.84 86.47,96.94 87.8,96.3C89.13,95.65 90.62,95.33 92.29,95.33C94.77,95.33 96.74,96.05 98.19,97.49Z");
+    			attr_dev(path28, "class", "svelte-9kfwom");
+    			add_location(path28, file$1, 44, 16, 16934);
+    			attr_dev(path29, "d", "M120.53,111.47C121.54,110.89 122.33,110.07 122.91,109.01C123.49,107.95 123.79,106.74 123.79,105.38C123.79,104.02 123.5,102.8 122.91,101.75C122.33,100.7 121.53,99.88 120.53,99.31C119.52,98.74 118.39,98.45 117.12,98.45C115.85,98.45 114.76,98.74 113.75,99.33C112.74,99.91 111.95,100.73 111.37,101.77C110.79,102.81 110.49,104.02 110.49,105.38C110.49,106.74 110.77,107.96 111.35,109.01C111.92,110.07 112.71,110.88 113.73,111.47C114.75,112.05 115.88,112.35 117.12,112.35C118.36,112.35 119.52,112.06 120.53,111.47ZM122.56,96.59C124.07,97.43 125.26,98.61 126.12,100.13C126.98,101.64 127.4,103.4 127.4,105.38C127.4,107.36 126.97,109.12 126.12,110.65C125.26,112.18 124.08,113.36 122.56,114.21C121.05,115.05 119.33,115.48 117.42,115.48C116,115.48 114.71,115.21 113.53,114.66C112.35,114.11 111.35,113.32 110.53,112.28L110.53,122.48L106.95,122.48L106.95,95.52L110.38,95.52L110.38,98.65C111.17,97.56 112.18,96.73 113.4,96.17C114.62,95.61 115.96,95.33 117.42,95.33C119.33,95.33 121.04,95.75 122.56,96.6L122.56,96.59Z");
+    			attr_dev(path29, "class", "svelte-9kfwom");
+    			add_location(path29, file$1, 45, 16, 17700);
+    			attr_dev(path30, "d", "M132.35,95.51L135.93,95.51L135.93,115.25L132.35,115.25L132.35,95.51ZM132.41,91.04C131.95,90.59 131.72,90.05 131.72,89.4C131.72,88.75 131.95,88.2 132.41,87.74C132.87,87.28 133.45,87.05 134.14,87.05C134.83,87.05 135.41,87.27 135.87,87.7C136.33,88.14 136.56,88.68 136.56,89.32C136.56,89.96 136.33,90.56 135.87,91.01C135.41,91.47 134.83,91.7 134.14,91.7C133.45,91.7 132.87,91.48 132.41,91.03L132.41,91.04Z");
+    			attr_dev(path30, "class", "svelte-9kfwom");
+    			add_location(path30, file$1, 46, 16, 18731);
+    			attr_dev(path31, "d", "M152.65,111.81C153.64,111.2 154.36,110.34 154.81,109.22L154.81,106.46L149.3,106.46C146.27,106.46 144.76,107.48 144.76,109.51C144.76,110.5 145.14,111.29 145.91,111.86C146.68,112.43 147.75,112.72 149.11,112.72C150.47,112.72 151.65,112.42 152.65,111.81ZM156.21,97.34C157.66,98.68 158.39,100.68 158.39,103.34L158.39,115.26L155,115.26L155,112.65C154.4,113.57 153.55,114.27 152.45,114.75C151.35,115.23 150.04,115.48 148.52,115.48C146.31,115.48 144.54,114.95 143.21,113.88C141.88,112.81 141.22,111.41 141.22,109.67C141.22,107.93 141.85,106.54 143.12,105.48C144.39,104.42 146.4,103.9 149.15,103.9L154.81,103.9L154.81,103.19C154.81,101.65 154.36,100.47 153.47,99.65C152.58,98.83 151.26,98.42 149.52,98.42C148.35,98.42 147.21,98.61 146.09,99C144.97,99.39 144.03,99.9 143.26,100.55L141.77,97.87C142.79,97.05 144,96.42 145.42,95.99C146.84,95.56 148.34,95.34 149.93,95.34C152.66,95.34 154.75,96.01 156.2,97.35L156.21,97.34Z");
+    			attr_dev(path31, "class", "svelte-9kfwom");
+    			add_location(path31, file$1, 47, 16, 19161);
+    			attr_dev(path32, "d", "M181.53,97.5C183.01,98.95 183.75,101.08 183.75,103.89L183.75,115.25L180.17,115.25L180.17,104.3C180.17,102.39 179.71,100.95 178.79,99.98C177.87,99.01 176.56,98.53 174.84,98.53C172.9,98.53 171.38,99.09 170.26,100.22C169.14,101.35 168.58,102.97 168.58,105.08L168.58,115.25L165,115.25L165,95.51L168.43,95.51L168.43,98.49C169.15,97.47 170.12,96.69 171.35,96.14C172.58,95.59 173.98,95.32 175.54,95.32C178.05,95.32 180.04,96.05 181.52,97.5L181.53,97.5Z");
+    			attr_dev(path32, "class", "svelte-9kfwom");
+    			add_location(path32, file$1, 48, 16, 20101);
+    			attr_dev(path33, "d", "M191.38,114.82C189.89,114.39 188.72,113.83 187.88,113.16L189.37,110.33C190.24,110.95 191.29,111.45 192.54,111.82C193.78,112.19 195.04,112.38 196.3,112.38C199.43,112.38 200.99,111.49 200.99,109.7C200.99,109.1 200.78,108.63 200.36,108.28C199.94,107.93 199.41,107.68 198.78,107.52C198.15,107.36 197.25,107.18 196.08,106.98C194.49,106.73 193.19,106.45 192.19,106.12C191.18,105.8 190.32,105.25 189.6,104.48C188.88,103.71 188.52,102.63 188.52,101.24C188.52,99.45 189.26,98.02 190.75,96.94C192.24,95.86 194.24,95.32 196.75,95.32C198.07,95.32 199.38,95.48 200.7,95.8C202.02,96.12 203.1,96.56 203.94,97.1L202.41,99.93C200.8,98.89 198.9,98.37 196.71,98.37C195.2,98.37 194.04,98.62 193.25,99.11C192.45,99.61 192.06,100.26 192.06,101.08C192.06,101.73 192.28,102.23 192.73,102.61C193.18,102.98 193.73,103.26 194.39,103.43C195.05,103.6 195.97,103.8 197.16,104.03C198.75,104.3 200.03,104.6 201.01,104.91C201.99,105.22 202.83,105.75 203.52,106.49C204.21,107.23 204.56,108.28 204.56,109.62C204.56,111.41 203.8,112.83 202.27,113.88C200.74,114.94 198.66,115.46 196.03,115.46C194.42,115.46 192.86,115.24 191.38,114.81L191.38,114.82Z");
+    			attr_dev(path33, "class", "svelte-9kfwom");
+    			add_location(path33, file$1, 49, 16, 20576);
+    			attr_dev(path34, "d", "M20.19,101.83L23.77,101.83L23.77,112C22.48,113.07 20.98,113.89 19.26,114.46C17.55,115.03 15.76,115.32 13.9,115.32C11.27,115.32 8.9,114.74 6.79,113.59C4.68,112.44 3.02,110.85 1.819,108.82C0.619,106.8 0.009,104.52 0.009,101.99C0.009,99.46 0.609,97.17 1.819,95.14C3.02,93.1 4.69,91.52 6.81,90.37C8.93,89.23 11.32,88.66 13.98,88.66C16.07,88.66 17.96,89 19.66,89.68C21.36,90.36 22.81,91.36 24,92.68L21.69,94.99C19.6,92.98 17.08,91.97 14.13,91.97C12.14,91.97 10.36,92.4 8.79,93.25C7.21,94.11 5.98,95.3 5.08,96.83C4.19,98.36 3.74,100.08 3.74,101.99C3.74,103.9 4.19,105.58 5.08,107.11C5.97,108.64 7.21,109.83 8.79,110.7C10.37,111.57 12.14,112 14.1,112C16.43,112 18.47,111.44 20.21,110.32L20.21,101.83L20.19,101.83Z");
+    			attr_dev(path34, "class", "svelte-9kfwom");
+    			add_location(path34, file$1, 50, 16, 21718);
+    			attr_dev(path35, "d", "M36.54,95.98C37.76,95.38 39.23,95.09 40.97,95.09L40.97,98.55C40.77,98.53 40.5,98.51 40.15,98.51C38.21,98.51 36.69,99.09 35.59,100.24C34.48,101.39 33.93,103.04 33.93,105.17L33.93,115L30.35,115L30.35,95.26L33.78,95.26L33.78,98.57C34.4,97.43 35.32,96.56 36.54,95.96L36.54,95.98Z");
+    			attr_dev(path35, "class", "svelte-9kfwom");
+    			add_location(path35, file$1, 51, 16, 22454);
+    			attr_dev(path36, "d", "M55.23,111.57C56.22,110.96 56.94,110.1 57.39,108.98L57.39,106.22L51.88,106.22C48.85,106.22 47.34,107.24 47.34,109.27C47.34,110.26 47.72,111.05 48.49,111.62C49.26,112.19 50.33,112.48 51.69,112.48C53.05,112.48 54.23,112.18 55.23,111.57ZM58.79,97.1C60.24,98.44 60.97,100.44 60.97,103.1L60.97,115.02L57.58,115.02L57.58,112.41C56.98,113.33 56.13,114.03 55.03,114.51C53.92,114.99 52.62,115.24 51.1,115.24C48.89,115.24 47.12,114.71 45.79,113.64C44.46,112.57 43.8,111.17 43.8,109.43C43.8,107.69 44.43,106.3 45.7,105.24C46.97,104.18 48.98,103.66 51.73,103.66L57.39,103.66L57.39,102.95C57.39,101.41 56.94,100.23 56.05,99.41C55.16,98.59 53.84,98.18 52.1,98.18C50.93,98.18 49.79,98.37 48.67,98.76C47.55,99.15 46.61,99.66 45.84,100.31L44.35,97.63C45.37,96.81 46.58,96.18 48,95.75C49.42,95.32 50.92,95.1 52.51,95.1C55.24,95.1 57.33,95.77 58.78,97.11L58.79,97.1Z");
+    			attr_dev(path36, "class", "svelte-9kfwom");
+    			add_location(path36, file$1, 52, 16, 22759);
+    			attr_dev(path37, "d", "M98.19,97.24C99.64,98.68 100.37,100.82 100.37,103.65L100.37,115.01L96.79,115.01L96.79,104.06C96.79,102.15 96.35,100.71 95.47,99.74C94.59,98.77 93.33,98.29 91.69,98.29C89.88,98.29 88.44,98.85 87.37,99.98C86.3,101.11 85.77,102.73 85.77,104.84L85.77,115.01L82.19,115.01L82.19,104.06C82.19,102.15 81.75,100.71 80.87,99.74C79.99,98.77 78.73,98.29 77.09,98.29C75.28,98.29 73.84,98.85 72.77,99.98C71.7,101.11 71.17,102.73 71.17,104.84L71.17,115.01L67.59,115.01L67.59,95.27L71.02,95.27L71.02,98.21C71.74,97.19 72.68,96.42 73.85,95.88C75.02,95.35 76.35,95.08 77.83,95.08C79.31,95.08 80.73,95.39 81.93,96.01C83.12,96.63 84.04,97.54 84.69,98.73C85.43,97.59 86.47,96.69 87.8,96.05C89.13,95.4 90.62,95.08 92.29,95.08C94.77,95.08 96.74,95.8 98.19,97.24Z");
+    			attr_dev(path37, "class", "svelte-9kfwom");
+    			add_location(path37, file$1, 53, 16, 23636);
+    			attr_dev(path38, "d", "M120.53,111.23C121.54,110.65 122.33,109.83 122.91,108.77C123.49,107.71 123.79,106.5 123.79,105.14C123.79,103.78 123.5,102.56 122.91,101.51C122.33,100.46 121.53,99.64 120.53,99.07C119.52,98.5 118.39,98.21 117.12,98.21C115.85,98.21 114.76,98.5 113.75,99.09C112.74,99.67 111.95,100.49 111.37,101.53C110.79,102.57 110.49,103.78 110.49,105.14C110.49,106.5 110.77,107.72 111.35,108.77C111.92,109.83 112.71,110.64 113.73,111.23C114.75,111.81 115.88,112.11 117.12,112.11C118.36,112.11 119.52,111.82 120.53,111.23ZM122.56,96.35C124.07,97.19 125.26,98.37 126.12,99.89C126.98,101.4 127.4,103.16 127.4,105.14C127.4,107.12 126.97,108.88 126.12,110.41C125.26,111.94 124.08,113.12 122.56,113.97C121.05,114.81 119.33,115.24 117.42,115.24C116,115.24 114.71,114.97 113.53,114.42C112.35,113.87 111.35,113.08 110.53,112.04L110.53,122.24L106.95,122.24L106.95,95.28L110.38,95.28L110.38,98.41C111.17,97.32 112.18,96.49 113.4,95.93C114.62,95.37 115.96,95.09 117.42,95.09C119.33,95.09 121.04,95.51 122.56,96.36L122.56,96.35Z");
+    			attr_dev(path38, "class", "svelte-9kfwom");
+    			add_location(path38, file$1, 54, 16, 24405);
+    			attr_dev(path39, "d", "M132.35,95.27L135.93,95.27L135.93,115.01L132.35,115.01L132.35,95.27ZM132.41,90.8C131.95,90.35 131.72,89.81 131.72,89.16C131.72,88.51 131.95,87.96 132.41,87.5C132.87,87.04 133.45,86.81 134.14,86.81C134.83,86.81 135.41,87.03 135.87,87.46C136.33,87.9 136.56,88.44 136.56,89.08C136.56,89.72 136.33,90.32 135.87,90.77C135.41,91.23 134.83,91.46 134.14,91.46C133.45,91.46 132.87,91.24 132.41,90.79L132.41,90.8Z");
+    			attr_dev(path39, "class", "svelte-9kfwom");
+    			add_location(path39, file$1, 55, 16, 25434);
+    			attr_dev(path40, "d", "M152.65,111.57C153.64,110.96 154.36,110.1 154.81,108.98L154.81,106.22L149.3,106.22C146.27,106.22 144.76,107.24 144.76,109.27C144.76,110.26 145.14,111.05 145.91,111.62C146.68,112.19 147.75,112.48 149.11,112.48C150.47,112.48 151.65,112.18 152.65,111.57ZM156.21,97.1C157.66,98.44 158.39,100.44 158.39,103.1L158.39,115.02L155,115.02L155,112.41C154.4,113.33 153.55,114.03 152.45,114.51C151.35,114.99 150.04,115.24 148.52,115.24C146.31,115.24 144.54,114.71 143.21,113.64C141.88,112.57 141.22,111.17 141.22,109.43C141.22,107.69 141.85,106.3 143.12,105.24C144.39,104.18 146.4,103.66 149.15,103.66L154.81,103.66L154.81,102.95C154.81,101.41 154.36,100.23 153.47,99.41C152.58,98.59 151.26,98.18 149.52,98.18C148.35,98.18 147.21,98.37 146.09,98.76C144.97,99.15 144.03,99.66 143.26,100.31L141.77,97.63C142.79,96.81 144,96.18 145.42,95.75C146.84,95.32 148.34,95.1 149.93,95.1C152.66,95.1 154.75,95.77 156.2,97.11L156.21,97.1Z");
+    			attr_dev(path40, "class", "svelte-9kfwom");
+    			add_location(path40, file$1, 56, 16, 25867);
+    			attr_dev(path41, "d", "M181.53,97.26C183.01,98.71 183.75,100.84 183.75,103.65L183.75,115.01L180.17,115.01L180.17,104.06C180.17,102.15 179.71,100.71 178.79,99.74C177.87,98.77 176.56,98.29 174.84,98.29C172.9,98.29 171.38,98.85 170.26,99.98C169.14,101.11 168.58,102.73 168.58,104.84L168.58,115.01L165,115.01L165,95.27L168.43,95.27L168.43,98.25C169.15,97.23 170.12,96.45 171.35,95.9C172.58,95.35 173.98,95.08 175.54,95.08C178.05,95.08 180.04,95.81 181.52,97.26L181.53,97.26Z");
+    			attr_dev(path41, "class", "svelte-9kfwom");
+    			add_location(path41, file$1, 57, 16, 26808);
+    			attr_dev(path42, "d", "M7.95,128.33L6.12,133.17L5.5,133.17L3.97,129.2L2.44,133.17L1.819,133.17L0,128.33L0.64,128.33L2.16,132.44L3.71,128.33L4.27,128.33L5.82,132.44L7.36,128.33L7.96,128.33L7.95,128.33Z");
+    			attr_dev(path42, "class", "svelte-9kfwom");
+    			add_location(path42, file$1, 58, 16, 27285);
+    			attr_dev(path43, "d", "M11.71,132.4C11.98,132.24 12.2,132.02 12.35,131.73C12.5,131.44 12.58,131.11 12.58,130.75C12.58,130.39 12.5,130.05 12.35,129.77C12.2,129.48 11.98,129.261 11.71,129.1C11.44,128.94 11.13,128.871 10.79,128.871C10.45,128.871 10.14,128.95 9.87,129.1C9.6,129.25 9.38,129.48 9.23,129.77C9.07,130.06 9,130.39 9,130.75C9,131.11 9.08,131.45 9.23,131.73C9.39,132.02 9.6,132.24 9.87,132.4C10.14,132.56 10.45,132.64 10.79,132.64C11.13,132.64 11.44,132.56 11.71,132.4ZM9.52,132.9C9.15,132.69 8.85,132.39 8.64,132.02C8.43,131.65 8.32,131.22 8.32,130.75C8.32,130.28 8.43,129.85 8.64,129.48C8.85,129.11 9.15,128.81 9.52,128.6C9.89,128.39 10.31,128.291 10.78,128.291C11.25,128.291 11.67,128.39 12.04,128.6C12.41,128.81 12.71,129.1 12.92,129.48C13.13,129.85 13.24,130.28 13.24,130.75C13.24,131.22 13.13,131.65 12.92,132.02C12.71,132.39 12.42,132.69 12.04,132.9C11.67,133.11 11.25,133.22 10.78,133.22C10.31,133.22 9.89,133.11 9.52,132.9Z");
+    			attr_dev(path43, "class", "svelte-9kfwom");
+    			add_location(path43, file$1, 59, 16, 27492);
+    			attr_dev(path44, "d", "M15.88,128.541C16.18,128.371 16.56,128.291 17.01,128.291L17.01,128.931L16.85,128.931C16.34,128.931 15.94,129.08 15.65,129.39C15.36,129.7 15.22,130.14 15.22,130.71L15.22,133.18L14.57,133.18L14.57,128.34L15.2,128.34L15.2,129.291C15.35,128.96 15.58,128.72 15.89,128.55L15.88,128.541Z");
+    			attr_dev(path44, "class", "svelte-9kfwom");
+    			add_location(path44, file$1, 60, 16, 28438);
+    			attr_dev(path45, "d", "M19.98,130.74L18.84,131.79L18.84,133.17L18.19,133.17L18.19,126.34L18.84,126.34L18.84,130.97L21.73,128.33L22.54,128.33L20.47,130.31L22.73,133.17L21.93,133.17L19.98,130.74Z");
+    			attr_dev(path45, "class", "svelte-9kfwom");
+    			add_location(path45, file$1, 61, 16, 28748);
+    			attr_dev(path46, "d", "M23.63,128.33L24.28,128.33L24.28,133.17L23.63,133.17L23.63,128.33ZM23.63,127.13C23.54,127.04 23.49,126.93 23.49,126.8C23.49,126.68 23.54,126.57 23.63,126.48C23.72,126.39 23.83,126.34 23.97,126.34C24.11,126.34 24.22,126.38 24.31,126.47C24.4,126.56 24.45,126.67 24.45,126.79C24.45,126.92 24.4,127.04 24.31,127.13C24.22,127.22 24.1,127.27 23.97,127.27C23.84,127.27 23.72,127.22 23.63,127.13Z");
+    			attr_dev(path46, "class", "svelte-9kfwom");
+    			add_location(path46, file$1, 62, 16, 28948);
+    			attr_dev(path47, "d", "M30.03,128.821C30.39,129.17 30.57,129.69 30.57,130.36L30.57,133.17L29.92,133.17L29.92,130.431C29.92,129.931 29.79,129.541 29.54,129.28C29.29,129.02 28.93,128.88 28.46,128.88C27.94,128.88 27.53,129.03 27.22,129.35C26.92,129.66 26.76,130.09 26.76,130.63L26.76,133.17L26.11,133.17L26.11,128.33L26.74,128.33L26.74,129.22C26.92,128.931 27.17,128.7 27.48,128.53C27.8,128.371 28.16,128.291 28.58,128.291C29.19,128.291 29.67,128.47 30.03,128.821Z");
+    			attr_dev(path47, "class", "svelte-9kfwom");
+    			add_location(path47, file$1, 63, 16, 29366);
+    			attr_dev(path48, "d", "M35.32,132.18C35.6,132.03 35.82,131.82 35.98,131.55C36.14,131.28 36.21,130.97 36.21,130.63C36.21,130.291 36.13,129.98 35.98,129.71C35.82,129.44 35.61,129.24 35.33,129.08C35.05,128.931 34.73,128.86 34.38,128.86C34.03,128.86 33.72,128.931 33.44,129.08C33.16,129.23 32.94,129.44 32.79,129.71C32.63,129.98 32.56,130.291 32.56,130.63C32.56,130.97 32.64,131.28 32.79,131.55C32.95,131.82 33.16,132.03 33.44,132.18C33.72,132.33 34.03,132.4 34.38,132.4C34.73,132.4 35.05,132.32 35.33,132.18L35.32,132.18ZM36.85,128.33L36.85,132.58C36.85,133.4 36.65,134.01 36.25,134.41C35.85,134.81 35.24,135 34.43,135C33.98,135 33.56,134.93 33.15,134.8C32.75,134.67 32.419,134.49 32.169,134.25L32.5,133.75C32.73,133.96 33.02,134.12 33.35,134.24C33.68,134.36 34.03,134.41 34.4,134.41C35.01,134.41 35.46,134.27 35.75,133.98C36.04,133.7 36.18,133.25 36.18,132.65L36.18,132.03C35.98,132.34 35.71,132.57 35.38,132.73C35.05,132.89 34.69,132.97 34.29,132.97C33.84,132.97 33.42,132.87 33.05,132.67C32.68,132.47 32.39,132.19 32.18,131.83C31.97,131.47 31.86,131.071 31.86,130.61C31.86,130.151 31.97,129.75 32.18,129.39C32.39,129.03 32.68,128.761 33.05,128.56C33.42,128.36 33.83,128.27 34.29,128.27C34.7,128.27 35.07,128.35 35.4,128.52C35.73,128.69 36,128.92 36.2,129.24L36.2,128.31L36.83,128.31L36.85,128.33Z");
+    			attr_dev(path48, "class", "svelte-9kfwom");
+    			add_location(path48, file$1, 64, 16, 29834);
+    			attr_dev(path49, "d", "M43.64,132.88C43.52,132.99 43.37,133.08 43.18,133.13C43,133.19 42.81,133.22 42.61,133.22C42.16,133.22 41.81,133.1 41.56,132.85C41.31,132.6 41.19,132.26 41.19,131.81L41.19,128.88L40.32,128.88L40.32,128.33L41.19,128.33L41.19,127.27L41.84,127.27L41.84,128.33L43.31,128.33L43.31,128.88L41.84,128.88L41.84,131.77C41.84,132.06 41.91,132.28 42.06,132.43C42.2,132.58 42.41,132.65 42.68,132.65C42.81,132.65 42.95,132.63 43.07,132.59C43.2,132.55 43.3,132.49 43.4,132.41L43.63,132.88L43.64,132.88Z");
+    			attr_dev(path49, "class", "svelte-9kfwom");
+    			add_location(path49, file$1, 65, 16, 31137);
+    			attr_dev(path50, "d", "M47.56,132.4C47.83,132.24 48.05,132.02 48.2,131.73C48.35,131.44 48.43,131.11 48.43,130.75C48.43,130.39 48.35,130.05 48.2,129.77C48.05,129.48 47.83,129.261 47.56,129.1C47.29,128.94 46.98,128.871 46.64,128.871C46.3,128.871 45.99,128.95 45.72,129.1C45.45,129.25 45.23,129.48 45.08,129.77C44.92,130.06 44.85,130.39 44.85,130.75C44.85,131.11 44.93,131.45 45.08,131.73C45.24,132.02 45.45,132.24 45.72,132.4C45.99,132.56 46.3,132.64 46.64,132.64C46.98,132.64 47.29,132.56 47.56,132.4ZM45.37,132.9C45,132.69 44.7,132.39 44.49,132.02C44.28,131.65 44.17,131.22 44.17,130.75C44.17,130.28 44.28,129.85 44.49,129.48C44.7,129.11 45,128.81 45.37,128.6C45.74,128.39 46.16,128.291 46.63,128.291C47.1,128.291 47.52,128.39 47.89,128.6C48.26,128.81 48.56,129.1 48.77,129.48C48.98,129.85 49.09,130.28 49.09,130.75C49.09,131.22 48.98,131.65 48.77,132.02C48.56,132.39 48.27,132.69 47.89,132.9C47.52,133.11 47.1,133.22 46.63,133.22C46.16,133.22 45.74,133.11 45.37,132.9Z");
+    			attr_dev(path50, "class", "svelte-9kfwom");
+    			add_location(path50, file$1, 66, 16, 31653);
+    			attr_dev(path51, "d", "M53.37,132.18C53.65,132.03 53.87,131.82 54.03,131.55C54.19,131.28 54.26,130.97 54.26,130.63C54.26,130.291 54.18,129.98 54.03,129.71C53.87,129.44 53.66,129.24 53.38,129.08C53.1,128.931 52.78,128.86 52.43,128.86C52.08,128.86 51.77,128.931 51.49,129.08C51.21,129.23 50.99,129.44 50.84,129.71C50.68,129.98 50.61,130.291 50.61,130.63C50.61,130.97 50.69,131.28 50.84,131.55C51,131.82 51.21,132.03 51.49,132.18C51.77,132.33 52.08,132.4 52.43,132.4C52.78,132.4 53.1,132.32 53.38,132.18L53.37,132.18ZM54.9,128.33L54.9,132.58C54.9,133.4 54.7,134.01 54.3,134.41C53.9,134.81 53.29,135 52.48,135C52.03,135 51.61,134.93 51.2,134.8C50.8,134.67 50.47,134.49 50.22,134.25L50.55,133.75C50.78,133.96 51.07,134.12 51.4,134.24C51.73,134.36 52.08,134.41 52.45,134.41C53.06,134.41 53.51,134.27 53.8,133.98C54.09,133.7 54.23,133.25 54.23,132.65L54.23,132.03C54.03,132.34 53.76,132.57 53.43,132.73C53.1,132.89 52.74,132.97 52.34,132.97C51.89,132.97 51.47,132.87 51.1,132.67C50.73,132.47 50.44,132.19 50.23,131.83C50.02,131.47 49.91,131.071 49.91,130.61C49.91,130.151 50.02,129.75 50.23,129.39C50.44,129.03 50.73,128.761 51.1,128.56C51.47,128.36 51.88,128.27 52.34,128.27C52.75,128.27 53.12,128.35 53.45,128.52C53.78,128.69 54.05,128.92 54.25,129.24L54.25,128.31L54.88,128.31L54.9,128.33Z");
+    			attr_dev(path51, "class", "svelte-9kfwom");
+    			add_location(path51, file$1, 67, 16, 32629);
+    			attr_dev(path52, "d", "M57.43,129.3C57.11,129.6 56.93,129.98 56.89,130.46L60.32,130.46C60.28,129.98 60.1,129.59 59.78,129.3C59.46,129 59.07,128.85 58.6,128.85C58.13,128.85 57.74,129 57.43,129.3ZM60.95,130.95L56.9,130.95C56.94,131.45 57.13,131.86 57.48,132.17C57.83,132.48 58.27,132.64 58.81,132.64C59.11,132.64 59.39,132.59 59.64,132.48C59.89,132.37 60.11,132.22 60.29,132.01L60.66,132.43C60.45,132.69 60.18,132.88 59.85,133.02C59.52,133.16 59.17,133.22 58.79,133.22C58.29,133.22 57.85,133.11 57.47,132.9C57.09,132.69 56.79,132.39 56.57,132.02C56.35,131.65 56.25,131.22 56.25,130.75C56.25,130.28 56.35,129.85 56.56,129.48C56.77,129.11 57.05,128.81 57.41,128.6C57.77,128.39 58.17,128.291 58.62,128.291C59.07,128.291 59.47,128.39 59.83,128.6C60.19,128.81 60.47,129.1 60.67,129.47C60.87,129.84 60.97,130.27 60.97,130.74L60.97,130.94L60.95,130.95Z");
+    			attr_dev(path52, "class", "svelte-9kfwom");
+    			add_location(path52, file$1, 68, 16, 33921);
+    			attr_dev(path53, "d", "M64.839,132.88C64.72,132.99 64.57,133.08 64.379,133.13C64.199,133.19 64.01,133.22 63.81,133.22C63.36,133.22 63.01,133.1 62.76,132.85C62.51,132.6 62.39,132.26 62.39,131.81L62.39,128.88L61.52,128.88L61.52,128.33L62.39,128.33L62.39,127.27L63.04,127.27L63.04,128.33L64.51,128.33L64.51,128.88L63.04,128.88L63.04,131.77C63.04,132.06 63.11,132.28 63.26,132.43C63.4,132.58 63.61,132.65 63.88,132.65C64.01,132.65 64.15,132.63 64.269,132.59C64.4,132.55 64.5,132.49 64.6,132.41L64.83,132.88L64.839,132.88Z");
+    			attr_dev(path53, "class", "svelte-9kfwom");
+    			add_location(path53, file$1, 69, 16, 34771);
+    			attr_dev(path54, "d", "M69.95,128.821C70.31,129.17 70.49,129.69 70.49,130.36L70.49,133.17L69.84,133.17L69.84,130.431C69.84,129.931 69.71,129.541 69.46,129.28C69.21,129.02 68.85,128.88 68.38,128.88C67.86,128.88 67.45,129.03 67.14,129.35C66.84,129.66 66.68,130.09 66.68,130.63L66.68,133.17L66.03,133.17L66.03,126.34L66.68,126.34L66.68,129.17C66.86,128.89 67.1,128.67 67.42,128.52C67.73,128.371 68.09,128.291 68.5,128.291C69.11,128.291 69.59,128.47 69.95,128.821Z");
+    			attr_dev(path54, "class", "svelte-9kfwom");
+    			add_location(path54, file$1, 70, 16, 35295);
+    			attr_dev(path55, "d", "M72.97,129.3C72.65,129.6 72.47,129.98 72.43,130.46L75.86,130.46C75.82,129.98 75.64,129.59 75.32,129.3C75,129 74.61,128.85 74.14,128.85C73.67,128.85 73.28,129 72.97,129.3ZM76.49,130.95L72.44,130.95C72.48,131.45 72.67,131.86 73.02,132.17C73.37,132.48 73.81,132.64 74.35,132.64C74.65,132.64 74.93,132.59 75.18,132.48C75.43,132.37 75.65,132.22 75.83,132.01L76.2,132.43C75.99,132.69 75.72,132.88 75.39,133.02C75.06,133.16 74.71,133.22 74.33,133.22C73.83,133.22 73.39,133.11 73.01,132.9C72.63,132.69 72.33,132.39 72.11,132.02C71.9,131.65 71.79,131.22 71.79,130.75C71.79,130.28 71.89,129.85 72.1,129.48C72.31,129.11 72.59,128.81 72.95,128.6C73.31,128.39 73.71,128.291 74.16,128.291C74.61,128.291 75.01,128.39 75.37,128.6C75.73,128.81 76.01,129.1 76.21,129.47C76.41,129.84 76.51,130.27 76.51,130.74L76.51,130.94L76.49,130.95Z");
+    			attr_dev(path55, "class", "svelte-9kfwom");
+    			add_location(path55, file$1, 71, 16, 35762);
+    			attr_dev(path56, "d", "M79.15,128.541C79.45,128.371 79.83,128.291 80.28,128.291L80.28,128.931L80.12,128.931C79.61,128.931 79.21,129.08 78.92,129.39C78.63,129.7 78.49,130.14 78.49,130.71L78.49,133.18L77.84,133.18L77.84,128.34L78.47,128.34L78.47,129.291C78.62,128.96 78.85,128.72 79.16,128.55L79.15,128.541Z");
+    			attr_dev(path56, "class", "svelte-9kfwom");
+    			add_location(path56, file$1, 72, 16, 36609);
+    			attr_dev(path57, "d", "M86.49,132.88C86.37,132.99 86.22,133.08 86.03,133.13C85.85,133.19 85.66,133.22 85.46,133.22C85.01,133.22 84.66,133.1 84.41,132.85C84.16,132.6 84.04,132.26 84.04,131.81L84.04,128.88L83.17,128.88L83.17,128.33L84.04,128.33L84.04,127.27L84.69,127.27L84.69,128.33L86.16,128.33L86.16,128.88L84.69,128.88L84.69,131.77C84.69,132.06 84.76,132.28 84.91,132.43C85.05,132.58 85.26,132.65 85.53,132.65C85.66,132.65 85.8,132.63 85.92,132.59C86.05,132.55 86.15,132.49 86.25,132.41L86.48,132.88L86.49,132.88Z");
+    			attr_dev(path57, "class", "svelte-9kfwom");
+    			add_location(path57, file$1, 73, 16, 36921);
+    			attr_dev(path58, "d", "M90.41,132.4C90.68,132.24 90.9,132.02 91.05,131.73C91.2,131.44 91.28,131.11 91.28,130.75C91.28,130.39 91.2,130.05 91.05,129.77C90.9,129.48 90.68,129.261 90.41,129.1C90.14,128.94 89.83,128.871 89.49,128.871C89.15,128.871 88.84,128.95 88.57,129.1C88.3,129.25 88.08,129.48 87.93,129.77C87.77,130.06 87.7,130.39 87.7,130.75C87.7,131.11 87.78,131.45 87.93,131.73C88.09,132.02 88.3,132.24 88.57,132.4C88.84,132.56 89.15,132.64 89.49,132.64C89.83,132.64 90.14,132.56 90.41,132.4ZM88.22,132.9C87.85,132.69 87.55,132.39 87.34,132.02C87.13,131.65 87.02,131.22 87.02,130.75C87.02,130.28 87.13,129.85 87.34,129.48C87.55,129.11 87.85,128.81 88.22,128.6C88.59,128.39 89.01,128.291 89.48,128.291C89.95,128.291 90.37,128.39 90.74,128.6C91.11,128.81 91.41,129.1 91.62,129.48C91.83,129.85 91.94,130.28 91.94,130.75C91.94,131.22 91.83,131.65 91.62,132.02C91.41,132.39 91.12,132.69 90.74,132.9C90.37,133.11 89.95,133.22 89.48,133.22C89.01,133.22 88.59,133.11 88.22,132.9Z");
+    			attr_dev(path58, "class", "svelte-9kfwom");
+    			add_location(path58, file$1, 74, 16, 37443);
+    			attr_dev(path59, "d", "M98.09,132.45C98.35,132.28 98.55,132.04 98.68,131.72L98.68,130.931L97.16,130.931C96.33,130.931 95.92,131.22 95.92,131.79C95.92,132.07 96.03,132.3 96.24,132.46C96.45,132.62 96.76,132.7 97.14,132.7C97.52,132.7 97.82,132.62 98.09,132.45ZM98.83,128.77C99.17,129.09 99.34,129.55 99.34,130.17L99.34,133.17L98.71,133.17L98.71,132.42C98.56,132.67 98.35,132.87 98.06,133.01C97.77,133.15 97.44,133.22 97.04,133.22C96.5,133.22 96.07,133.09 95.75,132.83C95.43,132.57 95.27,132.23 95.27,131.81C95.27,131.39 95.42,131.071 95.72,130.821C96.02,130.571 96.49,130.44 97.14,130.44L98.68,130.44L98.68,130.151C98.68,129.73 98.56,129.41 98.33,129.2C98.1,128.98 97.76,128.871 97.31,128.871C97,128.871 96.71,128.92 96.43,129.02C96.15,129.121 95.91,129.261 95.7,129.44L95.41,128.95C95.66,128.74 95.95,128.58 96.29,128.47C96.63,128.36 97,128.3 97.38,128.3C98.01,128.3 98.5,128.46 98.83,128.77Z");
+    			attr_dev(path59, "class", "svelte-9kfwom");
+    			add_location(path59, file$1, 75, 16, 38424);
+    			attr_dev(path60, "d", "M104.03,132.4C104.3,132.24 104.52,132.02 104.67,131.73C104.83,131.44 104.9,131.11 104.9,130.75C104.9,130.39 104.82,130.05 104.67,129.77C104.51,129.48 104.3,129.261 104.03,129.1C103.76,128.94 103.45,128.871 103.11,128.871C102.77,128.871 102.46,128.95 102.19,129.1C101.92,129.25 101.7,129.48 101.55,129.77C101.39,130.06 101.32,130.39 101.32,130.75C101.32,131.11 101.4,131.45 101.55,131.73C101.71,132.02 101.92,132.24 102.19,132.4C102.46,132.56 102.77,132.64 103.11,132.64C103.45,132.64 103.75,132.56 104.03,132.4ZM105.55,126.34L105.55,133.17L104.92,133.17L104.92,132.21C104.72,132.53 104.46,132.78 104.14,132.95C103.82,133.12 103.45,133.21 103.05,133.21C102.6,133.21 102.18,133.11 101.82,132.9C101.45,132.69 101.16,132.4 100.95,132.02C100.74,131.64 100.64,131.22 100.64,130.74C100.64,130.261 100.74,129.84 100.95,129.46C101.16,129.09 101.45,128.791 101.82,128.59C102.19,128.39 102.6,128.28 103.05,128.28C103.44,128.28 103.8,128.36 104.11,128.52C104.43,128.681 104.69,128.92 104.89,129.23L104.89,126.32L105.54,126.32L105.55,126.34Z");
+    			attr_dev(path60, "class", "svelte-9kfwom");
+    			add_location(path60, file$1, 76, 16, 39321);
+    			attr_dev(path61, "d", "M109.78,132.45C110.04,132.28 110.24,132.04 110.37,131.72L110.37,130.931L108.85,130.931C108.02,130.931 107.61,131.22 107.61,131.79C107.61,132.07 107.72,132.3 107.93,132.46C108.14,132.62 108.45,132.7 108.83,132.7C109.21,132.7 109.51,132.62 109.78,132.45ZM110.52,128.77C110.86,129.09 111.03,129.55 111.03,130.17L111.03,133.17L110.4,133.17L110.4,132.42C110.25,132.67 110.04,132.87 109.75,133.01C109.46,133.15 109.13,133.22 108.73,133.22C108.19,133.22 107.76,133.09 107.44,132.83C107.12,132.57 106.96,132.23 106.96,131.81C106.96,131.39 107.11,131.071 107.41,130.821C107.71,130.571 108.18,130.44 108.83,130.44L110.37,130.44L110.37,130.151C110.37,129.73 110.25,129.41 110.02,129.2C109.79,128.98 109.45,128.871 109,128.871C108.69,128.871 108.4,128.92 108.12,129.02C107.84,129.121 107.6,129.261 107.39,129.44L107.1,128.95C107.35,128.74 107.64,128.58 107.98,128.47C108.32,128.36 108.69,128.3 109.07,128.3C109.7,128.3 110.19,128.46 110.52,128.77Z");
+    			attr_dev(path61, "class", "svelte-9kfwom");
+    			add_location(path61, file$1, 77, 16, 40379);
+    			attr_dev(path62, "d", "M116.17,132.4C116.45,132.24 116.66,132.02 116.82,131.73C116.98,131.44 117.05,131.11 117.05,130.75C117.05,130.39 116.97,130.06 116.82,129.77C116.66,129.48 116.45,129.261 116.17,129.1C115.89,128.94 115.59,128.86 115.25,128.86C114.91,128.86 114.6,128.94 114.32,129.1C114.05,129.261 113.83,129.48 113.68,129.77C113.52,130.06 113.45,130.38 113.45,130.75C113.45,131.121 113.53,131.45 113.68,131.73C113.84,132.02 114.05,132.24 114.32,132.4C114.59,132.56 114.9,132.64 115.25,132.64C115.6,132.64 115.89,132.56 116.17,132.4ZM116.53,128.6C116.9,128.8 117.19,129.1 117.4,129.47C117.61,129.84 117.71,130.27 117.71,130.75C117.71,131.23 117.61,131.66 117.4,132.04C117.19,132.41 116.9,132.71 116.54,132.91C116.18,133.11 115.76,133.22 115.3,133.22C114.91,133.22 114.55,133.14 114.24,132.98C113.93,132.82 113.66,132.58 113.46,132.27L113.46,134.97L112.81,134.97L112.81,128.34L113.44,128.34L113.44,129.3C113.64,128.98 113.9,128.74 114.22,128.56C114.54,128.39 114.91,128.3 115.31,128.3C115.76,128.3 116.17,128.401 116.54,128.61L116.53,128.6Z");
+    			attr_dev(path62, "class", "svelte-9kfwom");
+    			add_location(path62, file$1, 78, 16, 41344);
+    			attr_dev(path63, "d", "M121.59,132.88C121.47,132.99 121.32,133.08 121.13,133.13C120.95,133.19 120.76,133.22 120.56,133.22C120.11,133.22 119.76,133.1 119.51,132.85C119.26,132.6 119.14,132.26 119.14,131.81L119.14,128.88L118.27,128.88L118.27,128.33L119.14,128.33L119.14,127.27L119.79,127.27L119.79,128.33L121.26,128.33L121.26,128.88L119.79,128.88L119.79,131.77C119.79,132.06 119.86,132.28 120.01,132.43C120.15,132.58 120.36,132.65 120.63,132.65C120.76,132.65 120.9,132.63 121.02,132.59C121.15,132.55 121.25,132.49 121.35,132.41L121.58,132.88L121.59,132.88Z");
+    			attr_dev(path63, "class", "svelte-9kfwom");
+    			add_location(path63, file$1, 79, 16, 42394);
+    			attr_dev(path64, "d", "M127.73,132.88C127.61,132.99 127.46,133.08 127.27,133.13C127.09,133.19 126.9,133.22 126.7,133.22C126.25,133.22 125.9,133.1 125.65,132.85C125.4,132.6 125.28,132.26 125.28,131.81L125.28,128.88L124.41,128.88L124.41,128.33L125.28,128.33L125.28,127.27L125.93,127.27L125.93,128.33L127.4,128.33L127.4,128.88L125.93,128.88L125.93,131.77C125.93,132.06 126,132.28 126.15,132.43C126.29,132.58 126.5,132.65 126.77,132.65C126.9,132.65 127.04,132.63 127.16,132.59C127.29,132.55 127.39,132.49 127.49,132.41L127.72,132.88L127.73,132.88Z");
+    			attr_dev(path64, "class", "svelte-9kfwom");
+    			add_location(path64, file$1, 80, 16, 42954);
+    			attr_dev(path65, "d", "M131.65,132.4C131.92,132.24 132.14,132.02 132.29,131.73C132.44,131.44 132.52,131.11 132.52,130.75C132.52,130.39 132.44,130.05 132.29,129.77C132.14,129.48 131.92,129.261 131.65,129.1C131.38,128.94 131.07,128.871 130.729,128.871C130.39,128.871 130.08,128.95 129.81,129.1C129.539,129.25 129.32,129.48 129.17,129.77C129.009,130.06 128.94,130.39 128.94,130.75C128.94,131.11 129.02,131.45 129.17,131.73C129.33,132.02 129.539,132.24 129.81,132.4C130.08,132.56 130.39,132.64 130.729,132.64C131.07,132.64 131.38,132.56 131.65,132.4ZM129.46,132.9C129.09,132.69 128.789,132.39 128.58,132.02C128.369,131.65 128.259,131.22 128.259,130.75C128.259,130.28 128.369,129.85 128.58,129.48C128.789,129.11 129.09,128.81 129.46,128.6C129.83,128.39 130.25,128.291 130.72,128.291C131.19,128.291 131.61,128.39 131.98,128.6C132.35,128.81 132.65,129.1 132.86,129.48C133.07,129.85 133.18,130.28 133.18,130.75C133.18,131.22 133.07,131.65 132.86,132.02C132.65,132.39 132.36,132.69 131.98,132.9C131.61,133.11 131.19,133.22 130.72,133.22C130.25,133.22 129.83,133.11 129.46,132.9Z");
+    			attr_dev(path65, "class", "svelte-9kfwom");
+    			add_location(path65, file$1, 81, 16, 43504);
+    			attr_dev(path66, "d", "M139.48,132.88C139.36,132.99 139.21,133.08 139.02,133.13C138.84,133.19 138.65,133.22 138.45,133.22C138,133.22 137.65,133.1 137.4,132.85C137.15,132.6 137.03,132.26 137.03,131.81L137.03,128.88L136.16,128.88L136.16,128.33L137.03,128.33L137.03,127.27L137.68,127.27L137.68,128.33L139.15,128.33L139.15,128.88L137.68,128.88L137.68,131.77C137.68,132.06 137.75,132.28 137.9,132.43C138.04,132.58 138.25,132.65 138.52,132.65C138.65,132.65 138.79,132.63 138.91,132.59C139.04,132.55 139.14,132.49 139.24,132.41L139.47,132.88L139.48,132.88Z");
+    			attr_dev(path66, "class", "svelte-9kfwom");
+    			add_location(path66, file$1, 82, 16, 44580);
+    			attr_dev(path67, "d", "M144.58,128.821C144.94,129.17 145.12,129.69 145.12,130.36L145.12,133.17L144.47,133.17L144.47,130.431C144.47,129.931 144.34,129.541 144.09,129.28C143.84,129.02 143.48,128.88 143.01,128.88C142.49,128.88 142.08,129.03 141.77,129.35C141.47,129.66 141.31,130.09 141.31,130.63L141.31,133.17L140.66,133.17L140.66,126.34L141.31,126.34L141.31,129.17C141.49,128.89 141.73,128.67 142.05,128.52C142.36,128.371 142.72,128.291 143.13,128.291C143.74,128.291 144.22,128.47 144.58,128.821Z");
+    			attr_dev(path67, "class", "svelte-9kfwom");
+    			add_location(path67, file$1, 83, 16, 45136);
+    			attr_dev(path68, "d", "M147.61,129.3C147.29,129.6 147.11,129.98 147.07,130.46L150.5,130.46C150.46,129.98 150.28,129.59 149.96,129.3C149.64,129 149.25,128.85 148.78,128.85C148.31,128.85 147.92,129 147.61,129.3ZM151.13,130.95L147.08,130.95C147.12,131.45 147.31,131.86 147.66,132.17C148.01,132.48 148.45,132.64 148.99,132.64C149.29,132.64 149.57,132.59 149.82,132.48C150.07,132.37 150.29,132.22 150.47,132.01L150.84,132.43C150.63,132.69 150.36,132.88 150.03,133.02C149.7,133.16 149.35,133.22 148.97,133.22C148.47,133.22 148.03,133.11 147.65,132.9C147.27,132.69 146.97,132.39 146.75,132.02C146.54,131.65 146.43,131.22 146.43,130.75C146.43,130.28 146.53,129.85 146.74,129.48C146.95,129.11 147.23,128.81 147.59,128.6C147.95,128.39 148.35,128.291 148.8,128.291C149.25,128.291 149.65,128.39 150.01,128.6C150.37,128.81 150.65,129.1 150.85,129.47C151.05,129.84 151.15,130.27 151.15,130.74L151.15,130.94L151.13,130.95Z");
+    			attr_dev(path68, "class", "svelte-9kfwom");
+    			add_location(path68, file$1, 84, 16, 45638);
+    			attr_dev(path69, "d", "M155.6,132.9C155.22,132.69 154.93,132.4 154.71,132.02C154.5,131.64 154.39,131.22 154.39,130.74C154.39,130.261 154.5,129.84 154.71,129.47C154.92,129.1 155.22,128.8 155.6,128.59C155.98,128.38 156.41,128.28 156.88,128.28C157.3,128.28 157.67,128.36 158,128.52C158.33,128.681 158.59,128.92 158.78,129.23L158.29,129.56C158.13,129.321 157.93,129.14 157.68,129.02C157.43,128.901 157.17,128.84 156.88,128.84C156.53,128.84 156.22,128.92 155.94,129.071C155.66,129.23 155.44,129.45 155.29,129.74C155.13,130.03 155.06,130.36 155.06,130.72C155.06,131.08 155.14,131.42 155.29,131.71C155.45,132 155.66,132.22 155.94,132.37C156.22,132.53 156.53,132.61 156.88,132.61C157.17,132.61 157.44,132.55 157.68,132.44C157.93,132.32 158.13,132.15 158.29,131.91L158.78,132.24C158.59,132.55 158.33,132.79 158,132.95C157.67,133.11 157.3,133.19 156.89,133.19C156.41,133.19 155.98,133.09 155.61,132.88L155.6,132.9Z");
+    			attr_dev(path69, "class", "svelte-9kfwom");
+    			add_location(path69, file$1, 85, 16, 46552);
+    			attr_dev(path70, "d", "M163.9,128.821C164.26,129.17 164.44,129.69 164.44,130.36L164.44,133.17L163.79,133.17L163.79,130.431C163.79,129.931 163.66,129.541 163.41,129.28C163.16,129.02 162.8,128.88 162.33,128.88C161.81,128.88 161.4,129.03 161.09,129.35C160.79,129.66 160.63,130.09 160.63,130.63L160.63,133.17L159.98,133.17L159.98,126.34L160.63,126.34L160.63,129.17C160.81,128.89 161.05,128.67 161.37,128.52C161.68,128.371 162.04,128.291 162.45,128.291C163.06,128.291 163.54,128.47 163.9,128.821Z");
+    			attr_dev(path70, "class", "svelte-9kfwom");
+    			add_location(path70, file$1, 86, 16, 47463);
+    			attr_dev(path71, "d", "M168.63,132.45C168.89,132.28 169.09,132.04 169.22,131.72L169.22,130.931L167.7,130.931C166.87,130.931 166.46,131.22 166.46,131.79C166.46,132.07 166.57,132.3 166.78,132.46C166.99,132.62 167.3,132.7 167.68,132.7C168.06,132.7 168.36,132.62 168.63,132.45ZM169.37,128.77C169.71,129.09 169.88,129.55 169.88,130.17L169.88,133.17L169.25,133.17L169.25,132.42C169.1,132.67 168.89,132.87 168.6,133.01C168.31,133.15 167.98,133.22 167.58,133.22C167.04,133.22 166.61,133.09 166.29,132.83C165.97,132.57 165.81,132.23 165.81,131.81C165.81,131.39 165.96,131.071 166.26,130.821C166.56,130.571 167.03,130.44 167.68,130.44L169.22,130.44L169.22,130.151C169.22,129.73 169.1,129.41 168.87,129.2C168.64,128.98 168.3,128.871 167.85,128.871C167.54,128.871 167.25,128.92 166.97,129.02C166.69,129.121 166.45,129.261 166.24,129.44L165.95,128.95C166.2,128.74 166.49,128.58 166.83,128.47C167.17,128.36 167.54,128.3 167.92,128.3C168.55,128.3 169.04,128.46 169.37,128.77Z");
+    			attr_dev(path71, "class", "svelte-9kfwom");
+    			add_location(path71, file$1, 87, 16, 47961);
+    			attr_dev(path72, "d", "M175.56,128.821C175.92,129.17 176.1,129.69 176.1,130.36L176.1,133.17L175.45,133.17L175.45,130.431C175.45,129.931 175.32,129.541 175.07,129.28C174.82,129.02 174.46,128.88 173.99,128.88C173.47,128.88 173.06,129.03 172.75,129.35C172.45,129.66 172.29,130.09 172.29,130.63L172.29,133.17L171.64,133.17L171.64,128.33L172.27,128.33L172.27,129.22C172.45,128.931 172.7,128.7 173.01,128.53C173.33,128.371 173.69,128.291 174.11,128.291C174.72,128.291 175.2,128.47 175.56,128.821Z");
+    			attr_dev(path72, "class", "svelte-9kfwom");
+    			add_location(path72, file$1, 88, 16, 48928);
+    			attr_dev(path73, "d", "M180.85,132.18C181.13,132.03 181.35,131.82 181.51,131.55C181.67,131.28 181.74,130.97 181.74,130.63C181.74,130.291 181.66,129.98 181.51,129.71C181.35,129.44 181.14,129.24 180.86,129.08C180.58,128.931 180.26,128.86 179.91,128.86C179.56,128.86 179.25,128.931 178.97,129.08C178.69,129.23 178.47,129.44 178.32,129.71C178.16,129.98 178.09,130.291 178.09,130.63C178.09,130.97 178.17,131.28 178.32,131.55C178.48,131.82 178.69,132.03 178.97,132.18C179.25,132.33 179.56,132.4 179.91,132.4C180.26,132.4 180.58,132.32 180.86,132.18L180.85,132.18ZM182.38,128.33L182.38,132.58C182.38,133.4 182.18,134.01 181.78,134.41C181.38,134.81 180.77,135 179.96,135C179.51,135 179.09,134.93 178.68,134.8C178.28,134.67 177.95,134.49 177.7,134.25L178.03,133.75C178.26,133.96 178.55,134.12 178.88,134.24C179.21,134.36 179.56,134.41 179.93,134.41C180.54,134.41 180.99,134.27 181.28,133.98C181.57,133.7 181.71,133.25 181.71,132.65L181.71,132.03C181.51,132.34 181.24,132.57 180.91,132.73C180.58,132.89 180.22,132.97 179.82,132.97C179.37,132.97 178.95,132.87 178.58,132.67C178.21,132.47 177.92,132.19 177.71,131.83C177.5,131.47 177.39,131.071 177.39,130.61C177.39,130.151 177.5,129.75 177.71,129.39C177.92,129.03 178.21,128.761 178.58,128.56C178.95,128.36 179.36,128.27 179.82,128.27C180.23,128.27 180.6,128.35 180.93,128.52C181.26,128.69 181.53,128.92 181.73,129.24L181.73,128.31L182.36,128.31L182.38,128.33Z");
+    			attr_dev(path73, "class", "svelte-9kfwom");
+    			add_location(path73, file$1, 89, 16, 49425);
+    			attr_dev(path74, "d", "M184.2,128.33L184.85,128.33L184.85,133.17L184.2,133.17L184.2,128.33ZM184.2,127.13C184.11,127.04 184.06,126.93 184.06,126.8C184.06,126.68 184.11,126.57 184.2,126.48C184.29,126.39 184.4,126.34 184.54,126.34C184.68,126.34 184.79,126.38 184.88,126.47C184.97,126.56 185.02,126.67 185.02,126.79C185.02,126.92 184.97,127.04 184.88,127.13C184.79,127.22 184.67,127.27 184.54,127.27C184.41,127.27 184.29,127.22 184.2,127.13Z");
+    			attr_dev(path74, "class", "svelte-9kfwom");
+    			add_location(path74, file$1, 90, 16, 50831);
+    			attr_dev(path75, "d", "M190.6,128.821C190.96,129.17 191.14,129.69 191.14,130.36L191.14,133.17L190.49,133.17L190.49,130.431C190.49,129.931 190.36,129.541 190.11,129.28C189.86,129.02 189.5,128.88 189.03,128.88C188.51,128.88 188.1,129.03 187.79,129.35C187.49,129.66 187.33,130.09 187.33,130.63L187.33,133.17L186.68,133.17L186.68,128.33L187.31,128.33L187.31,129.22C187.49,128.931 187.74,128.7 188.05,128.53C188.37,128.371 188.73,128.291 189.15,128.291C189.76,128.291 190.24,128.47 190.6,128.821Z");
+    			attr_dev(path75, "class", "svelte-9kfwom");
+    			add_location(path75, file$1, 91, 16, 51275);
+    			attr_dev(path76, "d", "M195.89,132.18C196.17,132.03 196.39,131.82 196.55,131.55C196.71,131.28 196.78,130.97 196.78,130.63C196.78,130.291 196.7,129.98 196.55,129.71C196.39,129.44 196.18,129.24 195.9,129.08C195.62,128.931 195.3,128.86 194.95,128.86C194.6,128.86 194.29,128.931 194.01,129.08C193.73,129.23 193.51,129.44 193.36,129.71C193.2,129.98 193.13,130.291 193.13,130.63C193.13,130.97 193.21,131.28 193.36,131.55C193.52,131.82 193.73,132.03 194.01,132.18C194.29,132.33 194.6,132.4 194.95,132.4C195.3,132.4 195.62,132.32 195.9,132.18L195.89,132.18ZM197.42,128.33L197.42,132.58C197.42,133.4 197.22,134.01 196.82,134.41C196.42,134.81 195.81,135 195,135C194.55,135 194.13,134.93 193.72,134.8C193.32,134.67 192.99,134.49 192.74,134.25L193.07,133.75C193.3,133.96 193.59,134.12 193.92,134.24C194.25,134.36 194.6,134.41 194.97,134.41C195.58,134.41 196.03,134.27 196.32,133.98C196.61,133.7 196.75,133.25 196.75,132.65L196.75,132.03C196.55,132.34 196.28,132.57 195.95,132.73C195.62,132.89 195.26,132.97 194.86,132.97C194.41,132.97 193.99,132.87 193.62,132.67C193.25,132.47 192.96,132.19 192.75,131.83C192.54,131.47 192.43,131.071 192.43,130.61C192.43,130.151 192.54,129.75 192.75,129.39C192.96,129.03 193.25,128.761 193.62,128.56C193.99,128.36 194.4,128.27 194.86,128.27C195.27,128.27 195.64,128.35 195.97,128.52C196.3,128.69 196.57,128.92 196.77,129.24L196.77,128.31L197.4,128.31L197.42,128.33Z");
+    			attr_dev(path76, "class", "svelte-9kfwom");
+    			add_location(path76, file$1, 92, 16, 51773);
+    			attr_dev(path77, "d", "M202.38,132.9C202,132.69 201.71,132.4 201.49,132.02C201.28,131.64 201.17,131.22 201.17,130.74C201.17,130.261 201.28,129.84 201.49,129.47C201.7,129.1 202,128.8 202.38,128.59C202.76,128.38 203.19,128.28 203.66,128.28C204.08,128.28 204.45,128.36 204.78,128.52C205.11,128.681 205.37,128.92 205.56,129.23L205.07,129.56C204.91,129.321 204.71,129.14 204.46,129.02C204.21,128.901 203.95,128.84 203.66,128.84C203.31,128.84 203,128.92 202.72,129.071C202.44,129.23 202.22,129.45 202.07,129.74C201.91,130.03 201.84,130.36 201.84,130.72C201.84,131.08 201.92,131.42 202.07,131.71C202.23,132 202.44,132.22 202.72,132.37C203,132.53 203.31,132.61 203.66,132.61C203.95,132.61 204.22,132.55 204.46,132.44C204.71,132.32 204.91,132.15 205.07,131.91L205.56,132.24C205.37,132.55 205.11,132.79 204.78,132.95C204.45,133.11 204.08,133.19 203.67,133.19C203.19,133.19 202.76,133.09 202.39,132.88L202.38,132.9Z");
+    			attr_dev(path77, "class", "svelte-9kfwom");
+    			add_location(path77, file$1, 93, 16, 53167);
+    			attr_dev(rect2, "x", "206.77");
+    			attr_dev(rect2, "y", "126.34");
+    			attr_dev(rect2, "width", "0.65");
+    			attr_dev(rect2, "height", "6.83");
+    			attr_dev(rect2, "class", "svelte-9kfwom");
+    			add_location(rect2, file$1, 94, 16, 54078);
+    			attr_dev(path78, "d", "M209.23,128.33L209.88,128.33L209.88,133.17L209.23,133.17L209.23,128.33ZM209.23,127.13C209.14,127.04 209.09,126.93 209.09,126.8C209.09,126.68 209.14,126.57 209.23,126.48C209.32,126.39 209.43,126.34 209.57,126.34C209.71,126.34 209.82,126.38 209.91,126.47C210,126.56 210.05,126.67 210.05,126.79C210.05,126.92 210,127.04 209.91,127.13C209.82,127.22 209.7,127.27 209.57,127.27C209.44,127.27 209.32,127.22 209.23,127.13Z");
+    			attr_dev(path78, "class", "svelte-9kfwom");
+    			add_location(path78, file$1, 95, 16, 54152);
+    			attr_dev(path79, "d", "M219.19,128.821C219.54,129.17 219.71,129.69 219.71,130.371L219.71,133.18L219.06,133.18L219.06,130.44C219.06,129.94 218.94,129.55 218.7,129.291C218.46,129.03 218.11,128.89 217.67,128.89C217.17,128.89 216.77,129.041 216.48,129.36C216.19,129.67 216.05,130.1 216.05,130.64L216.05,133.18L215.4,133.18L215.4,130.44C215.4,129.94 215.28,129.55 215.04,129.291C214.8,129.03 214.45,128.89 214,128.89C213.5,128.89 213.11,129.041 212.82,129.36C212.53,129.67 212.38,130.1 212.38,130.64L212.38,133.18L211.73,133.18L211.73,128.34L212.36,128.34L212.36,129.22C212.53,128.931 212.77,128.7 213.08,128.541C213.39,128.38 213.74,128.3 214.14,128.3C214.54,128.3 214.9,128.39 215.19,128.56C215.49,128.73 215.71,128.99 215.86,129.321C216.04,129 216.29,128.75 216.63,128.571C216.96,128.39 217.35,128.3 217.78,128.3C218.39,128.3 218.86,128.48 219.21,128.821L219.19,128.821Z");
+    			attr_dev(path79, "class", "svelte-9kfwom");
+    			add_location(path79, file$1, 96, 16, 54596);
+    			attr_dev(path80, "d", "M223.89,132.45C224.15,132.28 224.35,132.04 224.48,131.72L224.48,130.931L222.96,130.931C222.13,130.931 221.72,131.22 221.72,131.79C221.72,132.07 221.83,132.3 222.04,132.46C222.25,132.62 222.56,132.7 222.94,132.7C223.32,132.7 223.62,132.62 223.89,132.45ZM224.63,128.77C224.97,129.09 225.14,129.55 225.14,130.17L225.14,133.17L224.51,133.17L224.51,132.42C224.36,132.67 224.15,132.87 223.86,133.01C223.57,133.15 223.24,133.22 222.84,133.22C222.3,133.22 221.87,133.09 221.55,132.83C221.23,132.57 221.07,132.23 221.07,131.81C221.07,131.39 221.22,131.071 221.52,130.821C221.82,130.571 222.29,130.44 222.94,130.44L224.48,130.44L224.48,130.151C224.48,129.73 224.36,129.41 224.13,129.2C223.9,128.98 223.56,128.871 223.11,128.871C222.8,128.871 222.51,128.92 222.23,129.02C221.95,129.121 221.71,129.261 221.5,129.44L221.21,128.95C221.46,128.74 221.75,128.58 222.09,128.47C222.43,128.36 222.8,128.3 223.18,128.3C223.81,128.3 224.3,128.46 224.63,128.77Z");
+    			attr_dev(path80, "class", "svelte-9kfwom");
+    			add_location(path80, file$1, 97, 16, 55471);
+    			attr_dev(path81, "d", "M229.46,132.88C229.34,132.99 229.19,133.08 229,133.13C228.82,133.19 228.63,133.22 228.43,133.22C227.98,133.22 227.63,133.1 227.38,132.85C227.13,132.6 227.01,132.26 227.01,131.81L227.01,128.88L226.14,128.88L226.14,128.33L227.01,128.33L227.01,127.27L227.66,127.27L227.66,128.33L229.13,128.33L229.13,128.88L227.66,128.88L227.66,131.77C227.66,132.06 227.73,132.28 227.88,132.43C228.02,132.58 228.23,132.65 228.5,132.65C228.63,132.65 228.77,132.63 228.89,132.59C229.02,132.55 229.12,132.49 229.22,132.41L229.45,132.88L229.46,132.88Z");
+    			attr_dev(path81, "class", "svelte-9kfwom");
+    			add_location(path81, file$1, 98, 16, 56439);
+    			attr_dev(path82, "d", "M231.17,129.3C230.85,129.6 230.67,129.98 230.63,130.46L234.06,130.46C234.02,129.98 233.84,129.59 233.52,129.3C233.2,129 232.81,128.85 232.34,128.85C231.87,128.85 231.48,129 231.17,129.3ZM234.69,130.95L230.64,130.95C230.68,131.45 230.87,131.86 231.22,132.17C231.57,132.48 232.01,132.64 232.55,132.64C232.85,132.64 233.13,132.59 233.38,132.48C233.63,132.37 233.85,132.22 234.03,132.01L234.4,132.43C234.19,132.69 233.92,132.88 233.59,133.02C233.26,133.16 232.91,133.22 232.53,133.22C232.03,133.22 231.59,133.11 231.21,132.9C230.83,132.69 230.53,132.39 230.31,132.02C230.1,131.65 229.99,131.22 229.99,130.75C229.99,130.28 230.09,129.85 230.3,129.48C230.51,129.11 230.79,128.81 231.15,128.6C231.51,128.39 231.91,128.291 232.36,128.291C232.81,128.291 233.21,128.39 233.57,128.6C233.93,128.81 234.21,129.1 234.41,129.47C234.61,129.84 234.71,130.27 234.71,130.74L234.71,130.94L234.69,130.95Z");
+    			attr_dev(path82, "class", "svelte-9kfwom");
+    			add_location(path82, file$1, 99, 16, 56996);
+    			attr_dev(g1, "transform", "matrix(4.16667,0,0,4.16667,0,0)");
+    			add_location(g1, file$1, 27, 12, 10419);
+    			attr_dev(svg1, "width", "100%");
+    			attr_dev(svg1, "height", "100%");
+    			attr_dev(svg1, "viewBox", "0 0 980 563");
+    			attr_dev(svg1, "version", "1.1");
+    			attr_dev(svg1, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg1, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg1, "xml:space", "preserve");
+    			attr_dev(svg1, "xmlns:serif", "http://www.serif.com/");
+    			set_style(svg1, "fill-rule", "evenodd");
+    			set_style(svg1, "clip-rule", "evenodd");
+    			set_style(svg1, "stroke-linejoin", "round");
+    			set_style(svg1, "stroke-miterlimit", "2");
+    			attr_dev(svg1, "class", "svelte-9kfwom");
+    			add_location(svg1, file$1, 26, 8, 10116);
+    			attr_dev(div1, "class", "logo-container adapt-grampians svelte-9kfwom");
+    			add_location(div1, file$1, 25, 4, 10061);
+    			attr_dev(path83, "d", "M0,18.551L0,0L2.663,0L9.516,13.14L8.687,13.14L15.541,0L18.116,0L18.116,18.551L15.19,18.551L15.19,4.625L15.889,4.714L10.171,15.627L7.988,15.627L2.182,4.714L3.011,4.625L3.011,18.551L0,18.551ZM-12.267,18.551L-12.267,2.75L-18.334,2.75L-18.334,0L-2.838,0L-2.838,2.75L-8.906,2.75L-8.906,18.551L-12.267,18.551Z");
+    			attr_dev(path83, "class", "svelte-9kfwom");
+    			add_location(path83, file$1, 107, 20, 58411);
+    			attr_dev(g2, "transform", "matrix(1,0,0,1,947.715,318.654)");
+    			add_location(g2, file$1, 106, 16, 58343);
+    			attr_dev(path84, "d", "M0,0.67C-0.517,1.201 -1.687,1.663 -3.434,2.088C-4.307,2.299 -5.321,2.503 -6.468,2.685C-7.039,2.787 -7.646,2.849 -8.283,2.907C-8.916,2.969 -9.585,3.024 -10.28,3.071C-10.979,3.118 -11.702,3.162 -12.455,3.198C-12.83,3.212 -13.216,3.227 -13.604,3.245C-13.994,3.249 -14.391,3.245 -14.794,3.242C-16.406,3.224 -18.123,3.176 -19.924,3.089C-21.725,2.954 -23.612,2.751 -25.569,2.522C-26.548,2.423 -27.537,2.238 -28.545,2.07C-29.553,1.896 -30.575,1.711 -31.611,1.51C-32.805,1.303 -33.867,1.034 -34.824,0.801C-35.78,0.565 -36.628,0.346 -37.374,0.143C-38.116,-0.065 -38.768,-0.236 -39.316,-0.433C-39.865,-0.629 -40.324,-0.807 -40.699,-0.975C-42.205,-1.64 -42.397,-2.091 -41.845,-2.579C-40.902,-2.222 -39.982,-1.898 -39.192,-1.615C-38.407,-1.324 -37.734,-1.127 -37.309,-0.942C-36.09,-0.436 -35.061,-0.025 -34.074,0.328C-33.58,0.499 -33.1,0.67 -32.604,0.812C-32.11,0.943 -31.608,1.066 -31.08,1.183C-30.021,1.416 -28.854,1.627 -27.429,1.834C-27.071,1.885 -26.701,1.943 -26.308,1.983C-25.915,2.02 -25.504,2.06 -25.074,2.1C-24.209,2.176 -23.26,2.249 -22.208,2.325C-21.597,2.365 -20.993,2.405 -20.396,2.445C-19.804,2.482 -19.214,2.474 -18.636,2.485C-17.482,2.496 -16.362,2.492 -15.274,2.482C-14.729,2.471 -14.194,2.463 -13.667,2.456C-13.139,2.423 -12.619,2.391 -12.106,2.358C-11.084,2.289 -10.087,2.216 -9.119,2.136C-8.668,2.096 -8.231,2.06 -7.807,2.02C-7.381,1.983 -6.97,1.936 -6.565,1.87C-5.755,1.754 -4.983,1.63 -4.23,1.506C-3.48,1.376 -2.746,1.248 -2.008,1.121C-1.641,1.055 -1.27,0.99 -0.898,0.924C-0.527,0.856 -0.152,0.768 0.226,0.688C0.189,0.688 0,0.67 0,0.67");
+    			attr_dev(path84, "class", "svelte-9kfwom");
+    			add_location(path84, file$1, 110, 20, 58833);
+    			attr_dev(g3, "transform", "matrix(1,0,0,1,951.433,286.828)");
+    			add_location(g3, file$1, 109, 16, 58765);
+    			attr_dev(path85, "d", "M0,0.037C0.037,0.025 0.075,0.012 0.112,0C0.012,0.006 -0.094,0.013 -0.192,0.019L0,0.037Z");
+    			attr_dev(path85, "class", "svelte-9kfwom");
+    			add_location(path85, file$1, 113, 20, 60498);
+    			attr_dev(g4, "transform", "matrix(1,0,0,1,951.624,287.481)");
+    			add_location(g4, file$1, 112, 16, 60430);
+    			attr_dev(path86, "d", "M0,-181.138C-0.339,-181.309 -0.841,-181.625 -1.481,-182.066C-2.412,-182.884 -3.344,-183.702 -4.271,-184.521L-1.896,-183.99C-0.24,-182.262 0.505,-181.346 0.502,-181.058C0.505,-180.923 0.334,-180.956 0,-181.138M1.065,-150.457C1.506,-149.755 1.942,-149.06 2.382,-148.358C1.825,-148.787 1.27,-149.217 0.716,-149.638C0.258,-150.363 -0.571,-151.672 -0.59,-151.705C-0.106,-151.403 0.49,-150.905 1.065,-150.457M-71.792,-7.035C-71.77,-7.037 -71.742,-7.041 -71.719,-7.043C-72.201,-6.867 -72.723,-6.693 -73.287,-6.522C-73.927,-6.347 -74.618,-6.205 -75.346,-6.053C-76.077,-5.907 -76.841,-5.762 -77.638,-5.62C-78.438,-5.514 -79.264,-5.424 -80.111,-5.329C-83.505,-4.925 -87.208,-4.918 -90.617,-4.932C-91.636,-4.951 -92.727,-5.053 -93.873,-5.154C-94.444,-5.216 -95.033,-5.252 -95.619,-5.358C-96.208,-5.46 -96.805,-5.565 -97.405,-5.678C-98.005,-5.795 -98.613,-5.914 -99.217,-6.042C-99.824,-6.169 -100.421,-6.358 -101.021,-6.522C-101.617,-6.693 -102.211,-6.871 -102.8,-7.053C-103.095,-7.144 -103.386,-7.231 -103.677,-7.333C-103.96,-7.442 -104.244,-7.552 -104.527,-7.66C-93.188,-5.464 -81.817,-5.663 -71.075,-7.883C-70.7,-7.853 -70.325,-7.828 -69.951,-7.803C-70.565,-7.548 -71.17,-7.293 -71.792,-7.035M-81.417,10.219C-80.908,9.99 -80.529,9.819 -80.133,9.64C-79.362,9.6 -78.612,9.571 -77.885,9.546C-77.521,9.531 -77.161,9.531 -76.808,9.513C-76.455,9.491 -76.109,9.469 -75.764,9.448C-74.393,9.368 -73.094,9.317 -71.85,9.288C-70.613,9.208 -69.435,9.146 -68.292,9.102C-67.721,9.08 -67.157,9.058 -66.607,9.037C-66.055,9 -65.513,8.96 -64.979,8.924C-63.974,8.859 -63.021,8.8 -62.057,8.738C-61.089,8.666 -60.122,8.516 -59.066,8.363C-56.961,8.072 -54.578,7.465 -51.457,6.384C-49.83,5.741 -47.157,5.195 -44.239,4.144C-45.094,4.788 -45.931,5.424 -46.793,6.057C-47.677,6.657 -48.575,7.265 -49.528,7.913C-48.419,7.614 -47.455,7.323 -46.607,7.043C-45.768,6.748 -45.051,6.428 -44.406,6.141C-43.767,5.846 -43.202,5.563 -42.679,5.282C-42.158,5.002 -41.679,4.733 -41.22,4.424C-40.292,3.831 -39.394,3.231 -38.237,2.576C-37.946,2.416 -37.641,2.245 -37.316,2.067C-36.996,1.881 -36.654,1.688 -36.291,1.488C-35.563,1.088 -34.733,0.666 -33.77,0.2C-32.93,-0.123 -32.289,-0.41 -31.82,-0.563C-31.347,-0.72 -31.056,-0.767 -30.95,-0.691C-30.747,-0.545 -31.274,0.11 -32.679,1.256C-33.915,2.219 -35.283,3.271 -35.69,3.86C-36.095,4.449 -35.534,4.58 -32.864,3.653L-34.811,4.788C-35.247,4.955 -35.676,5.141 -36.127,5.3C-36.578,5.457 -37.036,5.617 -37.517,5.781C-38.47,6.108 -39.496,6.461 -40.667,6.861C-41.026,7.136 -41.589,7.529 -41.658,7.58C-42.856,8.121 -44.005,8.63 -45.087,9.102C-46.178,9.564 -47.229,9.939 -48.189,10.317C-48.674,10.503 -49.14,10.685 -49.583,10.856C-50.023,11.03 -50.449,11.197 -50.856,11.336C-51.671,11.623 -52.398,11.889 -53.028,12.143C-53.919,12.492 -54.774,12.86 -55.618,13.176C-56.462,13.489 -57.28,13.791 -58.066,14.078C-58.855,14.381 -59.616,14.672 -60.348,14.952C-61.082,15.206 -61.788,15.454 -62.461,15.701C-63.138,15.945 -63.777,16.189 -64.389,16.425C-64.996,16.661 -65.571,16.905 -66.117,17.102C-67.204,17.512 -68.15,17.916 -68.947,18.309C-70.529,19.146 -73.222,19.866 -75.342,20.597C-75.641,20.699 -75.964,20.798 -76.313,20.892C-76.662,20.976 -77.041,21.052 -77.448,21.125C-78.267,21.267 -79.209,21.394 -80.297,21.496C-80.839,21.547 -81.421,21.594 -82.039,21.634C-82.661,21.653 -83.319,21.656 -84.021,21.656C-84.724,21.653 -85.47,21.641 -86.259,21.623C-87.049,21.601 -87.882,21.587 -88.762,21.496C-90.348,20.91 -91.497,20.339 -92.349,19.79C-92.774,19.51 -93.123,19.244 -93.411,18.971C-93.698,18.688 -93.928,18.415 -94.109,18.146C-94.844,17.072 -94.869,16.083 -95.099,15.097C-96.317,14.846 -97.5,14.632 -98.631,14.366C-99.759,14.082 -100.843,13.806 -101.887,13.54C-102.407,13.409 -102.913,13.278 -103.411,13.151C-103.902,13.002 -104.386,12.853 -104.855,12.711C-105.79,12.424 -106.678,12.147 -107.518,11.889C-108.395,11.725 -109.231,11.503 -110.068,11.292C-110.908,11.077 -111.741,10.863 -112.604,10.645C-113.466,10.437 -114.335,10.161 -115.256,9.881C-116.172,9.593 -117.14,9.295 -118.181,8.975C-119.228,8.905 -120.811,8.735 -122.698,8.546C-128.535,5.871 -133.898,2.783 -138.94,-0.693C-138.778,-0.624 -138.616,-0.554 -138.454,-0.485C-138.729,-0.63 -139.005,-0.776 -139.28,-0.92C-139.273,-0.913 -139.114,-0.771 -139.108,-0.765C-141.599,-2.245 -143.89,-3.816 -146.122,-5.289C-147.213,-6.064 -148.283,-6.824 -149.327,-7.566C-149.589,-7.752 -149.851,-7.937 -150.109,-8.119C-150.363,-8.312 -150.614,-8.501 -150.862,-8.694C-151.364,-9.072 -151.858,-9.451 -152.346,-9.822C-154.34,-11.277 -156.126,-12.805 -157.89,-14.209C-158.767,-14.918 -159.574,-15.657 -160.396,-16.347C-160.804,-16.701 -161.208,-17.042 -161.604,-17.385C-161.805,-17.555 -162.001,-17.722 -162.197,-17.894C-162.39,-18.068 -162.579,-18.239 -162.765,-18.414C-163.882,-19.44 -164.907,-20.338 -165.871,-21.146C-166.82,-21.968 -167.672,-22.732 -168.513,-23.427C-170.204,-24.802 -171.648,-26.057 -173.172,-27.421C-179.578,-33.263 -185.246,-39.549 -190.645,-47.425C-191.005,-48.731 -191.307,-49.826 -191.536,-50.655C-191.729,-51.495 -191.853,-52.074 -191.859,-52.358C-191.91,-54.464 -191.976,-56.505 -191.67,-57.891C-191.351,-59.502 -190.976,-60.943 -190.59,-62.365C-190.179,-63.795 -189.713,-65.214 -189.302,-66.752C-189.16,-67.273 -189.099,-68.044 -189.029,-68.899C-188.945,-69.754 -188.854,-70.696 -188.771,-71.554C-188.658,-72.595 -188.479,-72.82 -188.222,-72.143C-188.091,-71.802 -187.941,-71.238 -187.771,-70.43C-187.684,-70.026 -187.589,-69.564 -187.49,-69.037C-187.374,-68.517 -187.239,-67.931 -187.098,-67.287C-185.333,-59.04 -182.605,-52.016 -179.396,-45.886C-176.174,-39.757 -172.471,-34.496 -168.396,-29.705C-167.461,-28.621 -166.562,-27.537 -165.588,-26.552C-164.627,-25.555 -163.703,-24.562 -162.75,-23.638C-161.782,-22.728 -160.833,-21.848 -159.901,-20.997C-159.443,-20.567 -158.96,-20.171 -158.486,-19.778C-158.01,-19.392 -157.541,-19.007 -157.082,-18.632C-156.617,-18.258 -156.162,-17.894 -155.711,-17.534C-155.264,-17.174 -154.791,-16.853 -154.34,-16.526C-153.434,-15.878 -152.558,-15.267 -151.71,-14.693C-150.854,-14.125 -149.992,-13.638 -149.188,-13.161C-148.377,-12.695 -147.609,-12.259 -146.864,-11.877C-145.416,-11.182 -144.06,-10.575 -142.768,-10.029C-141.455,-9.505 -140.182,-9.076 -138.955,-8.658C-137.74,-8.221 -136.5,-7.901 -135.281,-7.559C-134.056,-7.224 -132.852,-6.867 -131.563,-6.58C-134.885,-8.305 -137.453,-9.705 -139.425,-10.695C-141.43,-11.637 -142.801,-12.222 -143.765,-12.291C-144.277,-12.335 -145.249,-12.721 -146.348,-13.281C-147.436,-13.863 -148.676,-14.587 -149.796,-15.213C-150.491,-15.587 -151.153,-16.038 -151.855,-16.479C-152.554,-16.93 -153.271,-17.395 -153.998,-17.868C-154.18,-17.988 -154.365,-18.108 -154.547,-18.228C-154.726,-18.356 -154.903,-18.487 -155.085,-18.614C-155.445,-18.876 -155.806,-19.138 -156.173,-19.4C-156.908,-19.934 -157.65,-20.476 -158.403,-21.022C-160.055,-23.194 -161.619,-25.238 -163.165,-27.606C-162.866,-27.421 -162.63,-27.315 -162.267,-27.035C-161.647,-26.562 -161.044,-26.05 -160.386,-25.58C-159.738,-25.111 -159.08,-24.638 -158.436,-24.169C-157.788,-23.71 -157.159,-23.256 -156.529,-22.841C-155.893,-22.441 -155.271,-22.062 -154.686,-21.724C-153.986,-21.321 -153.267,-20.884 -152.518,-20.418C-151.75,-19.971 -150.942,-19.502 -150.116,-18.999C-149.705,-18.748 -149.287,-18.49 -148.854,-18.225C-148.643,-18.094 -148.429,-17.959 -148.21,-17.825C-147.984,-17.697 -147.759,-17.566 -147.533,-17.435C-146.62,-16.911 -145.686,-16.359 -144.722,-15.777C-140.808,-13.532 -136.318,-11.04 -131.112,-8.646C-130.41,-8.341 -129.668,-8.013 -128.897,-7.657C-128.512,-7.479 -128.122,-7.293 -127.722,-7.097C-127.329,-6.9 -126.907,-6.729 -126.492,-6.533C-123.524,-5.085 -120.218,-3.678 -118.94,-2.546C-118.341,-2.044 -118.605,-1.95 -119.417,-2.12C-120.218,-2.321 -121.545,-2.823 -123.08,-3.445C-123.364,-3.557 -123.637,-3.666 -123.906,-3.776C-124.168,-3.892 -124.427,-4.009 -124.678,-4.117C-125.183,-4.343 -125.667,-4.551 -126.129,-4.743C-126.591,-4.936 -127.034,-5.114 -127.46,-5.282C-127.882,-5.449 -128.29,-5.598 -128.664,-5.762C-130.174,-6.388 -131.403,-6.799 -132.411,-7.038C-132.175,-6.937 -131.964,-6.853 -131.698,-6.729C-125.802,-3.805 -122.607,-2.775 -120.338,-1.604C-119.771,-1.302 -119.235,-1.058 -118.729,-0.774C-118.221,-0.494 -117.732,-0.2 -117.228,0.128C-116.722,0.455 -116.201,0.822 -115.623,1.223C-115.037,1.609 -114.394,2.03 -113.666,2.51C-108.173,6.148 -101.425,9.459 -94.048,11.958C-94.604,11.314 -96.351,10.528 -97.475,9.815C-98.591,9.051 -99.089,8.378 -97.281,8.091C-91.741,9.258 -86.692,9.888 -81.417,10.219M-92.794,33.062C-94.796,33.051 -96.827,32.904 -99.737,32.711C-100.275,32.267 -100.636,31.98 -101.075,31.602C-99.231,31.863 -97.532,32.071 -95.739,32.297C-94.841,32.42 -93.92,32.486 -92.941,32.562C-91.963,32.638 -90.93,32.715 -89.813,32.799C-91.22,32.924 -92.014,32.993 -92.794,33.062M-102.68,30.049C-103.367,30.019 -104.183,29.957 -105.11,29.877C-105.572,29.834 -106.063,29.786 -106.579,29.739C-107.096,29.688 -107.631,29.605 -108.194,29.532C-109.632,28.997 -110.537,28.659 -111.436,28.32C-110.374,28.491 -109.326,28.655 -108.264,28.826C-107.732,28.91 -107.198,28.993 -106.652,29.081C-106.106,29.15 -105.554,29.219 -104.986,29.288C-104.757,29.321 -102.433,30.059 -102.68,30.049M-144.336,1.165C-148.967,-1.757 -153.273,-4.943 -157.385,-8.385L-158.155,-9.41C-157.603,-9.003 -157.068,-8.581 -156.497,-8.196L-154.794,-7.042C-153.652,-6.282 -152.546,-5.489 -151.367,-4.798C-151.477,-4.929 -151.59,-5.067 -151.702,-5.201C-154.14,-6.959 -156.569,-8.77 -159.116,-10.942C-158.796,-11.076 -158.127,-10.869 -157.191,-10.386C-156.726,-10.145 -156.202,-9.829 -155.605,-9.469C-155.002,-9.123 -154.34,-8.716 -153.634,-8.261C-152.928,-7.806 -152.175,-7.304 -151.39,-6.759C-150.582,-6.242 -149.734,-5.693 -148.861,-5.103C-147.141,-3.903 -145.22,-2.706 -143.303,-1.4C-140.178,0.612 -137.573,2.289 -135.467,3.646C-134.943,3.995 -134.456,4.329 -134.005,4.653C-133.546,4.973 -133.113,5.257 -132.724,5.544C-131.938,6.112 -131.295,6.643 -130.789,7.138C-130.112,7.789 -129.978,8.237 -129.355,9.008C-134.729,6.676 -139.68,4.042 -144.336,1.165M-187.182,-82.959C-187.054,-81.347 -186.967,-79.779 -186.771,-78.262C-186.683,-77.506 -186.6,-76.756 -186.52,-76.014C-186.439,-75.276 -186.366,-74.544 -186.243,-73.828C-186.021,-72.387 -185.807,-70.983 -185.592,-69.604C-185.333,-68.229 -185.05,-66.887 -184.773,-65.559C-184.522,-64.224 -184.147,-62.94 -183.806,-61.652C-183.452,-60.368 -183.11,-59.091 -182.656,-57.847C-182.223,-56.599 -181.79,-55.352 -181.299,-54.115C-180.775,-52.896 -180.229,-51.674 -179.654,-50.451C-179.527,-50.186 -179.4,-49.921 -179.276,-49.651C-179.139,-49.393 -179,-49.131 -178.865,-48.873C-178.589,-48.356 -178.316,-47.844 -178.043,-47.33C-177.771,-46.821 -177.498,-46.315 -177.229,-45.813C-177.09,-45.562 -176.952,-45.315 -176.817,-45.064C-176.672,-44.82 -176.526,-44.58 -176.381,-44.337C-175.791,-43.376 -175.209,-42.43 -174.639,-41.495C-174.493,-41.266 -174.348,-41.034 -174.205,-40.805C-174.053,-40.582 -173.896,-40.357 -173.747,-40.135C-173.437,-39.695 -173.132,-39.255 -172.827,-38.822C-172.212,-37.96 -171.63,-37.105 -171.001,-36.301C-170.364,-35.5 -169.731,-34.725 -169.109,-33.976C-168.792,-33.601 -168.483,-33.23 -168.174,-32.867C-167.861,-32.507 -167.53,-32.168 -167.21,-31.826C-166.566,-31.15 -165.93,-30.495 -165.3,-29.873C-165.031,-29.076 -164.998,-28.658 -165.129,-28.519C-165.271,-28.381 -165.584,-28.516 -165.999,-28.84C-166.832,-29.484 -168.098,-30.844 -169.232,-32.121C-172.267,-35.697 -175.224,-39.64 -178.025,-44.486C-180.765,-49.357 -183.365,-55.126 -185.341,-62.3C-186.53,-66.665 -187.131,-69.91 -187.196,-72.857C-187.21,-73.493 -187.258,-74.155 -187.262,-74.875C-187.269,-75.592 -187.272,-76.356 -187.279,-77.182C-187.287,-78.004 -187.294,-78.888 -187.305,-79.848C-187.265,-80.805 -187.225,-81.838 -187.182,-82.959M-186.021,-77.622C-185.897,-76.964 -185.773,-76.305 -185.649,-75.647C-185.584,-75.319 -185.529,-74.988 -185.457,-74.664L-185.225,-73.69C-184.911,-72.391 -184.603,-71.099 -184.289,-69.801C-183.547,-67.24 -182.845,-64.675 -181.91,-62.143C-180.12,-57.073 -177.963,-51.994 -175.144,-46.901C-175.006,-46.137 -174.23,-44.177 -174.536,-44.373C-174.875,-44.606 -175.286,-44.904 -175.77,-45.409C-176.242,-45.919 -176.756,-46.65 -177.341,-47.72C-179.433,-51.459 -181.208,-55.676 -182.725,-60.179C-183.074,-61.314 -183.42,-62.464 -183.762,-63.628C-183.846,-63.919 -183.933,-64.21 -184.009,-64.501C-184.082,-64.799 -184.151,-65.094 -184.224,-65.392C-184.362,-65.985 -184.5,-66.585 -184.639,-67.181C-185.231,-69.575 -185.573,-72.056 -185.952,-74.548C-186.108,-75.927 -186.01,-76.978 -186.021,-77.622M-178.745,-113.472C-178.844,-113.316 -178.949,-113.152 -179.047,-112.992L-178.768,-114.575C-178.669,-115.102 -178.585,-115.633 -178.454,-116.153C-178.214,-117.197 -177.975,-118.241 -177.734,-119.285C-177.596,-119.478 -177.458,-119.671 -177.319,-119.86C-177.817,-117.736 -178.385,-115.626 -178.745,-113.472M-180.419,-66.007C-181.041,-67.818 -181.535,-69.263 -181.859,-70.463C-182.154,-71.671 -182.325,-72.624 -182.387,-73.442C-182.441,-74.264 -182.412,-74.945 -182.23,-75.617C-182.049,-76.29 -181.765,-76.949 -181.379,-77.709L-181.347,-76.258C-181.339,-75.774 -181.324,-75.286 -181.281,-74.806C-181.212,-73.839 -181.143,-72.867 -181.073,-71.896C-181.033,-71.409 -180.997,-70.918 -180.961,-70.43C-180.902,-69.943 -180.845,-69.455 -180.786,-68.964C-180.662,-67.986 -180.542,-67 -180.419,-66.007M-181.543,-85.618C-182.1,-85.447 -182.616,-85.163 -183.002,-83.835C-183.194,-83.173 -183.354,-82.249 -183.467,-80.943C-183.536,-80.292 -183.529,-79.546 -183.525,-78.695C-183.518,-77.84 -183.489,-76.88 -183.441,-75.792C-183.689,-77.488 -183.94,-79.096 -184.101,-80.619C-184.228,-82.151 -184.329,-83.595 -184.402,-84.952C-184.428,-85.29 -184.435,-85.621 -184.431,-85.952L-184.431,-86.92C-184.428,-87.553 -184.42,-88.164 -184.405,-88.757C-184.395,-89.346 -184.377,-89.914 -184.352,-90.46C-184.325,-91.005 -184.26,-91.526 -184.209,-92.028C-184.101,-93.028 -183.977,-93.937 -183.842,-94.76C-183.772,-95.171 -183.7,-95.56 -183.627,-95.927C-183.532,-96.291 -183.441,-96.633 -183.344,-96.957C-182.962,-98.241 -182.543,-99.168 -182.1,-99.747C-182.161,-98.768 -182.197,-97.793 -182.281,-96.866C-182.391,-95.858 -182.456,-94.901 -182.532,-93.912C-182.456,-93.741 -182.372,-93.286 -182.328,-93.493C-182.223,-93.963 -182.114,-94.421 -182.009,-94.923C-181.957,-95.174 -181.906,-95.44 -181.855,-95.72C-181.805,-96.004 -181.746,-96.305 -181.685,-96.633C-181.364,-98.452 -181.121,-99.812 -180.928,-100.776C-180.695,-101.737 -180.517,-102.304 -180.375,-102.541C-180.084,-103.01 -179.942,-102.144 -179.586,-100.434C-179.204,-101.867 -178.73,-103.443 -178.156,-105.426C-178.236,-103.836 -178.247,-102.253 -178.338,-101.813C-178.437,-101.344 -178.553,-100.871 -178.633,-100.394C-178.709,-99.918 -178.789,-99.441 -178.865,-98.969C-179.029,-98.015 -179.186,-97.073 -179.342,-96.157C-179.43,-95.698 -179.473,-95.243 -179.535,-94.796C-179.593,-94.348 -179.654,-93.908 -179.709,-93.483C-179.829,-92.624 -179.949,-91.802 -180.073,-91.042C-180.455,-87.99 -180.881,-85.818 -181.543,-85.618M-184.646,-111.915C-184.479,-112.937 -184.217,-114.258 -183.86,-115.895C-183.649,-116.95 -183.354,-117.961 -183.104,-118.958C-182.845,-119.954 -182.594,-120.93 -182.351,-121.883C-182.07,-122.828 -181.794,-123.752 -181.524,-124.655C-181.248,-125.557 -181.019,-126.455 -180.728,-127.31C-180.444,-128.169 -180.164,-129.009 -179.892,-129.831C-179.757,-130.242 -179.622,-130.653 -179.491,-131.057C-179.36,-131.461 -179.232,-131.861 -179.084,-132.246C-178.517,-133.814 -177.971,-135.313 -177.45,-136.754C-175.271,-142.494 -173.19,-147.212 -171.295,-151.505C-170.615,-152.927 -169.942,-154.342 -169.266,-155.754C-168.534,-157.136 -167.788,-158.526 -167.024,-159.926C-166.653,-160.639 -166.217,-161.301 -165.81,-161.996C-165.388,-162.687 -164.962,-163.382 -164.532,-164.08C-164.318,-164.43 -164.104,-164.783 -163.878,-165.132C-163.645,-165.474 -163.412,-165.816 -163.176,-166.161C-162.699,-166.849 -162.219,-167.544 -161.731,-168.246C-161.484,-168.598 -161.236,-168.951 -160.985,-169.308C-160.734,-169.661 -160.462,-169.999 -160.196,-170.348C-159.65,-171.039 -159.102,-171.742 -158.545,-172.455C-158.261,-172.807 -157.978,-173.164 -157.69,-173.524C-157.402,-173.888 -157.09,-174.222 -156.784,-174.579C-156.162,-175.278 -155.533,-175.987 -154.889,-176.711C-154.565,-177.071 -154.237,-177.431 -153.906,-177.799C-153.562,-178.148 -153.212,-178.501 -152.859,-178.857C-152.146,-179.567 -151.419,-180.283 -150.68,-181.018C-149.945,-181.763 -149.134,-182.448 -148.326,-183.172C-147.512,-183.888 -146.679,-184.623 -145.812,-185.354C-144.161,-186.347 -142.651,-187.249 -141.353,-188.028C-140.028,-188.759 -138.897,-189.338 -138.035,-189.73C-137.653,-189.901 -137.264,-190.076 -136.875,-190.251C-136.489,-190.429 -136.107,-190.596 -135.729,-190.738C-134.976,-191.029 -134.277,-191.287 -133.725,-191.455C-132.618,-191.793 -132.08,-191.786 -132.775,-191.036C-133.688,-190.051 -132.011,-190.269 -131.12,-190.145C-130.804,-190.101 -130.381,-190.112 -129.931,-190.138C-129.476,-190.145 -128.988,-190.167 -128.556,-190.163C-127.686,-190.163 -127.021,-190.069 -127.177,-189.617C-127.314,-189.2 -128.082,-188.515 -129.185,-187.635C-130.272,-186.725 -131.717,-185.674 -133.252,-184.583C-135.343,-182.99 -137.286,-181.524 -138.948,-179.981C-139.789,-179.221 -140.6,-178.512 -141.331,-177.781C-142.059,-177.038 -142.742,-176.326 -143.379,-175.634C-144.671,-174.284 -145.689,-172.924 -146.559,-171.735C-146.987,-171.131 -147.381,-170.57 -147.708,-170.021C-148.028,-169.465 -148.305,-168.941 -148.534,-168.45C-148.741,-168.006 -149.032,-167.438 -149.49,-166.769C-149.72,-166.43 -149.992,-166.074 -150.312,-165.685C-150.622,-165.281 -150.979,-164.855 -151.4,-164.404C-155.042,-160.599 -157.202,-157.336 -159.018,-154.433C-159.888,-152.949 -160.644,-151.523 -161.411,-150.112C-162.132,-148.664 -162.834,-147.205 -163.619,-145.666C-165.144,-142.342 -167.174,-138.769 -169.142,-134.659C-169.403,-134.127 -169.734,-133.523 -170.073,-132.894C-170.394,-132.254 -170.735,-131.596 -171.066,-130.981C-171.729,-129.747 -172.376,-128.689 -172.67,-128.249C-176.981,-122.57 -180.637,-116.786 -183.751,-110.489C-184.384,-109.161 -184.736,-108.859 -184.795,-109.729C-184.82,-110.162 -184.78,-110.886 -184.646,-111.915M-157.661,-189.632C-156.668,-190.603 -155.289,-191.629 -154.787,-192.182C-154.187,-192.535 -153.59,-192.885 -152.982,-193.241C-154.583,-191.797 -156.213,-190.41 -158.654,-187.941C-159.371,-187.883 -158.672,-188.679 -157.661,-189.632M-143.743,-200.622C-142.4,-201.564 -140.931,-202.411 -139.319,-203.31C-138.512,-203.754 -137.672,-204.216 -136.772,-204.671C-135.863,-205.1 -134.903,-205.54 -133.885,-205.991C-133.372,-206.217 -132.848,-206.442 -132.31,-206.679C-131.768,-206.908 -131.211,-207.148 -130.625,-207.359C-129.461,-207.792 -128.221,-208.236 -126.903,-208.694C-127.987,-208.185 -128.984,-207.716 -129.945,-207.264C-130.418,-207.032 -130.891,-206.821 -131.346,-206.584C-131.797,-206.344 -132.247,-206.111 -132.695,-205.875C-134.484,-204.911 -136.311,-204.001 -138.392,-202.724C-139.269,-202.295 -140.509,-201.699 -142.073,-200.906C-143.608,-200.062 -145.492,-199.057 -147.649,-197.806C-146.388,-198.796 -145.093,-199.694 -143.743,-200.622M-122.873,-206.497C-122.182,-206.755 -121.399,-207.054 -120.501,-207.392C-119.599,-207.726 -118.584,-208.119 -117.395,-208.487C-115.376,-208.93 -113.866,-209.251 -112.688,-209.487C-111.498,-209.68 -110.646,-209.804 -109.959,-209.88C-108.588,-210.029 -107.871,-210.004 -106.445,-209.924C-107.849,-209.651 -109.145,-209.382 -110.366,-209.131C-110.978,-209.003 -111.566,-208.88 -112.142,-208.763C-112.717,-208.647 -113.266,-208.487 -113.808,-208.356C-114.888,-208.075 -115.918,-207.806 -116.925,-207.545C-117.428,-207.41 -117.926,-207.279 -118.417,-207.137C-118.908,-206.981 -119.392,-206.824 -119.879,-206.668C-120.697,-206.402 -121.52,-206.122 -122.36,-205.831C-123.2,-205.536 -124.066,-205.245 -124.946,-204.874C-125.834,-204.511 -126.755,-204.136 -127.733,-203.736C-128.221,-203.532 -128.719,-203.325 -129.235,-203.114C-129.756,-202.903 -130.272,-202.644 -130.814,-202.401C-130.309,-202.732 -129.868,-203.034 -129.454,-203.281C-129.043,-203.529 -128.664,-203.75 -128.301,-203.958C-127.573,-204.369 -126.9,-204.725 -126.067,-205.125C-125.234,-205.522 -124.252,-205.984 -122.873,-206.497M-105.71,-174.754C-106.106,-174.437 -106.725,-174.052 -107.532,-173.615C-108.34,-173.171 -109.315,-172.604 -110.461,-172.033C-116.056,-169.137 -121.287,-165.667 -125.936,-161.698C-126.66,-161.061 -127.228,-160.497 -127.5,-160.057C-127.009,-160.41 -126.532,-160.756 -126.067,-161.101C-125.602,-161.443 -125.157,-161.796 -124.695,-162.098C-123.786,-162.724 -122.92,-163.342 -122.072,-163.961C-121.214,-164.554 -120.352,-165.106 -119.508,-165.685C-119.079,-165.965 -118.664,-166.274 -118.224,-166.536C-117.784,-166.802 -117.344,-167.071 -116.896,-167.34C-113.335,-169.505 -109.312,-171.658 -103.363,-173.411C-104.546,-172.6 -104.812,-172.215 -105.841,-171.723C-108.504,-170.461 -111.214,-168.97 -114.106,-167.351C-116.451,-165.942 -115.379,-166.032 -114.453,-166.055C-114.603,-166.257 -114.284,-166.601 -113.367,-167.056C-112.902,-167.293 -112.291,-167.573 -111.52,-167.904C-111.134,-168.064 -110.716,-168.264 -110.239,-168.428C-109.767,-168.595 -109.25,-168.777 -108.693,-168.97C-114.564,-165.841 -119.01,-162.68 -122.982,-159.29C-123.139,-159.159 -123.291,-159.032 -123.44,-158.904C-123.582,-158.769 -123.721,-158.635 -123.858,-158.504C-124.124,-158.239 -124.383,-157.984 -124.638,-157.733C-125.129,-157.227 -125.598,-156.743 -126.078,-156.252C-127.042,-155.179 -127.795,-154.204 -128.78,-153.113C-132.848,-148.344 -136.34,-143.127 -138.978,-137.852C-139.509,-136.754 -139.941,-135.699 -140.396,-134.64C-140.825,-133.563 -141.2,-132.421 -141.662,-131.195C-141.495,-131.235 -141.065,-131.337 -140.545,-131.461C-140.59,-131.401 -140.633,-131.341 -140.676,-131.281C-141.375,-130.475 -142.053,-129.652 -142.716,-128.817C-144.598,-127.149 -146.937,-123.705 -148.621,-121.508C-149.353,-120.544 -149.949,-120.053 -150.509,-119.689C-151.051,-119.314 -151.553,-119.06 -152.139,-118.561C-152.004,-119.009 -151.873,-119.438 -151.75,-119.856C-151.626,-120.278 -151.462,-120.668 -151.327,-121.06C-151.048,-121.839 -150.782,-122.581 -150.523,-123.294C-150.258,-124.007 -149.952,-124.673 -149.684,-125.346C-149.545,-125.68 -149.407,-126.015 -149.269,-126.346C-149.131,-126.681 -148.999,-127.015 -148.836,-127.336C-149.108,-127.055 -149.345,-126.764 -149.585,-126.484C-149.829,-126.204 -150.065,-125.935 -150.294,-125.67C-150.764,-125.142 -151.219,-124.647 -151.658,-124.189C-152.478,-123.236 -153.245,-122.421 -153.965,-121.752C-154.144,-121.584 -154.317,-121.424 -154.492,-121.275C-154.652,-121.122 -154.812,-120.977 -154.969,-120.842C-155.282,-120.573 -155.58,-120.34 -155.867,-120.147C-156.442,-119.765 -156.97,-119.536 -157.442,-119.478C-157.727,-119.445 -158.047,-119.311 -158.389,-119.118C-158.56,-119.023 -158.737,-118.914 -158.912,-118.798C-159.083,-118.674 -159.254,-118.547 -159.433,-118.416C-160.127,-117.896 -160.837,-117.335 -161.426,-117.15C-162.452,-116.823 -163.132,-117.575 -164.049,-117.885C-164.107,-117.612 -164.056,-118.088 -163.91,-118.511C-161.706,-124.913 -159.251,-130.598 -156.442,-135.895C-153.616,-141.177 -150.454,-146.081 -146.664,-150.719C-145.882,-151.647 -145.176,-152.575 -144.521,-153.429C-143.841,-154.259 -143.241,-155.041 -142.739,-155.736C-139.479,-160.086 -136.15,-163.997 -132.069,-167.827C-131.462,-168.391 -130.825,-168.97 -130.152,-169.566C-129.469,-170.148 -128.733,-170.72 -127.97,-171.334C-126.456,-172.596 -124.688,-173.786 -122.757,-175.194C-120.501,-175.674 -118.603,-176.249 -118.141,-176.133C-116.933,-175.783 -115.357,-175.605 -113.4,-175.605C-112.414,-175.583 -111.319,-175.561 -110.134,-175.601C-109.537,-175.612 -108.922,-175.659 -108.271,-175.67C-107.616,-175.678 -106.939,-175.692 -106.237,-175.718C-105.008,-175.758 -104.913,-175.394 -105.71,-174.754M-120.352,-13.826C-120.803,-14.005 -121.138,-14.154 -121.418,-14.314C-121.975,-14.641 -122.346,-14.984 -123.04,-15.725C-122.149,-15.183 -121.334,-14.74 -120.589,-14.303C-119.918,-13.918 -119.295,-13.554 -118.655,-13.231C-119.385,-13.444 -119.921,-13.663 -120.352,-13.826M-130.167,-9.352C-129.68,-9.214 -129.231,-9.083 -128.792,-8.956C-128.355,-8.832 -127.926,-8.708 -127.479,-8.577C-127.253,-8.515 -127.027,-8.45 -126.787,-8.381C-126.547,-8.319 -126.296,-8.264 -126.034,-8.199C-124.877,-7.373 -123.965,-6.719 -123.022,-6.046C-122.062,-5.402 -121.058,-4.769 -119.756,-3.929C-120.876,-4.405 -121.898,-4.838 -122.88,-5.256C-123.852,-5.696 -124.765,-6.159 -125.699,-6.606C-126.165,-6.831 -126.638,-7.06 -127.114,-7.293C-127.591,-7.534 -128.064,-7.803 -128.559,-8.068C-129.054,-8.337 -129.562,-8.617 -130.094,-8.905C-130.625,-9.203 -131.192,-9.483 -131.757,-9.844C-131.182,-9.636 -130.65,-9.498 -130.167,-9.352M-159.935,-79.339C-159.818,-80.281 -159.662,-81.093 -159.479,-81.743C-159.298,-82.395 -159.087,-82.882 -158.825,-83.188C-158.743,-83.287 -158.66,-83.372 -158.578,-83.457C-158.564,-78.786 -158.092,-74.222 -157.226,-69.792C-157.32,-69.928 -157.413,-70.061 -157.508,-70.198C-157.784,-70.608 -158.09,-71.023 -158.338,-71.46C-158.621,-71.936 -158.887,-72.496 -159.119,-73.111C-159.236,-73.417 -159.345,-73.737 -159.447,-74.068C-159.545,-74.399 -159.65,-74.734 -159.705,-75.087C-159.833,-75.788 -159.924,-76.513 -159.971,-77.233C-160.011,-77.95 -160.04,-78.659 -159.935,-79.339M-168.52,-61.172C-168.443,-62.205 -168.309,-63.093 -168.142,-63.904C-168.083,-64.137 -167.941,-64.111 -167.756,-63.966C-167.566,-63.82 -167.334,-63.555 -167.119,-63.3C-165.904,-61.878 -164.747,-60.43 -163.437,-59.076C-162.801,-58.393 -162.172,-57.716 -161.539,-57.058C-160.877,-56.425 -160.215,-55.796 -159.563,-55.174C-159.134,-54.77 -158.716,-54.377 -158.29,-53.995C-157.847,-53.627 -157.406,-53.26 -156.966,-52.896L-155.664,-51.826L-155.013,-51.299C-154.798,-51.124 -154.562,-50.961 -154.336,-50.79C-153.448,-50.124 -152.546,-49.451 -151.618,-48.756C-150.68,-48.087 -149.709,-47.421 -148.737,-46.716C-148.534,-46.57 -148.315,-46.399 -148.09,-46.21C-148.088,-46.208 -148.086,-46.206 -148.084,-46.205C-145.538,-42.006 -142.583,-38.072 -139.263,-34.455C-139.138,-34.152 -139.013,-33.849 -138.876,-33.551C-138.505,-32.776 -138.111,-31.986 -137.683,-31.16C-137.479,-30.782 -137.275,-30.379 -137.042,-29.989C-136.799,-29.604 -136.551,-29.207 -136.3,-28.807C-135.783,-28.014 -135.256,-27.166 -134.682,-26.359C-134.088,-25.551 -133.495,-24.743 -132.913,-23.947L-132.477,-23.346C-132.327,-23.147 -132.175,-22.965 -132.025,-22.772C-131.728,-22.39 -131.433,-22.015 -131.146,-21.648C-130.844,-21.251 -130.574,-20.877 -130.327,-20.516C-130.079,-20.153 -129.857,-19.796 -129.621,-19.469C-129.159,-18.8 -128.723,-18.13 -128.185,-17.385C-128.955,-17.712 -129.745,-18.043 -130.541,-18.381C-131.331,-18.738 -132.105,-19.134 -132.898,-19.509C-133.292,-19.698 -133.685,-19.887 -134.077,-20.076C-134.273,-20.171 -134.467,-20.262 -134.663,-20.356C-134.853,-20.458 -135.041,-20.56 -135.227,-20.659C-135.979,-21.058 -136.719,-21.444 -137.438,-21.811C-138.522,-22.335 -139.509,-22.925 -140.52,-23.474C-141.021,-23.75 -141.523,-24.027 -142.022,-24.3C-142.524,-24.576 -142.993,-24.886 -143.484,-25.177C-143.972,-25.478 -144.459,-25.777 -144.95,-26.078C-145.438,-26.388 -145.951,-26.679 -146.428,-27.024C-147.392,-27.694 -148.381,-28.392 -149.407,-29.138C-154.667,-33.081 -159.781,-38.211 -163.878,-43.194C-164.479,-44.253 -164.886,-44.97 -165.166,-45.464C-165.435,-45.963 -165.565,-46.25 -165.639,-46.439C-166.093,-47.643 -166.497,-48.763 -166.85,-49.808C-167.17,-50.87 -167.429,-51.863 -167.657,-52.78C-167.773,-53.242 -167.876,-53.682 -167.974,-54.108C-168.076,-54.533 -168.127,-54.955 -168.192,-55.355C-168.315,-56.159 -168.407,-56.898 -168.476,-57.585C-168.633,-58.953 -168.596,-60.139 -168.52,-61.172M-168.142,-72.62C-167.821,-71.725 -167.406,-70.768 -167.028,-69.43C-166.857,-68.757 -166.609,-68.008 -166.421,-67.109C-166.318,-66.658 -166.225,-66.174 -166.133,-65.65C-166.042,-65.126 -165.974,-64.555 -165.856,-63.955C-165.937,-64.133 -166.017,-64.311 -166.093,-64.486C-166.17,-64.664 -166.235,-64.843 -166.304,-65.021C-166.442,-65.374 -166.577,-65.719 -166.708,-66.065C-166.978,-66.752 -167.239,-67.426 -167.494,-68.087L-167.687,-68.582L-167.854,-69.084C-167.967,-69.419 -168.076,-69.754 -168.188,-70.085C-168.41,-70.754 -168.633,-71.423 -168.854,-72.103C-168.891,-72.358 -168.916,-72.591 -168.935,-72.795C-168.945,-73.002 -168.941,-73.188 -168.937,-73.34C-168.927,-73.646 -168.887,-73.843 -168.825,-73.908C-168.69,-74.039 -168.494,-73.646 -168.142,-72.62M-159.196,-148.256L-158.319,-148.958C-158.49,-148.609 -158.646,-148.278 -158.796,-147.951C-158.931,-147.613 -159.065,-147.278 -159.203,-146.943C-159.473,-146.266 -159.76,-145.579 -160.124,-144.804C-160.306,-144.415 -160.517,-144.011 -160.734,-143.567C-160.949,-143.113 -161.186,-142.633 -161.462,-142.109C-161.735,-141.585 -162.044,-141.021 -162.394,-140.406C-162.758,-139.799 -163.117,-139.115 -163.528,-138.369C-164.424,-136.739 -165.213,-135.579 -165.78,-134.811C-166.37,-134.058 -166.835,-133.753 -167.159,-133.894C-164.82,-139.096 -162.187,-143.782 -159.196,-148.256M-164.81,-140.748C-165.129,-140.086 -165.449,-139.42 -165.776,-138.743C-166.101,-138.067 -166.428,-137.38 -166.767,-136.678C-167.071,-135.957 -167.381,-135.226 -167.701,-134.469C-167.811,-134.353 -168.778,-133.007 -168.724,-133.44C-168.618,-134.247 -168.156,-135.473 -167.501,-136.899C-167.151,-137.601 -166.737,-138.344 -166.304,-139.115C-165.86,-139.879 -165.42,-140.682 -164.918,-141.45C-164.536,-141.861 -164.15,-142.272 -163.772,-142.68C-164.118,-142.036 -164.46,-141.395 -164.81,-140.748M-106.87,-8.679C-107.165,-8.726 -107.445,-8.759 -107.707,-8.81C-107.966,-8.865 -108.209,-8.916 -108.445,-8.963C-108.915,-9.057 -109.337,-9.145 -109.737,-9.225C-110.537,-9.396 -111.247,-9.519 -112.018,-9.705C-113.164,-10.284 -114.277,-10.844 -115.376,-11.4C-116.397,-11.961 -117.389,-12.54 -118.385,-13.103C-117.855,-13.037 -117.113,-13.017 -116.896,-12.91C-113.972,-11.455 -111.021,-10.181 -106.87,-8.679M-107.624,-9.992C-108.675,-10.342 -109.719,-10.709 -110.756,-11.091C-111.279,-11.269 -111.774,-11.517 -112.276,-11.731C-112.774,-11.96 -113.273,-12.19 -113.764,-12.415C-114.255,-12.652 -114.754,-12.863 -115.219,-13.128C-115.688,-13.394 -116.15,-13.656 -116.612,-13.918C-118.468,-14.936 -120.127,-16.162 -121.654,-17.326C-122.403,-17.941 -123.099,-18.581 -123.757,-19.196C-124.084,-19.505 -124.401,-19.814 -124.706,-20.12C-125.009,-20.433 -125.288,-20.764 -125.558,-21.08C-122.48,-18.716 -119.257,-16.46 -115.735,-14.507C-112.229,-12.535 -108.5,-10.669 -104.419,-9.149C-104.953,-9.283 -105.488,-9.414 -106.022,-9.549L-106.827,-9.756C-107.096,-9.825 -107.361,-9.902 -107.624,-9.992M-100.097,-165.114C-99.526,-165.15 -98.955,-165.19 -98.388,-165.226C-98.107,-165.244 -97.827,-165.266 -97.547,-165.284C-97.267,-165.299 -96.983,-165.296 -96.707,-165.299C-95.594,-165.31 -94.513,-165.332 -93.479,-165.321C-92.443,-165.263 -91.457,-165.198 -90.544,-165.114C-89.635,-165.052 -88.783,-164.859 -88.034,-164.699C-87.488,-164.572 -86.779,-164.477 -86.022,-164.393C-85.266,-164.281 -84.458,-164.146 -83.728,-164.022C-82.992,-163.888 -82.33,-163.775 -81.854,-163.586C-81.373,-163.4 -81.082,-163.197 -81.086,-162.975C-81.09,-162.847 -81.166,-162.72 -81.202,-162.607C-81.995,-162.582 -82.8,-162.472 -83.614,-162.382C-84.429,-162.284 -85.259,-162.229 -86.096,-162.105C-87.765,-161.825 -89.493,-161.611 -91.246,-161.185C-91.687,-161.09 -92.127,-160.999 -92.574,-160.905L-92.912,-160.832L-93.247,-160.741C-93.469,-160.68 -93.691,-160.617 -93.916,-160.555C-94.364,-160.432 -94.815,-160.308 -95.273,-160.181C-95.503,-160.119 -95.731,-160.057 -95.961,-159.995C-96.19,-159.937 -96.419,-159.872 -96.648,-159.788C-97.558,-159.479 -98.485,-159.166 -99.428,-158.846C-100.362,-158.496 -101.294,-158.089 -102.251,-157.711C-105.954,-156.108 -109.756,-153.999 -113.46,-151.228C-121.738,-147.618 -129.235,-142.632 -135.633,-136.555C-135.458,-136.82 -135.269,-137.101 -135.049,-137.419C-134.841,-137.721 -134.642,-138.016 -134.444,-138.304C-134.237,-138.58 -134.037,-138.853 -133.837,-139.118C-133.448,-139.653 -133.084,-140.173 -132.735,-140.682C-132.651,-140.81 -132.564,-140.937 -132.48,-141.061C-132.39,-141.184 -132.299,-141.301 -132.211,-141.421C-132.033,-141.661 -131.858,-141.898 -131.687,-142.13C-131.346,-142.603 -131.011,-143.069 -130.68,-143.527C-130.359,-144.008 -129.984,-144.422 -129.636,-144.877C-129.275,-145.325 -128.912,-145.775 -128.541,-146.241C-128.177,-146.718 -127.748,-147.143 -127.318,-147.609C-126.882,-148.071 -126.424,-148.547 -125.936,-149.042C-122.422,-152.443 -118.697,-155.481 -114.491,-158.195C-110.283,-160.898 -105.586,-163.277 -100.097,-165.114M-97.325,-191.473C-96.383,-191.411 -95.659,-191.298 -94.888,-191.197C-95.434,-191.095 -95.982,-190.989 -96.524,-190.887C-97.616,-190.956 -98.7,-190.92 -99.795,-190.924C-98.944,-191.117 -97.423,-191.498 -97.325,-191.473M-80.74,-189.451C-81.206,-189.436 -81.672,-189.421 -82.13,-189.407C-83.37,-189.592 -84.607,-189.778 -85.848,-189.963C-85.487,-190.025 -85.139,-190.083 -84.782,-190.145C-84.192,-190.116 -83.538,-190.08 -82.931,-190.051C-82.625,-190.033 -82.33,-190.014 -82.061,-189.992C-81.792,-189.96 -81.548,-189.923 -81.341,-189.883C-80.737,-189.77 -80.911,-189.596 -80.74,-189.451M-83.119,-192.935C-82.792,-192.939 -82.469,-192.943 -82.152,-192.946C-81.832,-192.939 -81.519,-192.928 -81.206,-192.921C-80.58,-192.899 -79.97,-192.877 -79.369,-192.859C-78.766,-192.837 -78.172,-192.815 -77.587,-192.793C-77.292,-192.783 -77.001,-192.779 -76.71,-192.757C-76.419,-192.732 -76.132,-192.71 -75.844,-192.684C-74.69,-192.586 -73.545,-192.488 -72.389,-192.389C-71.643,-191.953 -70.94,-191.462 -70.154,-190.938C-71.701,-191.051 -73.116,-191.091 -74.433,-191.193C-75.753,-191.291 -76.976,-191.448 -78.154,-191.516C-79.333,-191.611 -80.457,-191.72 -81.573,-191.826C-82.13,-191.891 -82.683,-191.899 -83.239,-191.924C-83.796,-191.946 -84.356,-191.96 -84.92,-191.971C-86.113,-191.993 -86.212,-192.441 -87.245,-192.866C-85.79,-192.891 -84.422,-192.913 -83.119,-192.935M-197.148,-63.289C-197.226,-62.776 -197.534,-63.056 -198.051,-64.024C-198.116,-65.006 -198.189,-65.985 -198.24,-66.963C-198.262,-67.946 -198.284,-68.924 -198.306,-69.907C-198.076,-69.037 -197.851,-68.167 -197.622,-67.294C-197.243,-65.094 -197.065,-63.799 -197.148,-63.289M25.668,-149.144C26.006,-148.657 26.341,-148.173 26.675,-147.689C27.337,-146.718 27.996,-145.757 28.654,-144.789C28.992,-144.306 29.302,-143.807 29.611,-143.305C29.924,-142.8 30.236,-142.294 30.553,-141.781C29.426,-144.458 28.119,-146.947 26.886,-149.359C26.246,-150.552 25.569,-151.698 24.915,-152.826C24.584,-153.386 24.253,-153.942 23.929,-154.495C23.608,-155.048 23.241,-155.565 22.903,-156.092C22.212,-157.136 21.524,-158.151 20.84,-159.133C20.669,-159.381 20.498,-159.624 20.327,-159.865C20.149,-160.101 19.971,-160.337 19.793,-160.57C19.433,-161.032 19.076,-161.487 18.723,-161.938C18.014,-162.836 17.315,-163.702 16.609,-164.532C15.882,-165.339 15.158,-166.114 14.441,-166.852C14.11,-167.191 13.521,-167.944 12.812,-168.857C12.08,-169.748 11.215,-170.788 10.399,-171.738C10.745,-172.044 11.022,-172.284 11.24,-172.476C10.757,-173.026 10.28,-173.568 9.804,-174.106C9.313,-174.623 8.817,-175.139 8.319,-175.667C7.817,-176.187 7.304,-176.718 6.78,-177.264C6.245,-177.806 5.718,-178.381 5.114,-178.937C5.34,-178.821 5.562,-178.708 5.776,-178.595C5.983,-178.479 6.191,-178.363 6.391,-178.25C6.795,-178.02 7.184,-177.799 7.569,-177.58C8.341,-177.137 9.09,-176.707 9.883,-176.249C10.156,-175.91 10.422,-175.579 10.68,-175.26C10.935,-174.939 11.167,-174.612 11.4,-174.303C11.862,-173.677 12.303,-173.08 12.729,-172.498C13.575,-171.334 14.397,-170.25 15.18,-169.035C16.489,-167.725 17.453,-166.754 17.759,-166.449C16.86,-167.824 16.027,-169.097 15.205,-170.348C14.361,-171.589 13.481,-172.775 12.571,-174.037C13.572,-173.117 14.481,-172.28 15.321,-171.505C16.155,-170.716 16.883,-169.959 17.588,-169.254C18.29,-168.544 18.948,-167.875 19.593,-167.22C20.236,-166.561 20.818,-165.888 21.434,-165.219C20.287,-167.355 18.687,-169.421 17.104,-171.392C16.904,-171.636 16.708,-171.884 16.504,-172.12C16.297,-172.353 16.086,-172.582 15.882,-172.811C15.467,-173.269 15.053,-173.713 14.646,-174.146C13.83,-175.009 13.041,-175.823 12.306,-176.555C11.451,-177.362 10.534,-178.213 9.621,-179.043C8.708,-179.868 7.813,-180.687 6.944,-181.364C5.224,-182.739 3.815,-183.764 3.284,-183.95C2.146,-184.339 0.403,-185.252 -1.547,-186.391C-2.511,-186.97 -3.58,-187.544 -4.657,-188.134C-5.737,-188.726 -6.828,-189.323 -7.895,-189.89C-9.892,-190.869 -11.707,-191.669 -13.457,-192.415C-15.246,-193.103 -16.975,-193.732 -18.768,-194.401C-21.846,-195.442 -24.752,-196.377 -28,-197.25C-28.662,-197.435 -29.638,-197.806 -30.558,-198.123C-31.489,-198.414 -32.351,-198.672 -32.759,-198.705C-33.592,-198.77 -34.396,-198.818 -35.17,-198.854C-35.56,-198.868 -35.941,-198.883 -36.32,-198.898C-36.702,-198.894 -37.08,-198.894 -37.458,-198.89C-38.957,-198.868 -40.405,-198.821 -41.875,-198.778C-40.467,-198.483 -39.136,-198.203 -37.844,-197.933C-37.521,-197.868 -37.196,-197.799 -36.877,-197.737C-36.56,-197.657 -36.243,-197.584 -35.931,-197.508C-35.302,-197.355 -34.68,-197.202 -34.058,-197.053C-33.432,-196.901 -32.81,-196.748 -32.188,-196.595C-31.875,-196.518 -31.562,-196.438 -31.245,-196.358C-30.936,-196.267 -30.623,-196.177 -30.313,-196.086C-29.062,-195.715 -27.782,-195.326 -26.447,-194.892C-25.771,-194.681 -25.163,-194.467 -24.573,-194.27C-23.984,-194.085 -23.421,-193.903 -22.864,-193.728C-22.3,-193.55 -21.743,-193.375 -21.165,-193.194C-20.587,-193.012 -19.99,-192.815 -19.364,-192.564C-18.113,-192.073 -16.69,-191.469 -14.934,-190.615C-14.064,-190.171 -13.129,-189.639 -12.085,-189.035C-11.562,-188.734 -11.012,-188.406 -10.438,-188.061C-9.855,-187.719 -9.27,-187.326 -8.651,-186.904C-9.263,-187.013 -9.702,-187.068 -10.099,-187.122C-10.503,-187.169 -10.863,-187.228 -11.307,-187.344C-12.344,-187.62 -13.234,-187.781 -14.119,-187.933C-14.559,-188.013 -14.999,-188.09 -15.457,-188.174C-15.916,-188.264 -16.389,-188.359 -16.905,-188.461C-18.979,-188.875 -21.536,-189.752 -25.912,-191.436C-27.004,-191.869 -26.359,-191.124 -26.861,-191.127C-27.677,-191.138 -28.193,-190.909 -28.932,-190.829C-29.666,-190.745 -30.627,-190.793 -32.34,-191.287C-32.719,-191.4 -33.107,-191.513 -33.504,-191.629C-33.904,-191.731 -34.312,-191.837 -34.727,-191.946C-35.553,-192.164 -36.4,-192.389 -37.27,-192.619C-37.702,-192.739 -38.139,-192.855 -38.579,-192.975C-39.016,-193.096 -39.47,-193.186 -39.921,-193.295C-40.823,-193.503 -41.74,-193.718 -42.66,-193.929C-46.342,-194.762 -50.15,-195.416 -53.661,-195.813C-52.948,-195.183 -52.392,-194.696 -52.01,-194.361C-53.166,-194.583 -54.258,-194.794 -55.313,-194.98C-56.371,-195.129 -57.386,-195.271 -58.376,-195.409C-58.87,-195.474 -59.357,-195.544 -59.842,-195.609C-60.082,-195.642 -60.321,-195.671 -60.562,-195.703C-60.802,-195.725 -61.042,-195.747 -61.282,-195.769C-62.235,-195.86 -63.185,-195.944 -64.138,-196.031C-64.636,-196.078 -65.131,-196.129 -65.614,-196.187C-66.099,-196.242 -66.579,-196.267 -67.044,-196.318C-67.982,-196.413 -68.878,-196.526 -69.715,-196.657C-71.381,-196.951 -72.832,-197.173 -73.901,-197.534C-74.851,-197.835 -75.466,-198.152 -76.725,-198.435C-79.453,-198.959 -79.653,-199.563 -78.114,-200.138C-77.732,-200.28 -77.237,-200.422 -76.648,-200.556C-76.059,-200.684 -75.375,-200.771 -74.611,-200.866C-73.844,-200.956 -72.996,-201.033 -72.075,-201.098C-71.617,-201.127 -71.141,-201.16 -70.649,-201.179L-69.136,-201.179C-68.311,-201.171 -67.492,-201.164 -66.688,-201.16C-65.877,-201.149 -65.076,-201.16 -64.291,-201.106C-62.708,-201.033 -61.173,-200.964 -59.7,-200.898C-58.223,-200.789 -56.804,-200.687 -55.462,-200.589C-54.789,-200.538 -54.127,-200.513 -53.494,-200.458C-52.857,-200.404 -52.242,-200.349 -51.649,-200.298C-52.111,-200.389 -52.559,-200.472 -52.992,-200.556C-53.429,-200.64 -53.847,-200.713 -54.265,-200.76C-55.095,-200.866 -55.884,-200.953 -56.655,-201.033C-57.426,-201.106 -58.179,-201.179 -58.943,-201.255C-59.703,-201.327 -60.481,-201.346 -61.282,-201.4C-62.086,-201.448 -62.919,-201.502 -63.807,-201.571C-64.251,-201.6 -64.705,-201.651 -65.182,-201.68C-65.658,-201.706 -66.149,-201.731 -66.666,-201.761C-67.691,-201.823 -68.798,-201.902 -70.006,-202.004C-70.609,-202.066 -71.242,-202.084 -71.904,-202.12C-72.566,-202.16 -73.258,-202.2 -73.981,-202.241C-74.506,-202.652 -74.931,-203.052 -75.386,-203.452C-75.841,-203.852 -76.324,-204.256 -76.965,-204.627C-77.608,-205.005 -78.409,-205.384 -79.507,-205.762C-80.605,-206.133 -81.995,-206.548 -83.825,-206.821C-85.364,-206.602 -86.718,-206.409 -88.093,-206.199C-89.464,-205.933 -90.864,-205.664 -92.505,-205.347C-92.279,-205.886 -92.203,-206.162 -91.497,-206.391C-91.145,-206.508 -90.632,-206.61 -89.864,-206.73C-89.093,-206.843 -88.067,-206.999 -86.681,-207.094C-84.953,-207.232 -83.294,-207.395 -82.374,-207.552C-81.915,-207.632 -81.639,-207.683 -81.636,-207.759C-81.628,-207.825 -81.894,-207.923 -82.512,-207.97C-87.212,-208.381 -83.992,-208.89 -83.6,-209.392C-83.272,-209.825 -83.454,-210.284 -84.593,-210.666C-85.59,-211 -86.929,-211.309 -88.274,-211.615C-89.62,-211.873 -90.97,-212.121 -91.978,-212.401C-92.374,-212.513 -92.817,-212.608 -93.356,-212.681C-93.891,-212.75 -94.521,-212.823 -95.288,-212.805C-96.06,-212.801 -96.965,-212.764 -98.063,-212.685C-98.609,-212.645 -99.206,-212.597 -99.85,-212.535C-100.174,-212.503 -100.512,-212.47 -100.861,-212.43C-101.21,-212.379 -101.574,-212.325 -101.952,-212.27C-102.905,-212.124 -103.837,-211.99 -104.793,-211.863C-105.746,-211.721 -106.732,-211.63 -107.776,-211.437C-108.82,-211.259 -109.938,-211.073 -111.17,-210.862C-111.785,-210.753 -112.437,-210.647 -113.113,-210.516C-113.789,-210.364 -114.499,-210.207 -115.248,-210.04C-113.025,-210.775 -111.429,-211.168 -110.188,-211.502C-108.944,-211.83 -108.057,-212.07 -107.198,-212.295C-105.39,-212.724 -103.706,-213.125 -101.676,-213.605C-103.913,-213.401 -105.594,-213.245 -106.754,-213.139C-107.918,-213.037 -108.565,-212.969 -108.748,-213.045C-109.111,-213.18 -107.627,-213.834 -104.554,-214.878C-105.31,-214.835 -106.416,-214.697 -107.631,-214.511C-108.839,-214.278 -110.159,-214.027 -111.349,-213.802C-113.738,-213.383 -115.594,-213.001 -115.103,-213.594C-115.033,-213.674 -116.576,-213.365 -118.565,-212.899C-119.064,-212.779 -119.592,-212.659 -120.123,-212.517C-120.654,-212.365 -121.192,-212.208 -121.72,-212.052C-122.782,-211.739 -123.808,-211.415 -124.652,-211.135C-126.158,-210.659 -127.62,-210.055 -129.098,-209.491C-129.832,-209.2 -130.566,-208.912 -131.302,-208.621C-132.04,-208.341 -132.746,-207.995 -133.466,-207.683C-134.896,-207.035 -136.322,-206.391 -137.715,-205.715C-139.094,-205.009 -140.454,-204.292 -141.789,-203.572C-147.09,-200.615 -151.902,-197.388 -155.787,-194.03C-164.267,-186.882 -171.081,-179.021 -176.995,-170.545C-177.334,-170.065 -177.52,-169.734 -177.661,-169.432C-177.796,-169.126 -177.897,-168.853 -178.08,-168.5C-179.16,-166.358 -180.276,-164.263 -181.216,-162.069C-181.692,-160.989 -182.169,-159.908 -182.646,-158.831C-183.093,-157.743 -183.507,-156.645 -183.926,-155.565C-184.405,-154.313 -185.137,-152.64 -185.017,-152.232C-184.808,-151.43 -184.18,-151.332 -183.713,-150.967C-184.24,-150.079 -184.769,-149.184 -185.295,-148.296C-185.582,-147.801 -185.885,-147.321 -186.153,-146.823C-186.423,-146.327 -186.692,-145.837 -186.958,-145.353C-188.773,-142.048 -188.455,-142.091 -188.219,-142.006C-189.095,-139.69 -189.385,-138.375 -189.465,-137.541C-189.541,-136.672 -189.378,-136.305 -189.269,-135.77C-188.781,-137.141 -188.337,-138.342 -188.006,-139.353C-187.664,-140.364 -187.446,-141.19 -187.297,-141.768C-187.024,-142.865 -187.214,-143.151 -187.996,-142.385C-187.078,-144.038 -186.146,-145.711 -185.343,-147.2C-184.484,-148.725 -183.828,-150.08 -183.586,-151.111C-183.038,-152.116 -182.382,-153.153 -180.859,-155.616C-181.307,-154.102 -181.666,-152.753 -182.037,-151.407C-182.365,-150.039 -182.699,-148.667 -183.133,-147.139C-183.565,-145.721 -184.101,-143.855 -184.616,-142.105C-185.151,-140.363 -185.512,-138.66 -185.609,-137.554C-185.661,-136.987 -185.864,-136.186 -186.159,-135.244C-186.312,-134.779 -186.454,-134.262 -186.621,-133.723C-186.788,-133.189 -186.967,-132.625 -187.148,-132.047C-187.334,-131.475 -187.527,-130.886 -187.716,-130.297C-187.811,-130.002 -187.905,-129.711 -188,-129.416C-188.083,-129.118 -188.163,-128.824 -188.247,-128.533C-188.567,-127.361 -188.862,-126.237 -189.076,-125.259C-189.12,-125.069 -189.236,-124.72 -189.411,-124.243C-189.575,-123.767 -189.778,-123.156 -190.015,-122.457C-190.255,-121.759 -190.524,-120.973 -190.809,-120.133C-190.95,-119.715 -191.096,-119.282 -191.245,-118.842C-191.368,-118.398 -191.499,-117.943 -191.627,-117.488C-191.547,-117.979 -191.47,-118.445 -191.394,-118.885C-191.303,-119.325 -191.216,-119.74 -191.132,-120.14C-190.961,-120.933 -190.805,-121.654 -190.663,-122.319C-190.518,-122.989 -190.383,-123.607 -190.252,-124.2C-190.113,-124.789 -189.957,-125.346 -189.812,-125.906C-189.928,-125.757 -190.048,-125.608 -190.168,-125.458L-190.484,-124.487C-190.579,-124.16 -190.67,-123.829 -190.765,-123.501C-190.946,-122.839 -191.132,-122.177 -191.317,-121.508C-191.503,-120.839 -191.688,-120.162 -191.874,-119.474C-192.07,-118.79 -192.205,-118.081 -192.376,-117.365C-192.703,-116.953 -192.903,-116.935 -192.937,-117.528C-192.954,-117.826 -192.933,-118.278 -192.867,-118.91C-192.802,-119.543 -192.638,-120.347 -192.437,-121.366C-192.187,-122.683 -191.946,-123.923 -191.718,-125.106C-191.467,-126.292 -191.223,-127.423 -190.986,-128.529C-190.87,-129.089 -190.754,-129.638 -190.641,-130.191C-190.521,-130.741 -190.372,-131.275 -190.24,-131.821C-189.964,-132.909 -189.684,-134.007 -189.379,-135.138C-189.932,-133.549 -190.488,-131.959 -191.016,-130.362C-191.488,-128.747 -191.961,-127.128 -192.437,-125.502C-192.794,-124.203 -193.049,-123.047 -193.304,-122.032C-193.547,-121.013 -193.776,-120.129 -193.955,-119.344C-194.282,-117.757 -194.548,-116.593 -194.817,-115.618C-195.086,-114.643 -195.37,-113.861 -195.668,-113.032C-195.981,-112.206 -196.359,-111.344 -196.861,-110.216C-197.134,-109.605 -197.399,-109.001 -197.665,-108.409C-197.909,-107.808 -198.149,-107.215 -198.386,-106.63C-198.869,-105.447 -199.339,-104.29 -199.808,-103.144C-200.259,-101.988 -200.659,-100.827 -201.081,-99.652C-201.288,-99.063 -201.492,-98.47 -201.703,-97.877C-201.805,-97.579 -201.907,-97.277 -202.013,-96.975C-202.11,-96.673 -202.194,-96.371 -202.289,-96.065C-202.369,-95.789 -202.445,-95.011 -202.532,-94.392C-202.479,-92.562 -202.475,-90.809 -202.285,-88.677C-202.504,-86.785 -202.772,-84.497 -202.918,-83.246C-203.118,-81.994 -203.431,-81.787 -204.017,-84.152C-204.326,-85.509 -204.687,-84.01 -204.98,-83.534C-205.231,-83.133 -205.792,-84.625 -205.389,-78.713C-205.003,-79.808 -204.679,-80.707 -204.242,-81.9C-204.173,-80.754 -204.111,-79.696 -204.053,-78.702C-203.991,-77.709 -203.868,-76.782 -203.784,-75.894C-203.686,-75.01 -203.595,-74.166 -203.504,-73.34C-203.457,-72.93 -203.413,-72.526 -203.365,-72.122C-203.308,-71.718 -203.246,-71.322 -203.184,-70.921C-202.929,-72.038 -202.595,-73.129 -202.281,-74.264C-202.009,-75.279 -201.718,-76.352 -201.416,-77.48C-201.288,-75.858 -201.176,-74.388 -201.07,-73.06C-201.03,-72.391 -200.943,-71.765 -200.877,-71.169C-200.812,-70.572 -200.75,-70.008 -200.692,-69.477C-200.575,-68.411 -200.48,-67.472 -200.408,-66.647C-200.324,-65.821 -200.233,-65.116 -200.189,-64.512C-199.99,-62.085 -200.233,-61.278 -200.881,-61.365C-201.23,-61.412 -201.579,-62.06 -201.987,-63.551C-202.18,-64.301 -202.424,-65.254 -202.62,-66.454C-202.81,-67.658 -203.009,-69.106 -203.213,-70.819C-203.445,-69.677 -203.7,-68.659 -203.871,-67.273C-203.89,-67.109 -203.846,-66.643 -203.78,-66.079C-203.722,-65.519 -203.591,-64.868 -203.515,-64.319C-203.104,-63.82 -202.736,-63.373 -202.209,-62.733C-202.06,-61.823 -201.929,-61.005 -201.812,-60.277C-201.703,-59.546 -201.562,-58.913 -201.474,-58.349C-201.277,-57.225 -201.169,-56.41 -201.129,-55.846C-201.052,-54.711 -201.26,-54.573 -201.612,-54.941C-202.314,-55.668 -203.58,-58.444 -204.221,-59.241C-203.93,-57.727 -203.635,-56.268 -203.34,-54.831C-203.187,-54.111 -203.057,-53.394 -202.882,-52.689C-202.703,-51.983 -202.529,-51.277 -202.351,-50.572C-202.169,-49.866 -201.987,-49.153 -201.805,-48.436C-201.616,-47.72 -201.441,-46.992 -201.208,-46.268C-200.771,-44.817 -200.31,-43.318 -199.815,-41.739C-199.499,-41.204 -199.143,-40.648 -198.789,-40.095C-198.44,-39.546 -198.091,-38.996 -197.764,-38.483C-197.102,-37.465 -196.509,-36.599 -196.101,-36.177C-195.315,-35.38 -194.304,-34.027 -193.082,-32.088C-192.769,-31.608 -192.467,-31.077 -192.106,-30.538C-191.754,-29.993 -191.379,-29.411 -190.986,-28.8C-190.597,-28.181 -190.189,-27.53 -189.761,-26.846C-189.55,-26.504 -189.331,-26.151 -189.105,-25.791C-188.873,-25.438 -188.633,-25.078 -188.386,-24.707C-187.68,-23.641 -186.971,-22.616 -186.261,-21.6L-185.729,-20.84L-185.17,-20.105C-184.809,-19.628 -184.443,-19.15 -184.076,-18.668C-184.734,-20.285 -184.306,-20.236 -182.172,-17.85C-181.758,-17.395 -181.383,-16.988 -181.019,-16.635C-180.647,-16.286 -180.303,-15.976 -179.975,-15.704C-179.323,-15.151 -178.756,-14.725 -178.222,-14.332C-176.166,-12.797 -174.565,-12.135 -172.219,-10.451C-169.567,-8.599 -166.198,-6.1 -162.604,-3.888C-165.776,-6.49 -168.163,-8.596 -171.415,-11.801C-171.055,-12.346 -170.375,-12.423 -169.367,-12.008C-168.353,-11.596 -166.948,-10.749 -165.18,-9.385C-164.969,-10.462 -166.512,-13.383 -164.264,-11.695C-163.532,-11.157 -162.826,-10.607 -162.07,-10.091C-161.313,-9.574 -160.549,-9.05 -159.753,-8.508C-159.359,-8.236 -158.96,-7.955 -158.549,-7.672C-158.345,-7.53 -158.141,-7.384 -157.934,-7.239C-157.719,-7.097 -157.501,-6.955 -157.282,-6.813C-156.409,-6.238 -155.5,-5.623 -154.54,-4.961C-154.056,-4.634 -153.579,-4.27 -153.052,-3.935C-152.535,-3.59 -151.997,-3.237 -151.444,-2.866C-150.895,-2.492 -150.327,-2.106 -149.734,-1.702C-149.439,-1.502 -149.148,-1.287 -148.839,-1.087C-148.526,-0.887 -148.21,-0.68 -147.886,-0.472C-147.246,-0.051 -146.584,0.386 -145.893,0.841C-145.201,1.292 -144.503,1.787 -143.739,2.245C-142.986,2.718 -142.204,3.209 -141.393,3.718C-140.989,3.976 -140.578,4.238 -140.156,4.508C-139.737,4.777 -139.294,5.021 -138.85,5.286C-136.871,6.709 -135.274,7.924 -133.993,8.829C-132.728,9.764 -131.848,10.503 -131.349,11.059C-130.851,11.612 -130.727,11.965 -131.007,12.176C-131.146,12.278 -131.382,12.343 -131.717,12.365C-132.044,12.38 -132.47,12.351 -132.993,12.278C-134.096,12.125 -135.452,11.889 -135.15,12.449C-134.575,13.486 -133.906,14.588 -133.099,15.719C-132.28,16.825 -131.331,17.982 -130.229,19.197C-129.931,19.524 -129.486,19.91 -129.003,20.314C-128.504,20.695 -127.973,21.103 -127.497,21.47C-126.544,22.223 -125.83,22.882 -126.216,23.155C-126.296,23.213 -125.401,23.66 -124.237,24.206C-123.055,24.708 -121.607,25.316 -120.614,25.737C-121.098,26.127 -121.768,26.458 -122.004,26.931C-122.095,27.105 -121.768,27.396 -120.905,27.819C-120.472,28.033 -119.908,28.28 -119.195,28.56C-118.475,28.815 -117.602,29.099 -116.568,29.412C-115.277,29.801 -114.303,30.07 -113.553,30.248C-112.8,30.423 -112.269,30.481 -111.891,30.514C-111.123,30.565 -110.938,30.42 -110.628,30.307C-110.53,30.27 -108.671,30.667 -107.154,30.94C-106.776,31.183 -106.022,31.449 -106.321,31.492C-107.456,31.645 -106.834,32.104 -103.116,32.784C-102.363,32.915 -101.57,33.068 -100.763,33.17C-99.951,33.264 -99.133,33.351 -98.333,33.428C-97.532,33.504 -96.754,33.57 -96.03,33.621C-95.306,33.672 -94.637,33.708 -94.051,33.697C-92.6,33.694 -92.958,33.318 -92.601,33.089C-89.186,33.293 -88.329,33.13 -87.83,32.882C-87.321,32.638 -87.18,32.358 -85.015,32.26C-84.375,32.264 -83.734,32.267 -83.091,32.271C-82.767,32.271 -82.443,32.275 -82.115,32.275C-81.788,32.264 -81.461,32.249 -81.13,32.238C-79.806,32.184 -78.438,32.126 -76.99,32.064C-76.63,32.049 -76.263,32.031 -75.892,32.013C-75.521,31.987 -75.142,31.951 -74.757,31.918C-73.989,31.849 -73.195,31.776 -72.377,31.7C-71.555,31.62 -70.704,31.54 -69.82,31.452C-68.939,31.351 -68.022,31.209 -67.07,31.078C-67.838,31.376 -68.551,31.653 -69.23,31.914C-69.911,32.173 -70.559,32.377 -71.181,32.591C-72.396,32.996 -73.514,33.367 -74.63,33.74C-73.265,33.654 -71.734,33.56 -70.312,33.475C-69.544,33.431 -68.816,33.348 -68.165,33.26C-67.514,33.177 -66.938,33.086 -66.488,32.995C-63.181,32.377 -60.515,31.133 -59.096,30.107C-57.674,29.07 -57.488,28.204 -59.07,28.015C-58.514,27.887 -57.99,27.786 -57.506,27.654C-57.022,27.528 -56.575,27.407 -56.16,27.298C-55.327,27.072 -54.629,26.88 -54.05,26.716C-52.894,26.382 -52.21,26.159 -51.896,25.992C-51.588,25.818 -51.643,25.723 -51.959,25.654C-52.275,25.585 -52.86,25.516 -53.6,25.424C-54.355,25.33 -55.069,25.203 -55.055,24.915C-55.043,24.617 -54.294,24.192 -52.162,23.387C-51.1,22.962 -50.089,22.54 -49.096,22.118C-48.103,21.696 -47.128,21.289 -46.164,20.805C-45.196,20.346 -44.214,19.877 -43.199,19.393C-42.693,19.146 -42.166,18.924 -41.649,18.651C-41.125,18.385 -40.591,18.116 -40.041,17.837C-39.692,17.662 -39.136,17.422 -38.463,17.145C-38.128,17.01 -37.764,16.865 -37.39,16.712C-37.2,16.639 -37.004,16.563 -36.811,16.487C-36.618,16.407 -36.422,16.323 -36.229,16.239C-34.665,15.57 -33.053,14.915 -32.166,14.606C-31.479,14.381 -30.867,14.14 -30.288,13.947C-29.714,13.751 -29.179,13.584 -28.677,13.435C-27.673,13.133 -26.789,12.914 -25.941,12.689C-24.596,12.293 -23.329,11.943 -22.093,11.605C-21.471,11.438 -20.859,11.27 -20.252,11.103C-19.651,10.917 -19.055,10.732 -18.451,10.543C-14.999,9.495 -11.688,8.305 -8.258,6.912C-8.007,6.807 -7.247,6.265 -6.385,5.704C-5.588,5.031 -4.733,4.337 -3.878,3.576C-3.038,2.805 -2.161,2.001 -1.273,1.186C-0.681,0.728 -0.16,0.361 0.309,0.044C0.768,-0.284 1.182,-0.56 1.574,-0.807C2.364,-1.305 3.073,-1.706 3.914,-2.281C4.332,-2.568 4.783,-2.895 5.292,-3.303C5.783,-3.721 6.329,-4.223 6.951,-4.838C7.573,-5.456 8.275,-6.184 9.072,-7.064C9.476,-7.497 9.872,-7.999 10.306,-8.53C10.738,-9.069 11.196,-9.647 11.681,-10.273C11.455,-10.214 10.902,-9.745 10.236,-9.138C9.905,-8.832 9.541,-8.493 9.178,-8.156C8.813,-7.813 8.421,-7.49 8.071,-7.188C6.649,-5.987 5.642,-5.271 6.824,-7.035C7.162,-7.421 7.461,-7.792 7.675,-8.006C8.231,-8.537 8.752,-9.097 9.287,-9.665C9.817,-10.233 10.356,-10.807 10.913,-11.4C11.462,-12 12.052,-12.597 12.615,-13.263C13.187,-13.929 13.775,-14.623 14.401,-15.351C13.91,-15.02 13.539,-14.718 13.347,-14.653C13.157,-14.594 13.146,-14.769 12.968,-14.911C15.525,-17.85 17.388,-20.327 19.272,-22.867C20.495,-24.627 21.487,-26.097 22.288,-27.345C23.049,-28.618 23.631,-29.665 24.07,-30.553C24.511,-31.441 24.823,-32.168 25.013,-32.819C25.194,-33.474 25.282,-34.042 25.3,-34.602C25.337,-35.835 26.318,-38.305 27.617,-42.041C27.817,-42.597 28.021,-43.187 28.207,-43.758C28.393,-44.333 28.526,-44.9 28.646,-45.384C28.884,-46.359 28.985,-47.039 28.829,-46.981C28.178,-46.745 27.857,-47.21 27.934,-48.6C28.043,-49.975 28.418,-52.325 29.211,-55.835C29.439,-57.014 29.029,-57.073 28.589,-56.206C28.294,-55.686 27.279,-52.456 26.566,-50.466C26.067,-49.16 25.642,-47.858 24.915,-45.846C23.979,-44.45 22.994,-43.02 22.081,-41.706C21.852,-41.379 21.633,-41.055 21.4,-40.75C21.164,-40.448 20.935,-40.157 20.713,-39.873C20.266,-39.309 19.836,-38.796 19.443,-38.356C15.249,-33.721 11.073,-29.96 6.479,-26.395C6.257,-26.221 5.86,-25.835 5.475,-25.438C5.081,-25.046 4.692,-24.653 4.525,-24.424C3.419,-22.917 2.571,-21.815 1.844,-21.015C1.109,-20.222 0.538,-19.694 0.047,-19.287C-0.444,-18.88 -0.859,-18.592 -1.288,-18.279C-1.499,-18.123 -1.718,-17.963 -1.961,-17.784C-2.205,-17.606 -2.463,-17.41 -2.754,-17.17C-2.503,-17.555 -2.26,-17.908 -2.045,-18.261C-1.834,-18.614 -1.634,-18.949 -1.441,-19.265C-1.066,-19.898 -0.728,-20.466 -0.423,-20.975C-1.296,-20.276 -2.146,-19.6 -2.958,-18.952C-3.795,-18.33 -4.603,-17.756 -5.359,-17.232C-6.312,-16.588 -7.142,-15.973 -8.313,-15.056C-9.484,-14.139 -10.863,-12.79 -13.057,-10.815C-13.762,-10.163 -14.373,-9.639 -14.879,-9.247C-15.396,-8.872 -15.8,-8.628 -16.072,-8.508C-16.621,-8.276 -16.644,-8.552 -16.032,-9.352C-15.606,-9.894 -15.269,-10.422 -14.948,-10.938C-14.687,-11.354 -14.429,-11.766 -14.166,-12.187C-14.592,-11.733 -15.017,-11.279 -15.432,-10.836L-15.843,-10.392L-16.269,-9.971C-16.549,-9.687 -16.832,-9.407 -17.116,-9.127C-18.255,-8.01 -19.364,-6.842 -20.648,-5.736C-21.918,-4.612 -23.253,-3.401 -24.843,-2.222C-25.629,-1.618 -26.454,-0.992 -27.338,-0.342C-28.248,0.27 -29.212,0.906 -30.241,1.572C-28.946,0.182 -27.786,-1.025 -26.753,-2.302C-26.232,-2.921 -25.72,-3.528 -25.207,-4.139C-24.955,-4.438 -24.701,-4.74 -24.446,-5.045C-24.195,-5.351 -23.951,-5.671 -23.7,-5.987C-23.09,-6.766 -22.511,-7.522 -21.568,-8.497C-21.089,-8.974 -20.558,-9.552 -19.881,-10.207C-19.208,-10.866 -18.393,-11.604 -17.411,-12.477C-16.188,-13.641 -15.534,-14.601 -14.864,-15.474L-14.318,-16.195L-13.802,-16.937C-13.464,-17.428 -13.122,-17.919 -12.783,-18.41C-12.452,-18.898 -12.118,-19.385 -11.783,-19.869C-11.448,-20.349 -11.154,-20.869 -10.841,-21.364C-10.227,-22.361 -9.615,-23.358 -9,-24.358C-8.437,-25.38 -7.865,-26.406 -7.294,-27.439C-5.821,-30.16 -4.348,-33.096 -3.122,-35.973C-2.965,-36.33 -2.809,-36.686 -2.656,-37.039C-2.511,-37.396 -2.38,-37.76 -2.245,-38.112C-1.983,-38.826 -1.725,-39.52 -1.474,-40.204C-0.965,-41.546 -0.611,-42.885 -0.295,-44.096C-0.103,-44.849 0.062,-45.537 0.207,-46.232C0.334,-46.934 0.462,-47.636 0.622,-48.389C0.778,-49.146 0.985,-49.95 1.226,-50.881C1.44,-51.823 1.72,-52.878 2.088,-54.108C2.186,-54.45 2.28,-54.763 2.356,-55.057C2.426,-55.355 2.484,-55.628 2.531,-55.879C2.63,-56.377 2.688,-56.781 2.713,-57.091C2.761,-57.713 2.662,-57.96 2.426,-57.854C1.938,-57.647 0.979,-55.981 -0.768,-53.147C-0.546,-54.209 -0.303,-55.257 -0.099,-56.326C0.076,-57.4 0.251,-58.491 0.433,-59.604C0.476,-59.877 0.52,-60.157 0.567,-60.433C0.596,-60.718 0.629,-61.001 0.661,-61.288C0.724,-61.86 0.785,-62.434 0.851,-63.02C0.912,-63.602 0.979,-64.195 1.044,-64.795C1.08,-65.399 1.112,-66.014 1.149,-66.643C-0.474,-60.219 -2.555,-54.679 -4.562,-50.055C-5.028,-48.876 -5.573,-47.804 -6.047,-46.752C-6.286,-46.224 -6.516,-45.712 -6.741,-45.21C-6.978,-44.715 -7.226,-44.242 -7.45,-43.776C-7.913,-42.845 -8.327,-41.95 -8.724,-41.114C-9.149,-40.295 -9.535,-39.524 -9.877,-38.796C-10.096,-38.342 -10.31,-37.887 -10.524,-37.432C-10.75,-36.985 -10.99,-36.548 -11.223,-36.104C-11.696,-35.217 -12.165,-34.333 -12.631,-33.452C-13.137,-32.594 -13.642,-31.739 -14.145,-30.888C-14.398,-30.458 -14.649,-30.033 -14.9,-29.607C-15.17,-29.193 -15.439,-28.782 -15.708,-28.37C-16.247,-27.541 -16.781,-26.719 -17.312,-25.9C-17.88,-25.104 -18.444,-24.314 -19.004,-23.532C-19.284,-23.136 -19.564,-22.743 -19.845,-22.35C-20.132,-21.964 -20.43,-21.593 -20.722,-21.219C-21.311,-20.458 -21.893,-19.709 -22.471,-18.967C-25.108,-15.784 -27.589,-12.801 -30.805,-9.854C-34.003,-6.886 -37.844,-3.786 -43.362,-0.738C-43.563,-0.625 -43.759,-0.513 -43.948,-0.403C-44.145,-0.305 -44.334,-0.211 -44.523,-0.116C-44.901,0.073 -45.266,0.252 -45.618,0.423C-46.331,0.764 -47.011,1.066 -47.695,1.346C-48.375,1.637 -49.081,1.83 -49.819,2.034C-50.558,2.23 -51.337,2.405 -52.188,2.565C-53.035,2.743 -53.843,2.82 -54.593,2.907C-55.342,2.991 -56.04,3.056 -56.691,3.103C-57.99,3.22 -59.132,3.162 -60.133,3.111C-61.137,3.052 -62.006,2.954 -62.796,2.834C-63.596,2.681 -64.316,2.5 -65.007,2.318C-65.997,2.056 -66.946,1.783 -67.885,1.51C-68.816,1.194 -69.747,0.881 -70.704,0.557C-71.173,0.401 -71.646,0.244 -72.13,0.084C-72.37,0.008 -72.61,-0.072 -72.857,-0.152C-73.102,-0.24 -73.349,-0.33 -73.596,-0.418C-74.593,-0.774 -75.626,-1.124 -76.717,-1.466C-77.416,-1.673 -77.969,-1.88 -78.307,-2.055C-78.642,-2.229 -78.758,-2.375 -78.583,-2.513C-78.496,-2.586 -78.332,-2.655 -78.092,-2.724C-77.849,-2.797 -77.521,-2.863 -77.106,-2.971C-76.277,-3.168 -75.088,-3.405 -73.461,-3.706C-72.505,-3.903 -71.559,-4.15 -70.653,-4.368C-69.751,-4.601 -68.893,-4.794 -68.14,-5.085C-66.63,-5.616 -65.495,-6.137 -65.076,-6.638C-71.166,-4.823 -77.528,-3.67 -84.055,-3.219C-88.049,-4.009 -86.237,-4.321 -82.501,-4.547C-82.178,-4.557 -81.854,-4.594 -81.526,-4.63L-80.555,-4.74C-79.907,-4.812 -79.268,-4.885 -78.642,-4.958C-78.329,-4.994 -78.02,-5.031 -77.714,-5.067C-77.412,-5.118 -77.117,-5.176 -76.826,-5.227C-76.244,-5.336 -75.691,-5.445 -75.179,-5.558C-73.175,-5.95 -71.777,-6.542 -71.555,-7.062C-70.668,-7.161 -69.353,-7.289 -69.296,-7.326C-68.15,-8.13 -65.4,-8.825 -62.526,-9.818C-62.166,-9.93 -61.803,-10.047 -61.435,-10.163C-61.075,-10.284 -60.715,-10.429 -60.358,-10.56C-59.646,-10.833 -58.943,-11.102 -58.267,-11.357C-57.932,-11.495 -57.597,-11.608 -57.284,-11.761C-56.972,-11.909 -56.67,-12.052 -56.379,-12.193C-55.8,-12.477 -55.272,-12.754 -54.817,-13.015C-54.072,-13.412 -52.529,-14.154 -52.235,-14.46C-51.922,-14.784 -51.548,-15.118 -51.107,-15.456C-50.889,-15.627 -50.652,-15.791 -50.405,-15.973C-50.165,-16.162 -49.907,-16.351 -49.634,-16.54C-49.549,-16.602 -49.452,-16.663 -49.363,-16.725C-32.085,-24.682 -18.39,-38.738 -11.21,-56.019L-10.957,-56.541L-10.678,-57.214C-10.295,-58.113 -9.913,-59.018 -9.524,-59.931C-9.179,-60.859 -8.833,-61.79 -8.487,-62.725C-8.112,-63.649 -7.851,-64.61 -7.545,-65.555C-7.399,-66.029 -7.254,-66.498 -7.105,-66.971C-7.028,-67.203 -6.963,-67.44 -6.908,-67.68L-6.73,-68.397C-6.501,-69.346 -6.261,-70.284 -6.058,-71.22C-5.894,-72.165 -5.737,-73.096 -5.592,-74.01C-5.425,-74.919 -5.377,-75.836 -5.305,-76.72C-5.279,-77.164 -5.25,-77.604 -5.221,-78.033C-5.199,-78.466 -5.174,-78.891 -5.191,-79.317C-5.228,-80.874 -5.271,-82.162 -5.413,-82.853C-5.494,-83.164 -5.586,-83.345 -5.695,-83.382C-5.695,-83.474 -5.688,-83.565 -5.688,-83.658C-5.688,-96.505 -9.067,-108.586 -15.005,-119.118C-14.579,-118.69 -14.167,-118.261 -13.755,-117.841C-13.445,-117.528 -13.14,-117.219 -12.838,-116.913C-12.54,-116.608 -12.216,-116.309 -11.943,-116C-11.19,-115.197 -10.47,-114.429 -9.738,-113.647C-9.354,-113.254 -9.033,-112.828 -8.673,-112.403C-8.32,-111.973 -7.964,-111.526 -7.6,-111.056C-6.847,-110.125 -6.199,-109.063 -5.476,-107.848C-4.719,-106.64 -4.101,-105.229 -3.391,-103.596C-3.256,-103.279 -3.122,-103.032 -3.002,-102.817C-2.885,-102.602 -2.769,-102.428 -2.652,-102.264C-2.412,-101.94 -2.165,-101.668 -1.893,-101.238C-1.954,-101.857 -2.016,-102.431 -2.074,-102.992C-2.161,-103.545 -2.245,-104.09 -2.332,-104.654C-2.518,-105.782 -2.667,-107.004 -3.02,-108.547C-2.707,-108.052 -2.416,-107.594 -2.136,-107.153C-1.881,-106.702 -1.634,-106.269 -1.387,-105.84C-0.902,-104.971 -0.404,-104.094 0.054,-103.035C1.055,-100.591 1.858,-99.492 2.35,-102.821C2.276,-103.083 2.208,-103.337 2.139,-103.588C2.065,-103.836 1.979,-104.072 1.905,-104.305C1.753,-104.771 1.607,-105.207 1.473,-105.625C1.196,-106.455 0.956,-107.19 0.701,-107.848C-0.219,-109.969 -1.016,-111.493 -2.089,-113.868C-2.711,-115.4 -3.416,-116.604 -4.038,-117.656C-4.358,-118.176 -4.649,-118.667 -4.963,-119.118C-5.286,-119.569 -5.603,-119.991 -5.915,-120.406C-6.229,-120.817 -6.537,-121.221 -6.847,-121.632C-7,-121.839 -7.156,-122.043 -7.312,-122.254C-7.479,-122.457 -7.647,-122.661 -7.818,-122.872C-8.509,-123.716 -9.186,-124.647 -9.979,-125.742C-10.292,-126.153 -10.743,-126.554 -10.67,-126.317C-9.728,-123.363 -11.547,-126.371 -12.387,-127.296C-15.621,-130.744 -18.972,-133.643 -22.806,-136.648C-23.344,-137.063 -23.846,-137.423 -24.326,-137.747C-24.792,-138.081 -25.294,-138.329 -25.748,-138.587C-26.211,-138.835 -26.662,-139.071 -27.112,-139.311C-27.563,-139.548 -28,-139.799 -28.495,-140.028C-28.979,-140.268 -29.474,-140.526 -29.994,-140.825C-30.256,-140.97 -30.521,-141.126 -30.798,-141.297C-30.933,-141.381 -31.07,-141.468 -31.213,-141.555C-31.361,-141.643 -31.511,-141.726 -31.667,-141.818C-32.278,-142.174 -32.93,-142.581 -33.635,-143.058C-33.81,-143.181 -33.988,-143.305 -34.174,-143.432C-34.362,-143.553 -34.556,-143.673 -34.76,-143.8C-35.156,-144.055 -35.57,-144.327 -36,-144.622C-36.142,-144.721 -36.069,-144.498 -36.091,-144.433C-35.796,-144.171 -35.505,-143.909 -35.203,-143.64C-34.908,-143.367 -34.588,-143.116 -34.297,-142.807C-33.693,-142.214 -33.05,-141.577 -32.318,-140.857C-33.384,-141.348 -34.322,-141.781 -35.243,-142.203C-35.303,-142.227 -35.361,-142.252 -35.42,-142.276C-38.462,-144.555 -41.681,-146.621 -45.062,-148.442C-45.152,-148.539 -45.237,-148.625 -45.33,-148.725C-45.796,-149.239 -46.455,-149.904 -46.487,-150.134C-46.542,-150.73 -46.902,-151.479 -47.35,-152.28C-47.575,-152.68 -47.822,-153.091 -48.063,-153.502C-48.317,-153.891 -48.564,-154.281 -48.775,-154.652C-49.11,-155.234 -49.511,-155.848 -49.925,-156.474L-50.241,-156.943C-50.351,-157.093 -50.46,-157.242 -50.569,-157.391C-50.787,-157.685 -51.002,-157.984 -51.206,-158.275C-52.021,-159.435 -52.661,-160.574 -52.657,-161.374C-52.639,-162.487 -52.526,-163.568 -52.476,-164.539L-51.537,-164.259L-51.063,-164.117L-50.605,-163.95C-49.99,-163.724 -49.38,-163.498 -48.771,-163.277C-48.47,-163.167 -48.168,-163.055 -47.866,-162.946C-47.717,-162.891 -47.567,-162.836 -47.419,-162.782C-47.273,-162.72 -47.128,-162.658 -46.985,-162.596C-46.407,-162.349 -45.836,-162.109 -45.283,-161.872C-44.73,-161.636 -44.178,-161.425 -43.661,-161.192C-43.148,-160.949 -42.653,-160.723 -42.173,-160.508C-41.224,-160.072 -40.325,-159.733 -39.583,-159.391C-38.67,-159.002 -37.75,-158.609 -36.829,-158.22C-35.92,-157.798 -35.024,-157.344 -34.115,-156.91C-33.664,-156.689 -33.195,-156.489 -32.762,-156.245C-32.322,-156.005 -31.886,-155.768 -31.449,-155.535C-31.009,-155.299 -30.572,-155.066 -30.14,-154.833C-29.921,-154.717 -29.703,-154.604 -29.488,-154.488C-29.281,-154.364 -29.069,-154.241 -28.862,-154.117C-28.033,-153.626 -27.211,-153.145 -26.399,-152.683C-25.988,-152.458 -25.61,-152.203 -25.229,-151.967C-24.843,-151.727 -24.465,-151.494 -24.094,-151.261C-23.719,-151.032 -23.348,-150.81 -22.987,-150.592C-22.806,-150.483 -22.627,-150.373 -22.449,-150.268C-22.274,-150.155 -22.104,-150.042 -21.937,-149.933C-21.26,-149.497 -20.604,-149.086 -19.976,-148.711C-15.53,-145.99 -11.572,-143.24 -7.811,-140.286C-6.887,-139.518 -5.97,-138.762 -5.054,-138.001C-4.58,-137.627 -4.158,-137.216 -3.711,-136.816L-2.376,-135.593C-1.936,-135.179 -1.474,-134.775 -1.045,-134.342C-0.615,-133.909 -0.189,-133.469 0.243,-133.033C1.095,-132.141 2.004,-131.25 2.812,-130.275C4.012,-128.882 5.245,-127.529 6.384,-125.953C6.966,-125.171 7.581,-124.36 8.177,-123.465C8.748,-122.567 9.334,-121.599 9.945,-120.544C10.614,-119.416 11.033,-118.681 11.364,-118.398C11.691,-118.11 11.895,-118.263 12,-118.878C12.215,-119.94 11.942,-122.144 12.535,-121.781C13.845,-120.944 14.634,-121.621 15.456,-122.319C15.082,-124.04 14.558,-126.157 13.79,-128.078C13.423,-129.045 13.048,-129.98 12.662,-130.813C12.248,-131.636 11.837,-132.363 11.458,-132.938C11.175,-133.36 10.888,-133.833 10.597,-134.338C10.451,-134.593 10.302,-134.855 10.152,-135.124C9.992,-135.386 9.832,-135.659 9.665,-135.935C9.014,-137.037 8.341,-138.242 7.649,-139.438C6.911,-140.614 6.158,-141.788 5.405,-142.872C5.041,-143.422 4.638,-143.924 4.241,-144.393C3.849,-144.866 3.455,-145.303 3.07,-145.695C3.357,-145.815 3.801,-145.572 4.347,-145.084C4.889,-144.593 5.555,-143.869 6.191,-142.982C6.839,-142.105 7.526,-141.108 8.199,-140.118C8.854,-139.122 9.443,-138.103 9.996,-137.248C10.313,-136.75 10.629,-136.244 10.945,-135.742C11.255,-135.241 11.527,-134.727 11.812,-134.24C12.372,-133.258 12.902,-132.345 13.368,-131.599C13.604,-131.228 13.815,-130.897 13.994,-130.613C14.184,-130.333 14.351,-130.108 14.5,-129.955C14.798,-129.642 15.013,-129.606 15.118,-129.955C15.162,-130.104 15.464,-129.642 15.89,-128.922C16.097,-128.561 16.344,-128.136 16.599,-127.696C16.729,-127.474 16.86,-127.248 16.991,-127.019C17.119,-126.794 17.242,-126.564 17.366,-126.343C15.085,-133.378 12.172,-139.697 9.243,-144.928C8.533,-145.826 7.78,-146.619 7.101,-147.394C6.413,-148.155 5.758,-148.882 5.129,-149.58C3.805,-150.927 2.597,-152.167 1.371,-153.353C0.498,-154.153 -0.32,-154.87 -1.092,-155.517C-1.478,-155.841 -1.853,-156.147 -2.212,-156.438C-2.583,-156.721 -2.954,-156.98 -3.308,-157.231C-4.021,-157.729 -4.693,-158.173 -5.333,-158.58C-5.974,-158.984 -6.577,-159.359 -7.199,-159.675C-8.426,-160.319 -9.567,-160.868 -10.718,-161.418C-11.874,-161.963 -13.082,-162.458 -14.358,-163.08C-16.243,-163.979 -15.992,-162.862 -13.58,-160.116C-14.795,-160.577 -15.945,-161.007 -17.055,-161.414C-17.604,-161.625 -18.171,-161.8 -18.724,-161.974C-19.277,-162.149 -19.826,-162.32 -20.372,-162.491C-21.066,-162.698 -21.292,-162.4 -22.481,-163.171C-23.828,-163.953 -26.032,-165.743 -28.651,-167.366C-27.571,-166.423 -26.836,-165.728 -26.385,-165.219C-25.948,-164.695 -25.785,-164.375 -25.828,-164.219C-25.872,-164.059 -26.123,-164.062 -26.516,-164.175C-26.905,-164.295 -27.458,-164.503 -28.103,-164.761C-28.753,-165.03 -29.4,-165.292 -30.052,-165.557C-30.699,-165.82 -31.344,-166.092 -32.023,-166.322C-32.689,-166.565 -33.37,-166.816 -34.068,-167.071C-34.763,-167.329 -35.461,-167.617 -36.222,-167.864C-36.538,-167.97 -37.27,-168.377 -38.168,-168.897C-38.623,-169.152 -39.103,-169.461 -39.623,-169.726C-40.14,-169.992 -40.671,-170.265 -41.176,-170.523C-38.299,-170.308 -38.263,-170.286 -42.057,-173.506C-42.548,-173.906 -42.603,-174.121 -42.77,-174.387C-43.45,-175.445 -44.141,-176.511 -44.857,-177.588C-45.211,-178.133 -45.593,-178.632 -45.975,-179.159C-46.36,-179.68 -46.753,-180.2 -47.157,-180.727C-47.43,-181.083 -47.725,-181.447 -48.03,-181.818C-48.187,-182 -48.343,-182.189 -48.503,-182.375C-48.666,-182.553 -48.834,-182.731 -49.001,-182.913C-49.685,-183.634 -50.38,-184.368 -51.038,-185.063C-52.355,-186.518 -53.574,-187.781 -54.062,-188.905C-54.429,-189.742 -55.087,-190.483 -53.56,-190.494C-53.178,-190.498 -52.657,-190.451 -51.962,-190.352C-51.264,-190.265 -50.405,-190.065 -49.336,-189.789C-48.797,-189.654 -48.208,-189.497 -47.564,-189.319C-46.92,-189.134 -46.207,-188.959 -45.458,-188.69C-44.701,-188.428 -43.887,-188.148 -43.003,-187.843C-42.122,-187.533 -41.169,-187.206 -40.176,-186.777C-38.982,-186.285 -37.768,-185.889 -36.928,-185.653C-30.652,-183.783 -24.308,-181.116 -18.757,-178.366C-18.175,-178.086 -17.604,-177.813 -17.047,-177.544C-16.498,-177.257 -15.959,-176.976 -15.428,-176.703C-14.358,-176.154 -13.322,-175.619 -12.296,-175.096C-11.288,-174.528 -10.292,-173.971 -9.291,-173.411C-8.789,-173.124 -8.283,-172.837 -7.774,-172.546C-7.283,-172.237 -6.785,-171.92 -6.279,-171.603L-4.479,-170.447C-3.882,-170.054 -3.264,-169.679 -2.688,-169.257L0.829,-166.743C1.127,-166.533 1.418,-166.318 1.698,-166.089L2.55,-165.419L4.263,-164.062C4.827,-163.604 5.42,-163.164 5.962,-162.68L7.617,-161.24C9.857,-159.333 11.949,-157.26 14.07,-155.164C15.089,-154.077 16.107,-152.989 17.126,-151.905C17.646,-151.363 18.127,-150.792 18.61,-150.224L20.069,-148.511C20.466,-148.045 20.852,-147.591 21.226,-147.151C21.607,-146.714 21.938,-146.274 22.281,-145.867C22.954,-145.044 23.576,-144.306 24.129,-143.695C24.678,-143.08 25.166,-142.596 25.54,-142.268C25.911,-141.934 26.195,-141.77 26.366,-141.818C26.282,-142.127 26.198,-142.432 26.115,-142.731C26.021,-143.029 25.93,-143.316 25.839,-143.6C25.656,-144.167 25.482,-144.717 25.311,-145.248C24.966,-146.31 24.638,-147.3 24.329,-148.245C23.648,-150.115 22.997,-151.807 22.324,-153.549C23.103,-152.527 23.853,-151.545 24.584,-150.584C24.951,-150.097 25.311,-149.62 25.668,-149.144");
+    			attr_dev(path86, "class", "svelte-9kfwom");
+    			add_location(path86, file$1, 116, 20, 60704);
+    			attr_dev(g5, "transform", "matrix(1,0,0,1,1026.37,253.741)");
+    			add_location(g5, file$1, 115, 16, 60636);
+    			attr_dev(path87, "d", "M0,26.26C-0.324,25.362 -0.607,24.703 -0.826,24.35C-1.149,23.83 -1.459,23.31 -1.79,22.808C-2.139,22.309 -2.481,21.815 -2.827,21.323C-3.169,20.84 -3.507,20.356 -3.846,19.876C-4.02,19.639 -4.177,19.396 -4.362,19.166L-4.904,18.479C-5.632,17.566 -6.341,16.671 -7.054,15.802C-7.807,14.961 -8.557,14.132 -9.299,13.306C-9.869,12.648 -10.514,12.04 -11.128,11.426C-11.746,10.818 -12.354,10.21 -12.969,9.621C-13.609,9.053 -14.246,8.486 -14.886,7.922L-15.832,7.089C-16.141,6.809 -16.49,6.554 -16.814,6.292L-18.774,4.739L-19.262,4.357L-19.771,3.993L-20.783,3.273C-21.463,2.8 -22.106,2.316 -22.798,1.865C-23.485,1.429 -24.173,0.992 -24.864,0.552C-27.148,-0.878 -29.557,-2.22 -31.947,-3.391C-31.699,-3.078 -31.456,-2.773 -31.209,-2.46L-30.256,-1.907C-29.936,-1.725 -29.619,-1.54 -29.317,-1.332C-28.698,-0.932 -28.084,-0.532 -27.473,-0.136C-26.581,0.41 -25.748,1.058 -24.897,1.669C-24.468,1.978 -24.042,2.283 -23.628,2.578C-23.209,2.877 -22.831,3.189 -22.441,3.477C-21.849,3.917 -21.26,4.353 -20.677,4.786L-20.237,5.114L-19.818,5.456C-19.539,5.681 -19.259,5.91 -18.982,6.133C-18.415,6.583 -17.858,7.031 -17.309,7.468C-16.763,7.915 -16.254,8.377 -15.729,8.817C-15.05,9.403 -14.354,9.948 -13.718,10.505C-13.074,11.072 -12.448,11.625 -11.826,12.171L-10.877,13.004C-10.564,13.288 -10.273,13.582 -9.968,13.877C-9.36,14.467 -8.749,15.077 -8.12,15.725C-7.963,15.885 -7.8,16.049 -7.646,16.216C-7.498,16.391 -7.349,16.562 -7.199,16.737C-6.897,17.093 -6.592,17.457 -6.279,17.831C-5.97,18.206 -5.657,18.599 -5.333,19.003C-5.177,19.21 -5.006,19.414 -4.856,19.628C-4.708,19.846 -4.555,20.065 -4.402,20.29C-3.791,21.189 -3.15,22.16 -2.496,23.23C-1.896,24.314 -1.273,25.492 -0.622,26.787C-0.04,28.028 0.422,28.698 0.949,29.651C0.785,28.981 0.626,28.359 0.473,27.792C0.396,27.508 0.32,27.235 0.247,26.977C0.171,26.722 0.08,26.482 0,26.26");
+    			attr_dev(path87, "class", "svelte-9kfwom");
+    			add_location(path87, file$1, 119, 20, 131328);
+    			attr_dev(g6, "transform", "matrix(1,0,0,1,1029.69,114.053)");
+    			add_location(g6, file$1, 118, 16, 131260);
+    			attr_dev(path88, "d", "M0,35.123C-0.694,34.697 -1.557,33.817 -2.561,32.645C-3.063,32.06 -3.602,31.401 -4.161,30.685C-4.437,30.329 -4.732,29.961 -5.009,29.572C-5.285,29.179 -5.565,28.779 -5.853,28.368C-8.163,25.09 -10.523,21.114 -12.452,17.709C-13.605,15.643 -14.652,13.42 -15.475,10.855C-15.686,10.215 -15.896,9.561 -16.101,8.884C-16.301,8.207 -16.519,7.516 -16.683,6.789C-17.024,5.337 -17.355,3.798 -17.676,2.158C-17.745,1.809 -17.813,1.459 -17.879,1.11C-17.937,0.753 -17.992,0.4 -18.047,0.044C-18.156,-0.665 -18.269,-1.378 -18.378,-2.095C-18.487,-2.808 -18.593,-3.524 -18.701,-4.238L-18.854,-5.311L-18.971,-6.384C-19.186,-6.238 -19.302,-5.674 -19.287,-4.82C-19.266,-3.961 -19.138,-2.812 -18.941,-1.484C-18.596,1.186 -17.737,4.5 -16.978,7.567C-16.472,9.306 -15.934,10.976 -15.369,12.565C-15.231,12.965 -15.093,13.358 -14.943,13.744C-14.787,14.126 -14.631,14.5 -14.475,14.875C-14.162,15.621 -13.845,16.341 -13.528,17.043C-13.212,17.746 -12.899,18.422 -12.587,19.081C-12.277,19.735 -11.925,20.35 -11.604,20.954C-10.953,22.151 -10.32,23.253 -9.73,24.257C-9.331,24.956 -8.891,25.624 -8.461,26.287C-8.028,26.949 -7.603,27.6 -7.181,28.244C-6.755,28.88 -6.333,29.506 -5.922,30.124C-5.496,30.728 -5.057,31.31 -4.635,31.878C-3.783,33.013 -2.961,34.079 -2.179,35.058C-1.375,36.021 -0.589,36.887 0.128,37.659C0.852,38.43 1.517,39.095 2.113,39.644C2.725,40.186 3.281,40.598 3.747,40.885C4.682,41.459 5.281,41.507 5.46,40.904L5.478,40.911C5.468,40.898 5.458,40.885 5.447,40.872C5.45,40.878 5.451,40.883 5.454,40.89C3.478,38.99 0.977,35.733 0,35.123");
+    			attr_dev(path88, "class", "svelte-9kfwom");
+    			add_location(path88, file$1, 122, 20, 133252);
+    			attr_dev(g7, "transform", "matrix(1,0,0,1,836.843,194.201)");
+    			add_location(g7, file$1, 121, 16, 133184);
+    			attr_dev(path89, "d", "M0,14.013C0.051,14.031 0.099,14.053 0.146,14.071C2.79,12.041 5.235,9.768 7.629,7.447L9.353,5.635L10.219,4.729C10.499,4.424 10.765,4.1 11.041,3.787L12.678,1.899C13.22,1.266 13.715,0.593 14.234,-0.058L13.973,0.058C11.965,2.678 9.709,5.097 7.418,7.469C5.042,9.757 2.623,12.012 0,14.013");
+    			attr_dev(path89, "class", "svelte-9kfwom");
+    			add_location(path89, file$1, 125, 20, 134884);
+    			attr_dev(g8, "transform", "matrix(1,0,0,1,995.458,214.232)");
+    			add_location(g8, file$1, 124, 16, 134816);
+    			attr_dev(path90, "d", "M0,-2.413C0.183,-2.755 -0.312,-2.497 -1.299,-1.991C-1.669,-1.191 -2.098,-0.437 -2.515,0.342C-0.922,-1.219 -0.18,-2.104 0,-2.413");
+    			attr_dev(path90, "class", "svelte-9kfwom");
+    			add_location(path90, file$1, 128, 20, 135285);
+    			attr_dev(g9, "transform", "matrix(1,0,0,1,1015.22,240.606)");
+    			add_location(g9, file$1, 127, 16, 135217);
+    			attr_dev(path91, "d", "M0,-0.288C0.028,-0.342 0.058,-0.393 0.086,-0.447C-0.024,-0.338 -0.128,-0.236 -0.247,-0.121L-0.099,-0.221L-0.245,-0.121C-0.305,-0.025 -0.361,0.065 -0.42,0.159C-0.28,0.009 -0.146,-0.134 -0.004,-0.285L0,-0.288Z");
+    			attr_dev(path91, "class", "svelte-9kfwom");
+    			add_location(path91, file$1, 131, 20, 135531);
+    			attr_dev(g10, "transform", "matrix(1,0,0,1,1012.62,241.395)");
+    			add_location(g10, file$1, 130, 16, 135463);
+    			attr_dev(path92, "d", "M0,-1.146L-0.404,-1.081C0.483,-0.92 1.371,-0.757 2.259,-0.597C3.14,-0.415 4.016,-0.2 4.893,0L5.456,-0.062C4.551,-0.262 3.645,-0.462 2.739,-0.662C1.83,-0.844 0.913,-0.986 0,-1.146");
+    			attr_dev(path92, "class", "svelte-9kfwom");
+    			add_location(path92, file$1, 134, 20, 135857);
+    			attr_dev(g11, "transform", "matrix(1,0,0,1,958.321,56.3872)");
+    			add_location(g11, file$1, 133, 16, 135789);
+    			attr_dev(path93, "d", "M0,1.313C0.462,1.179 0.913,1.044 1.368,0.909C1.604,0.622 1.83,0.309 2.056,0C1.862,0.065 1.67,0.138 1.477,0.2C1.28,0.258 1.084,0.313 0.892,0.371C0.593,0.684 0.298,0.997 0,1.313");
+    			attr_dev(path93, "class", "svelte-9kfwom");
+    			add_location(path93, file$1, 137, 20, 136154);
+    			attr_dev(g12, "transform", "matrix(1,0,0,1,971.795,242.209)");
+    			add_location(g12, file$1, 136, 16, 136086);
+    			attr_dev(path94, "d", "M0,1.237C-0.527,2.132 -0.942,2.834 -1.356,3.536L-1.084,3.467C-0.702,2.776 -0.323,2.085 0.164,1.2C0.418,0.764 0.644,0.251 0.932,-0.324C1.212,-0.902 1.531,-1.55 1.896,-2.299C1.499,-1.542 1.149,-0.884 0.84,-0.302C0.535,0.284 0.276,0.797 0,1.237");
+    			attr_dev(path94, "class", "svelte-9kfwom");
+    			add_location(path94, file$1, 140, 20, 136447);
+    			attr_dev(g13, "transform", "matrix(1,0,0,1,1015.6,201.106)");
+    			add_location(g13, file$1, 139, 16, 136380);
+    			attr_dev(path95, "d", "M0.541,-0.139C0.613,-0.12 0.666,0.43 0.729,0.762C0.684,1.256 0.582,2.137 0.541,2.127C0.467,2.103 0.447,1.554 0.381,1.22C0.433,0.743 0.501,-0.144 0.541,-0.139");
+    			attr_dev(path95, "class", "svelte-9kfwom");
+    			add_location(path95, file$1, 143, 20, 136836);
+    			attr_dev(g14, "transform", "matrix(0.878351,0.478017,0.478017,-0.878351,1044.03,212.654)");
+    			add_location(g14, file$1, 142, 16, 136739);
+    			attr_dev(path96, "d", "M0,0.389L0.644,0.131C1.073,-0.044 1.499,-0.219 1.921,-0.393C1.48,-0.324 0.782,-0.248 0.637,-0.197C0.379,-0.102 0.127,-0.015 -0.12,0.072C-0.367,0.152 -0.611,0.232 -0.854,0.309C-1.339,0.469 -1.815,0.625 -2.299,0.782C-1.873,0.742 -1.459,0.701 -0.651,0.621L0,0.389Z");
+    			attr_dev(path96, "class", "svelte-9kfwom");
+    			add_location(path96, file$1, 146, 20, 137112);
+    			attr_dev(g15, "transform", "matrix(1,0,0,1,970.464,264.213)");
+    			add_location(g15, file$1, 145, 16, 137044);
+    			attr_dev(path97, "d", "M0,-1.36C-0.367,-1.447 -0.731,-1.531 -1.092,-1.615C-0.575,-1.331 -0.055,-1.047 0.462,-0.763L1.244,-0.338C1.506,-0.199 1.775,-0.076 2.041,0.055C2.346,0.124 2.655,0.19 2.957,0.255L1.462,-0.52C0.975,-0.8 0.487,-1.08 0,-1.36");
+    			attr_dev(path97, "class", "svelte-9kfwom");
+    			add_location(path97, file$1, 149, 20, 137492);
+    			attr_dev(g16, "transform", "matrix(1,0,0,1,901.652,261.017)");
+    			add_location(g16, file$1, 148, 16, 137424);
+    			attr_dev(path98, "d", "M0,-1.003L0.695,-0.672L3.471,0.634C3.057,0.332 2.646,0.034 2.23,-0.268C1.543,-0.53 0.855,-0.788 0.168,-1.05C-0.288,-1.245 -0.746,-1.441 -1.203,-1.637C-1.027,-1.545 -0.852,-1.452 -0.676,-1.359L0,-1.003Z");
+    			attr_dev(path98, "class", "svelte-9kfwom");
+    			add_location(path98, file$1, 152, 20, 137831);
+    			attr_dev(g17, "transform", "matrix(1,0,0,1,889.115,254.893)");
+    			add_location(g17, file$1, 151, 16, 137763);
+    			attr_dev(path99, "d", "M0,-2.055C-0.287,-1.764 -0.586,-1.458 -0.88,-1.16C-1.182,-0.866 -1.447,-0.534 -1.713,-0.236C-2.761,0.975 -3.539,2.005 -3.153,2.299L-1.746,0.597C-1.273,0.033 -0.818,-0.564 -0.309,-1.095L1.193,-2.739L1.95,-3.569L2.743,-4.354C2.313,-4.129 1.87,-3.925 1.455,-3.681C1.095,-3.208 0.571,-2.644 0,-2.055");
+    			attr_dev(path99, "class", "svelte-9kfwom");
+    			add_location(path99, file$1, 155, 20, 138151);
+    			attr_dev(g18, "transform", "matrix(1,0,0,1,893.295,100.844)");
+    			add_location(g18, file$1, 154, 16, 138083);
+    			attr_dev(path100, "d", "M0,-1.805C-0.36,-1.656 -0.71,-1.51 -1.037,-1.357C-1.361,-1.19 -1.67,-1.026 -1.957,-0.866C-3.11,-0.222 -3.937,0.385 -4.137,0.916C-3.038,0.258 -1.979,-0.379 -0.942,-1.005C0.13,-1.579 1.178,-2.146 2.229,-2.71L2.229,-2.709L2.251,-2.721C2.242,-2.72 2.232,-2.72 2.224,-2.72C2.226,-2.718 2.226,-2.715 2.228,-2.713C1.468,-2.409 0.712,-2.105 0,-1.805");
+    			attr_dev(path100, "class", "svelte-9kfwom");
+    			add_location(path100, file$1, 158, 20, 138564);
+    			attr_dev(g19, "transform", "matrix(1,0,0,1,909.69,90.4051)");
+    			add_location(g19, file$1, 157, 16, 138497);
+    			attr_dev(path101, "d", "M0,44.93C5.221,45.912 9.182,49.492 13.823,51.678C22.747,55.879 31.372,60.75 40.99,63.319C42.879,63.821 42.89,63.792 43.66,62.202C43.97,61.827 44.275,61.452 44.581,61.078C45.563,61.405 46.622,60.954 48.451,59.859C49.604,59.172 50.758,59.892 51.846,60.412C54.101,61.489 56.24,62.995 60.227,62.329C53.057,58.618 46.833,55.392 40.604,52.169C40.809,51.816 41.009,51.463 41.213,51.107C48.579,54.264 55.909,57.52 63.908,58.902C57.04,53.493 48.313,51.78 41.485,46.752C43.7,46.123 43.813,46.061 46.018,46.822C51.173,48.604 56.363,50.31 61.438,52.3C76.647,58.269 92.483,60.674 108.675,62.58C124.586,64.45 137.308,58.553 149.88,50.718C160.931,43.831 171.79,36.639 182.834,29.735C197.072,20.833 212.602,18.4 229.044,20.979C234.246,21.794 239.663,21.688 244.414,24.5C245.287,25.02 246.167,24.802 247.025,24.413C252.813,27.432 258.893,29.691 265.167,31.47C267.514,32.136 269.584,33.46 271.453,35.039C278.525,41.008 284.768,47.8 290.952,54.654C291.552,55.323 292.912,56.196 290.904,56.891C290.723,56.68 290.729,55.894 290.231,56.676C290.457,56.742 290.687,56.811 290.912,56.876C292.789,59.925 294.949,62.402 299.071,60.98C296.71,65.465 293.902,63.446 291.104,61.522C288.376,59.644 286.983,56.018 283.218,55.497C283.127,55.181 283.159,54.628 282.614,55.178C282.829,55.261 283.047,55.348 283.266,55.432C286.223,60.114 290.799,63.209 294.681,66.986C295.932,68.204 297.688,68.451 298.613,66.84C301.112,62.482 303.491,58.033 305.503,52.227C301.606,54.977 302.131,59.233 299.031,61.038C298.692,54.501 301.996,49.233 305.084,43.926C312.502,31.194 323.531,21.608 333.695,11.277C338.141,9.6 341.666,6.402 345.696,4.034C359.84,-4.278 375.057,-6.603 391.201,-4.562C403.271,-3.038 414.883,0.447 426.586,3.449C447.554,8.829 466.019,2.263 483.604,-8.032C496.037,-15.312 507.475,-24.082 518.014,-33.981C520.574,-36.389 523.514,-38.397 526.548,-40.296C524.001,-34.577 519.195,-30.725 515.343,-25.977C519.771,-25.766 521.88,-29.426 524.933,-31.405C525.22,-31.165 525.507,-30.921 525.794,-30.681C521.717,-25.639 516.133,-21.947 512.331,-16.654C512.641,-16.316 512.949,-15.977 513.259,-15.635C517.977,-19.59 522.695,-23.544 528.159,-28.124C527.398,-24.09 524.187,-22.645 523.655,-19.44C525.743,-21.23 527.831,-23.02 529.92,-24.81C530.211,-24.555 530.502,-24.297 530.789,-24.042C530.462,-22.929 528.864,-22.405 529.338,-20.848C530.996,-19.895 531.812,-21.434 532.691,-22.205C541.273,-29.735 548.741,-38.357 556.584,-46.611C557.581,-47.658 557.192,-48.83 557.52,-49.914C558.355,-52.7 561.95,-52.326 562.336,-51.562C564.416,-47.429 565.689,-50.82 566.581,-51.962C571.615,-58.415 577.829,-63.934 581.878,-71.166C582.249,-71.831 582.762,-72.399 585.269,-72.551C569.578,-50.623 552.153,-31.383 536.352,-10.837C548.214,-18.484 555.358,-31.179 567.155,-38.921C559.749,-26.265 549.996,-15.424 540.462,-4.235C543.612,-3.412 544.081,-6.926 547.701,-7.443C544.172,-4.216 543.583,0.571 538.119,-0.28C537.501,-0.379 536.639,0.593 536.009,1.193C531.826,5.191 527.871,9.324 525.489,14.78C523.543,19.229 519.352,21.932 515.947,25.031C495.361,43.777 472.043,57.305 443.8,60.557C430.532,62.085 417.527,59.841 404.649,56.916C395.068,54.741 385.537,52.336 376.003,49.961C371.976,48.957 367.952,48.531 363.845,49.263C358.566,49.353 353.03,49.08 348.239,51.165C329.421,59.357 314.109,71.344 306.987,91.606C305.976,94.487 305.117,97.532 302.981,100.195C300.923,97.805 299.042,95.818 297.38,93.665C290.489,84.756 281.545,78.903 271.067,74.905C256.681,69.419 242.373,67.309 227.782,73.897C219.48,74.701 212.772,79.256 206.039,83.497C199.542,87.586 193.253,92.072 187.199,96.804C177.068,104.727 165.74,109.529 153.136,111.963C124.586,117.481 97.277,113.272 70.664,102.417C64.927,100.078 60.729,95.484 55.454,92.49C41.354,84.494 27.24,76.52 13.147,68.51C10.117,66.789 7.043,65.101 4.74,62.369C5.053,62.089 5.369,61.805 5.683,61.522C15.592,64.508 24.421,69.917 33.813,74.061C37.015,75.472 39.939,77.972 44.967,77.138C25.079,65.519 5.606,55.112 -12.903,43.1C-12.688,42.743 -12.47,42.387 -12.252,42.031C-8.53,43.951 -4.819,45.897 -1.065,47.756C-0.523,48.029 0.517,48.476 0.706,47.472C0.79,47.018 -0.146,46.37 -0.618,45.814C-0.411,45.519 -0.207,45.224 0,44.93M115.546,106.892C124.746,110.93 157.632,108.307 161.771,101.417C146.449,107.023 131.119,108.052 115.546,106.892M75.862,87.47C76.048,86.99 76.233,86.506 76.422,86.022C67.761,82.228 59.103,78.43 50.441,74.632L49.841,76.04C58.514,79.848 67.186,83.661 75.862,87.47M81.85,98.623C88.631,101.632 89.107,101.741 93.393,101.264C89.416,99.013 85.881,98.201 81.85,98.623M512.63,-21.98C510.349,-21.925 508.82,-21.328 507.958,-19.528C507.605,-18.789 508.268,-18.262 508.828,-18.338C510.709,-18.604 512.029,-19.597 512.63,-21.98");
+    			attr_dev(path101, "class", "svelte-9kfwom");
+    			add_location(path101, file$1, 161, 20, 139024);
+    			attr_dev(g20, "transform", "matrix(1,0,0,1,643.343,102.262)");
+    			add_location(g20, file$1, 160, 16, 138956);
+    			attr_dev(path102, "d", "M0,-4.527C5.562,-6.513 7.152,-11.679 7.152,-15.971C7.152,-24.313 1.113,-30.036 -8.421,-30.036L-29.72,-30.036L-29.72,24.716L-6.755,24.716C4.609,24.716 10.091,16.848 10.091,9.14C10.091,3.101 6.675,-3.177 0,-4.527M-8.821,-21.374C-4.609,-21.374 -2.542,-18.434 -2.542,-14.619C-2.542,-10.646 -4.769,-7.943 -8.821,-7.943L-20.026,-7.943L-20.026,-21.374L-8.821,-21.374ZM-8.265,16.055L-20.026,16.055L-20.026,0.242L-8.025,0.242C-2.226,0.242 0.317,4.294 0.317,8.187C0.317,12.319 -2.623,16.055 -8.265,16.055M62.773,24.716L73.024,24.716L52.526,-30.036L42.035,-30.036L21.456,24.716L31.783,24.716L36.552,11.286L58.008,11.286L62.773,24.716ZM39.492,2.861L47.28,-19.227L55.068,2.861L39.492,2.861ZM87.725,24.716L118.715,24.716L118.715,16.055L97.419,16.055L97.419,-30.036L87.725,-30.036L87.725,24.716ZM169.411,24.716L179.662,24.716L159.159,-30.036L148.672,-30.036L128.089,24.716L138.42,24.716L143.189,11.286L164.645,11.286L169.411,24.716ZM146.129,2.861L153.917,-19.227L161.702,2.861L146.129,2.861ZM236,24.716L210.492,-2.778L231.391,-30.036L219.393,-30.036L203.977,-9.297L203.977,-30.036L194.362,-30.036L194.362,24.716L203.977,24.716L203.977,3.894L222.889,24.716L236,24.716ZM249.667,24.716L259.362,24.716L259.362,-30.036L249.667,-30.036L249.667,24.716ZM358.847,-30.036L346.689,8.427L338.107,-22.487L330.399,-22.487L321.814,8.267L309.737,-30.036L299.329,-30.036L317.762,24.716L325.71,24.716L334.212,-6.513L342.873,24.716L350.742,24.716L369.254,-30.036L358.847,-30.036ZM403.584,25.509C414.548,25.509 424.163,17.961 424.163,5.484L424.163,-30.036L414.468,-30.036L414.468,5.007C414.468,12.875 409.303,16.291 403.584,16.291C397.781,16.291 392.616,12.875 392.616,5.007L392.616,-30.036L382.922,-30.036L382.922,5.484C382.922,17.961 392.536,25.509 403.584,25.509M487.176,24.716L461.668,-2.778L482.566,-30.036L470.569,-30.036L455.152,-9.297L455.152,-30.036L445.538,-30.036L445.538,24.716L455.152,24.716L455.152,3.894L474.065,24.716L487.176,24.716ZM534.933,24.716L545.184,24.716L524.681,-30.036L514.193,-30.036L493.611,24.716L503.942,24.716L508.708,11.286L530.163,11.286L534.933,24.716ZM511.65,2.861L519.436,-19.227L527.224,2.861L511.65,2.861Z");
+    			attr_dev(path102, "class", "svelte-9kfwom");
+    			add_location(path102, file$1, 164, 20, 143750);
+    			attr_dev(g21, "transform", "matrix(1,0,0,1,351.161,640.185)");
+    			add_location(g21, file$1, 163, 16, 143682);
+    			attr_dev(path103, "d", "M0,-511.654C-6.868,-511.654 -13.165,-511.083 -18.316,-509.365C-26.897,-505.931 -37.774,-504.215 -40.063,-493.912C-40.634,-490.478 -22.321,-485.327 -19.458,-485.327C-19.458,-485.327 -21.746,-469.874 -22.321,-462.435C-30.906,-380.592 -53.799,-260.976 -56.087,-185.43C-56.087,-181.425 -57.232,-177.992 -57.232,-173.983L-57.232,-171.694L-54.944,-177.992C-54.37,-176.845 -53.799,-175.129 -53.799,-173.983C-53.799,-171.124 -54.944,-168.832 -54.944,-165.972C-55.516,-163.68 -56.087,-163.68 -56.087,-163.68C-56.658,-163.68 -56.658,-164.256 -56.658,-165.397L-56.658,-167.689C-57.232,-166.544 -57.232,-163.68 -57.232,-163.109C-56.658,-157.387 -53.799,-152.236 -53.799,-147.085L-53.799,-145.368C-53.799,-143.08 -50.365,-136.783 -48.647,-135.637C-49.219,-135.066 -49.219,-133.92 -49.219,-133.349C-49.219,-132.203 -48.647,-131.06 -48.647,-129.915C-46.931,-127.051 -46.359,-125.91 -45.785,-125.91C-45.213,-125.91 -44.643,-126.481 -42.925,-127.051C-42.351,-125.91 -42.351,-125.335 -41.779,-125.335C-41.208,-125.335 -41.208,-125.91 -41.208,-126.481C-41.208,-127.627 -41.779,-129.343 -41.779,-129.915C-41.208,-128.769 -40.063,-128.198 -38.917,-128.198C-38.917,-129.915 -40.063,-131.632 -40.063,-132.778C-37.2,-131.632 -37.2,-127.627 -36.057,-124.193C-34.34,-124.763 -31.478,-125.335 -29.189,-125.335C-29.76,-125.91 -31.478,-127.627 -31.478,-128.769C-31.478,-129.343 -30.906,-129.915 -29.76,-130.486L-28.614,-128.198C-26.897,-128.198 -27.472,-126.481 -26.326,-126.481C-26.897,-129.915 -26.897,-131.632 -26.897,-137.928C-24.038,-133.92 -25.755,-130.486 -23.463,-127.627L-22.892,-132.203C-22.321,-130.486 -22.892,-127.627 -21.746,-125.91L-21.746,-128.769C-21.746,-135.066 -20.604,-145.939 -20.604,-153.382C38.346,-165.397 61.809,-205.46 85.276,-256.97C85.848,-260.976 88.139,-263.839 89.282,-266.702C90.999,-270.135 91.573,-274.713 92.716,-278.717C95.004,-282.726 95.579,-285.586 95.579,-287.302L95.579,-290.166C95.579,-293.028 97.295,-294.745 97.867,-296.463C97.867,-298.179 98.438,-300.467 98.438,-302.184C102.447,-323.931 104.164,-345.681 104.164,-368.003C104.164,-410.925 96.15,-455.567 71.541,-481.893C55.516,-501.923 24.039,-511.654 0,-511.654M13.736,-482.465C54.37,-477.313 73.257,-421.226 73.257,-358.842C73.257,-349.686 72.686,-340.53 72.111,-331.374C68.106,-285.586 34.341,-188.865 -20.604,-183.714L-20.604,-188.294C-20.604,-250.674 9.731,-432.1 13.736,-482.465M-37.2,-203.172L-37.2,-186.577C-37.2,-185.43 -37.774,-184.859 -37.774,-184.859L-37.774,-183.142L-38.345,-189.436C-38.917,-189.436 -39.491,-190.01 -39.491,-190.582C-39.491,-191.727 -38.917,-192.299 -38.345,-192.87C-39.491,-192.87 -40.634,-192.299 -40.634,-191.727C-40.634,-194.587 -40.063,-195.733 -40.063,-196.303C-38.917,-198.021 -37.774,-203.743 -37.774,-206.035C-38.345,-205.46 -38.345,-206.606 -38.345,-207.752C-38.345,-208.894 -38.345,-210.04 -37.774,-211.186C-37.2,-212.903 -37.2,-215.191 -36.057,-217.479C-36.628,-217.479 -37.774,-216.908 -37.774,-216.908L-36.057,-218.625C-36.628,-219.196 -36.628,-219.771 -36.628,-220.342C-36.628,-222.059 -34.912,-223.776 -34.34,-225.493C-33.766,-225.493 -33.194,-224.347 -33.194,-222.631C-33.194,-216.908 -36.628,-205.46 -37.2,-203.172ZM-26.897,-190.01C-27.472,-189.436 -31.478,-187.718 -31.478,-187.148C-32.623,-187.148 -32.623,-188.294 -32.623,-188.294C-32.623,-188.294 -33.194,-188.294 -33.766,-187.718L-33.194,-190.01C-32.623,-190.01 -32.048,-189.436 -32.048,-188.865L-32.048,-190.582C-30.906,-191.153 -30.332,-192.299 -30.332,-193.445C-30.332,-194.015 -30.906,-194.587 -31.478,-194.587C-30.906,-195.162 -30.332,-195.733 -30.332,-196.879C-30.332,-197.45 -30.906,-198.021 -30.906,-199.167L-29.76,-196.879C-29.189,-197.45 -28.614,-202.601 -28.614,-204.889C-28.614,-206.035 -28.043,-208.323 -27.472,-210.04C-27.472,-209.469 -26.897,-208.323 -26.897,-206.606C-26.897,-205.46 -26.897,-204.318 -27.472,-203.172C-26.897,-203.172 -26.326,-203.743 -26.326,-204.318C-26.326,-204.889 -25.755,-208.323 -25.755,-208.323L-25.755,-203.743C-25.755,-202.026 -26.897,-199.738 -27.472,-199.167C-27.472,-198.021 -26.897,-197.45 -26.897,-197.45C-26.326,-197.45 -25.755,-199.738 -24.609,-200.309L-24.609,-209.469C-24.609,-209.469 -24.038,-208.323 -24.038,-206.035C-24.038,-201.455 -25.18,-193.445 -26.897,-190.01M-44.067,-191.153C-44.643,-191.153 -45.785,-183.714 -46.359,-180.85C-46.931,-180.85 -46.931,-183.714 -46.931,-184.285C-46.931,-185.43 -46.359,-187.148 -46.359,-187.718C-46.359,-189.436 -46.931,-190.582 -48.077,-190.582C-46.931,-193.445 -45.785,-196.303 -45.213,-199.167L-45.213,-197.45C-45.213,-196.879 -45.213,-196.303 -44.643,-195.733C-44.067,-198.021 -43.497,-198.595 -43.497,-199.738C-41.779,-201.455 -41.779,-202.601 -41.779,-203.743C-41.779,-204.889 -41.779,-207.177 -42.351,-208.323C-41.779,-210.04 -40.634,-211.186 -40.634,-212.328C-40.063,-211.186 -39.491,-209.469 -39.491,-207.752C-39.491,-201.455 -42.351,-191.153 -42.925,-187.718C-43.497,-189.436 -42.925,-191.153 -44.067,-191.153M-41.779,-224.923C-41.208,-224.923 -40.063,-231.791 -39.491,-232.932C-39.491,-231.216 -38.917,-230.073 -38.917,-229.499C-38.917,-232.361 -38.345,-232.361 -38.345,-232.932C-38.917,-233.508 -38.917,-234.079 -38.917,-235.224C-38.917,-236.937 -38.345,-237.512 -37.774,-237.512L-37.774,-232.932C-37.774,-227.781 -38.917,-221.488 -39.491,-217.479C-40.063,-216.908 -40.063,-216.337 -40.063,-216.337C-40.063,-218.054 -40.063,-220.914 -39.491,-222.631C-41.208,-222.631 -41.208,-221.488 -41.208,-220.342C-41.208,-219.196 -41.208,-218.054 -40.634,-217.479C-42.925,-215.191 -45.213,-208.894 -45.785,-205.46L-44.067,-219.771C-44.643,-217.479 -44.643,-215.762 -46.359,-214.046L-41.208,-232.932C-41.208,-230.073 -41.779,-227.211 -41.779,-224.923M-34.912,-247.24C-35.482,-247.24 -35.482,-248.957 -35.482,-248.957C-35.482,-248.957 -36.057,-248.385 -36.057,-247.24C-37.2,-247.24 -37.774,-247.814 -37.774,-247.814C-37.774,-248.385 -37.2,-251.82 -35.482,-252.966L-35.482,-250.674C-35.482,-250.102 -35.482,-248.957 -34.912,-248.957C-34.34,-248.957 -34.912,-248.385 -34.912,-247.24M-48.647,-168.26C-48.647,-169.977 -47.501,-172.841 -47.501,-173.983C-46.931,-173.983 -46.931,-166.544 -46.931,-165.972C-48.077,-165.972 -48.647,-167.115 -48.647,-168.26M-45.785,-223.776C-45.785,-225.493 -46.359,-226.639 -46.359,-227.211C-46.359,-227.781 -45.785,-228.356 -44.067,-228.356C-44.067,-226.064 -45.213,-224.923 -45.785,-223.776M-39.491,-251.249C-39.491,-252.391 -38.917,-254.108 -37.774,-254.682C-37.774,-251.82 -38.917,-250.674 -38.917,-248.957C-39.491,-249.532 -39.491,-250.674 -39.491,-251.249M-32.048,-165.397C-32.048,-165.972 -31.478,-166.544 -30.906,-166.544C-30.906,-165.397 -30.906,-163.68 -31.478,-163.109C-31.478,-163.68 -32.048,-164.827 -32.048,-165.397M194.013,-342.247C192.867,-351.974 190.007,-355.983 183.14,-355.983C181.422,-355.983 179.706,-355.983 177.414,-355.408C140.785,-352.549 133.346,-335.379 125.907,-301.613C103.585,-208.323 106.448,-18.883 16.592,-5.151C18.88,-4.005 20.026,-2.859 23.46,-2.859C25.748,-2.859 25.748,-2.288 25.748,-2.288C25.748,-1.717 25.177,-1.142 25.177,-0.571C25.177,0 25.748,0 26.894,0C36.625,0 78.976,-18.883 80.122,-19.458C119.039,-44.067 141.36,-88.707 155.667,-137.928C169.975,-186.577 176.271,-238.655 183.71,-279.863C187.145,-298.751 192.867,-320.497 193.441,-339.384C193.441,-339.959 194.013,-341.101 194.013,-342.247M203.74,-404.631C199.735,-413.787 192.867,-418.938 185.428,-418.938C182.564,-418.938 179.706,-418.367 176.271,-416.65C169.403,-412.641 162.535,-410.353 157.955,-405.773C152.804,-400.622 152.233,-400.051 152.233,-393.754C152.233,-387.461 165.395,-384.598 168.257,-382.881C169.975,-378.304 176.271,-376.588 183.71,-376.588C193.441,-376.588 204.315,-380.022 204.315,-386.315C205.457,-389.178 206.032,-391.466 206.032,-393.754C206.032,-397.188 204.886,-400.051 203.74,-404.631M420.078,-253.537C422.94,-258.117 425.229,-262.693 428.663,-266.127L433.813,-273.566C434.959,-273.566 434.959,-274.141 434.959,-274.713C435.531,-275.858 436.677,-275.858 437.248,-277.001C436.677,-276.429 436.677,-275.858 436.677,-275.283C436.677,-275.283 435.531,-273.566 434.959,-272.424C434.385,-271.278 433.813,-271.278 433.243,-270.707C429.809,-266.702 427.517,-261.55 427.517,-260.405C427.517,-259.834 429.809,-262.693 429.809,-262.693C432.667,-266.127 440.682,-278.146 441.253,-279.292C445.833,-283.868 441.828,-285.586 446.404,-286.731L448.692,-291.883C450.409,-296.463 451.555,-300.467 451.555,-304.472C451.555,-306.189 451.555,-307.907 450.984,-310.195C450.409,-311.912 446.404,-321.071 444.116,-321.071C438.965,-321.071 434.385,-310.769 434.385,-310.769C412.638,-273.566 351.4,-201.455 341.669,-202.601C335.947,-203.172 334.801,-265.556 334.801,-305.048L334.801,-330.799C334.801,-332.516 335.372,-333.662 335.372,-334.808L335.372,-338.813C335.372,-342.818 335.947,-343.393 336.518,-346.823C336.518,-349.686 334.23,-349.115 334.23,-352.549C337.089,-352.549 338.806,-353.692 339.952,-354.838C339.952,-354.838 340.523,-355.983 340.523,-357.126C340.523,-364.569 311.337,-369.719 306.187,-369.719C301.036,-369.719 296.456,-368.573 292.45,-366.857C247.237,-345.681 215.759,-274.713 212.896,-227.781C212.896,-218.054 215.759,-208.894 224.344,-203.172C228.92,-199.738 234.072,-198.595 239.223,-198.595C242.657,-198.595 245.52,-199.167 248.383,-200.309C252.388,-202.601 252.959,-206.035 256.968,-210.04C264.978,-208.894 294.167,-262.693 302.752,-291.311C302.752,-291.883 303.895,-295.887 305.041,-297.034C304.47,-288.448 303.895,-278.146 303.895,-267.273C303.895,-244.381 304.47,-184.285 339.952,-184.285C342.24,-184.285 343.958,-184.859 346.249,-185.43C350.826,-185.43 353.688,-185.43 358.269,-186.577C366.854,-190.582 370.288,-190.01 376.01,-196.879C378.298,-200.309 380.586,-200.883 382.878,-202.026C385.166,-203.172 402.907,-224.923 402.907,-224.923C404.053,-226.639 406.341,-228.927 406.916,-230.644C407.487,-230.073 409.775,-233.508 409.204,-233.508C410.346,-235.796 414.355,-239.229 416.644,-242.664C416.644,-244.381 419.506,-246.097 419.506,-246.097L421.223,-248.385C421.223,-248.385 423.512,-256.4 424.083,-256.97C422.94,-257.542 420.648,-254.108 420.078,-253.537M244.949,-219.771C253.534,-249.532 289.016,-333.662 317.06,-347.398C315.343,-346.252 307.329,-337.096 306.758,-331.945C284.437,-291.311 268.412,-259.834 246.666,-220.342C246.666,-220.342 245.52,-219.771 244.949,-219.771M406.916,-248.957C405.199,-247.24 403.482,-242.664 401.19,-242.664C401.19,-242.664 404.624,-254.108 407.487,-254.108C407.487,-253.537 408.058,-255.825 408.629,-256.4C409.204,-256.97 408.629,-259.834 411.492,-259.834C411.492,-259.258 412.063,-258.688 412.063,-258.117C412.063,-255.825 408.629,-255.254 408.629,-252.966C408.629,-251.249 408.058,-251.82 406.916,-248.957M406.341,-242.089C406.341,-242.089 406.341,-242.664 405.199,-243.805C406.916,-246.669 410.346,-250.102 412.638,-252.391C413.209,-251.82 413.78,-251.249 413.78,-250.674C413.78,-250.102 413.209,-249.532 412.638,-248.957C411.492,-247.24 410.921,-245.523 408.629,-244.381L409.204,-246.097C408.629,-246.097 406.916,-242.089 406.341,-242.089M291.879,-294.745C291.305,-294.745 289.587,-293.028 289.587,-293.599C289.587,-295.316 292.45,-301.039 293.021,-301.613C294.167,-301.613 296.456,-304.472 297.03,-305.048L295.884,-301.613C295.884,-300.467 292.45,-294.745 291.879,-294.745M282.719,-274.713C282.148,-274.713 279.285,-274.141 279.285,-272.995C279.285,-276.429 282.719,-278.146 284.437,-279.863C286.728,-281.58 287.871,-282.726 288.445,-282.726C289.016,-282.726 288.445,-281.009 286.153,-279.292C285.011,-278.146 285.011,-275.283 282.719,-274.713M289.587,-287.878C289.587,-284.443 285.011,-281.009 283.294,-280.434C284.437,-282.726 285.583,-286.16 285.583,-285.014C286.153,-287.878 289.587,-286.731 289.587,-287.878M403.482,-229.499C403.482,-231.791 404.053,-232.361 405.199,-232.361C404.053,-232.932 404.053,-233.508 404.053,-234.079C405.77,-238.655 408.629,-239.8 409.775,-243.235C409.775,-240.372 408.629,-239.8 408.058,-238.655C407.487,-235.224 406.341,-233.508 405.199,-232.361L403.482,-229.499ZM418.932,-271.853L421.794,-271.853C421.223,-271.278 415.498,-266.127 415.498,-266.702C415.498,-267.273 414.926,-268.419 414.926,-268.99L417.214,-268.99C417.214,-270.707 417.789,-270.707 418.932,-271.853M305.612,-317.063C304.47,-314.775 302.752,-313.057 302.178,-313.629L303.895,-315.921C304.47,-315.345 305.612,-317.063 305.612,-317.063M289.587,-279.292C289.587,-279.292 290.162,-278.146 290.162,-277.575C289.016,-277.575 287.871,-275.858 287.871,-275.858C287.871,-277.001 289.016,-278.717 289.587,-279.292M288.445,-274.713L292.45,-278.146C291.879,-276.429 289.587,-275.283 288.445,-274.713M485.321,-250.102C485.321,-243.235 484.746,-233.508 484.746,-222.631C484.746,-204.889 485.892,-183.714 491.614,-161.967C495.623,-161.967 496.765,-155.099 497.911,-152.807C497.911,-152.807 498.482,-152.236 499.628,-152.236C500.774,-152.236 501.345,-152.807 501.916,-154.524C504.204,-153.953 503.062,-150.519 506.496,-149.373C508.213,-150.519 508.784,-151.091 509.355,-151.091C509.93,-151.091 511.072,-150.519 512.218,-150.519L515.081,-149.373C515.081,-149.948 515.652,-150.519 516.223,-150.519C516.798,-150.519 517.369,-149.948 517.94,-149.948C518.515,-149.948 519.657,-148.231 520.232,-148.231C520.232,-148.802 523.091,-147.085 524.809,-147.085C526.525,-147.085 528.817,-144.797 529.388,-143.08C529.959,-143.651 534.54,-148.231 537.403,-148.231C538.544,-148.231 539.116,-147.656 539.691,-145.939C540.261,-145.939 540.261,-148.231 540.261,-151.665C540.261,-161.392 538.544,-181.425 538.544,-193.445C538.544,-198.021 539.116,-202.026 539.691,-202.601L542.549,-148.802C542.549,-148.802 544.841,-149.373 544.841,-150.519L544.841,-188.865C546.559,-177.417 545.413,-171.124 546.559,-164.827C546.559,-163.68 547.701,-163.109 548.276,-163.109C548.847,-163.109 549.417,-163.68 549.417,-164.256L549.417,-166.544C549.417,-187.148 554.569,-274.713 554.569,-334.808L554.569,-350.258C552.852,-350.832 550.564,-353.692 546.559,-355.983C544.841,-357.7 541.979,-356.554 539.116,-358.271C535.111,-359.988 532.823,-360.56 528.243,-361.705L526.525,-364.569C527.671,-363.993 528.817,-363.423 529.959,-363.423C531.676,-363.423 532.823,-364.569 532.823,-366.285C532.823,-367.427 532.251,-368.573 531.676,-370.291C527.1,-379.447 508.213,-383.452 499.057,-383.452L496.194,-383.452C492.188,-383.452 489.326,-384.598 488.755,-385.744C425.225,-384.027 377.723,-290.736 377.723,-222.631C377.723,-217.479 377.723,-212.328 378.294,-207.752C380.586,-188.865 408.055,-174.557 421.791,-174.557C449.263,-174.557 473.301,-229.499 485.321,-250.102M426.942,-206.606C426.942,-226.639 464.142,-321.643 505.35,-352.549C505.921,-350.258 491.043,-325.077 491.614,-322.214L489.897,-317.637C472.727,-279.863 448.117,-226.064 426.942,-206.606M498.482,-231.791L498.482,-238.084C497.911,-239.229 497.34,-239.8 497.34,-240.946C497.34,-241.517 497.911,-242.664 497.911,-242.664C497.911,-248.957 497.911,-251.82 498.482,-251.82C499.057,-251.82 500.774,-242.089 500.774,-236.937C500.774,-236.367 500.199,-235.224 499.628,-234.649C500.199,-234.649 500.774,-235.224 501.345,-235.224L501.345,-231.216C500.774,-230.073 500.199,-225.493 500.199,-222.631L500.199,-220.914C500.199,-220.914 501.916,-220.914 501.916,-220.342L500.774,-216.337C500.774,-214.62 500.774,-212.328 500.199,-210.04C500.199,-208.323 500.774,-207.752 500.774,-206.606C500.774,-204.889 499.628,-204.318 499.628,-202.026C498.482,-202.026 499.057,-202.601 497.911,-202.601L497.911,-205.46C497.911,-211.186 499.057,-217.479 499.628,-224.347C499.057,-226.064 499.057,-228.927 498.482,-231.791M497.34,-190.582C497.911,-191.153 501.345,-192.87 501.345,-192.87C501.345,-193.445 502.487,-192.87 503.062,-192.299C503.062,-192.299 503.633,-192.299 503.633,-192.87L503.633,-190.582C503.062,-190.582 502.487,-191.727 502.487,-191.727L502.487,-190.01C501.345,-189.436 501.345,-188.865 501.345,-187.718C501.345,-186.577 501.345,-186.002 502.487,-186.002C501.916,-185.43 501.345,-184.859 501.345,-184.285C501.345,-183.714 501.916,-182.568 502.487,-181.425C501.345,-183.142 501.916,-183.142 500.774,-183.714L500.774,-174.557C500.774,-173.412 500.199,-171.694 500.199,-169.977C500.199,-172.841 499.057,-176.274 499.057,-181.425C498.482,-182.568 498.482,-183.142 498.482,-183.142C497.911,-183.142 497.34,-180.85 496.194,-180.28C496.765,-179.709 496.765,-177.417 496.765,-176.845L496.765,-172.265C496.194,-172.265 496.194,-176.274 496.194,-180.28C496.194,-184.285 496.194,-188.865 497.34,-190.582M509.93,-195.162C509.93,-197.45 509.93,-200.309 509.355,-202.601C508.213,-202.026 508.213,-200.883 508.213,-199.167L508.213,-195.162C507.638,-196.303 507.638,-197.45 507.067,-198.021L507.067,-193.445C507.638,-193.445 508.213,-192.299 508.213,-190.582C507.067,-190.582 507.067,-190.01 507.067,-189.436L507.067,-192.299C506.496,-194.587 506.496,-198.021 506.496,-201.455L506.496,-210.04L507.067,-210.04L507.067,-204.889C508.213,-204.889 508.784,-205.46 508.784,-206.606C508.784,-207.752 508.213,-209.469 507.638,-210.04C508.784,-211.186 508.213,-212.903 509.93,-215.191C510.501,-216.337 511.072,-217.479 511.072,-218.625L511.072,-207.752C511.647,-210.04 511.072,-211.758 512.789,-213.474C512.789,-211.186 510.501,-199.167 509.93,-195.162M507.638,-238.655C508.213,-238.655 508.784,-243.805 508.784,-246.669C509.93,-246.669 509.93,-243.805 509.93,-243.805C509.93,-241.517 509.93,-239.229 511.647,-239.229L509.355,-230.073L509.355,-232.361C509.355,-232.932 509.355,-233.508 508.784,-234.079C508.213,-231.791 507.638,-231.216 507.638,-230.073C507.067,-228.927 506.496,-227.211 506.496,-226.064C506.496,-225.493 507.067,-222.059 507.638,-221.488C507.638,-219.771 506.496,-218.625 506.496,-217.479C505.921,-218.625 505.35,-219.771 505.35,-220.914C505.35,-222.631 505.921,-224.923 505.921,-226.064L505.921,-242.089C506.496,-240.372 506.496,-238.655 507.638,-238.655M507.067,-163.68C507.067,-164.827 507.638,-166.544 508.784,-167.115C508.784,-163.109 508.213,-160.25 507.638,-158.533C507.638,-160.25 507.067,-161.967 507.067,-163.68M505.35,-180.28C505.921,-180.28 506.496,-178.562 506.496,-178.562C507.067,-178.562 507.638,-179.133 508.213,-179.709C508.213,-179.133 508.784,-178.562 508.784,-177.992C508.784,-176.845 508.213,-175.7 506.496,-174.557L506.496,-176.845C506.496,-177.417 506.496,-177.992 505.921,-178.562C505.35,-178.562 505.35,-179.133 505.35,-180.28M513.364,-203.743C513.935,-201.455 514.506,-200.309 514.506,-199.738C514.506,-199.167 513.935,-199.167 512.218,-199.167C512.218,-200.883 512.789,-202.601 513.364,-203.743M534.54,-160.25C534.54,-160.25 534.54,-158.533 533.968,-158.533C533.394,-158.533 532.823,-159.104 532.823,-159.675C532.823,-160.25 533.394,-160.821 533.968,-161.967C533.968,-160.821 533.968,-160.25 534.54,-160.25M709.661,-401.197C695.925,-397.763 662.73,-368.573 647.277,-350.258C650.14,-376.588 654.72,-381.164 657.008,-404.056L657.008,-411.499C657.008,-420.655 650.14,-424.09 642.126,-424.09C638.121,-424.09 632.399,-422.944 624.385,-416.075C619.234,-416.075 615.799,-408.065 613.511,-402.914C592.336,-354.838 578.029,-239.229 575.166,-171.124C575.737,-169.406 576.312,-168.26 576.312,-167.689C578.029,-165.972 579.171,-165.397 579.171,-164.256C579.171,-162.538 579.171,-154.524 585.468,-152.807C588.902,-151.665 590.619,-148.802 594.053,-148.802C594.625,-148.802 595.199,-148.802 596.341,-149.373C598.629,-149.373 599.775,-148.802 600.346,-148.802C602.638,-148.802 604.355,-151.091 604.926,-151.665C605.498,-152.807 607.214,-153.953 608.361,-155.099C608.361,-153.953 610.078,-153.953 610.078,-153.382C610.078,-153.382 611.223,-153.953 611.794,-153.953C611.794,-152.807 612.366,-152.236 612.366,-152.236C615.799,-152.236 620.951,-156.816 620.951,-160.25L623.243,-163.68C623.243,-163.68 623.243,-164.256 626.676,-167.689C636.404,-253.537 650.711,-321.643 710.232,-390.32C713.095,-393.183 714.241,-396.046 714.241,-398.334C714.241,-400.051 713.095,-401.768 711.378,-401.768C710.807,-401.768 710.232,-401.197 709.661,-401.197M881.927,-253.537C884.79,-258.117 887.079,-262.693 890.512,-266.127L895.664,-273.566C896.809,-273.566 896.809,-274.141 896.809,-274.713C897.38,-275.858 898.526,-275.858 899.097,-277.001C898.526,-276.429 898.526,-275.858 898.526,-275.283C898.526,-275.283 897.38,-273.566 896.809,-272.424C896.238,-271.278 895.664,-271.278 895.092,-270.707C891.658,-266.702 889.37,-261.55 889.37,-260.405C889.37,-259.834 891.658,-262.693 891.658,-262.693C894.521,-266.127 902.532,-278.146 903.106,-279.292C907.682,-283.868 903.677,-285.586 908.257,-286.731L910.545,-291.883C912.262,-296.463 913.405,-300.467 913.405,-304.472C913.405,-306.189 913.405,-307.907 912.833,-310.195C912.262,-311.912 908.257,-321.071 905.965,-321.071C900.814,-321.071 896.238,-310.769 896.238,-310.769C874.488,-273.566 813.25,-201.455 803.519,-202.601C797.796,-203.172 796.655,-265.556 796.655,-305.048L796.655,-330.799C796.655,-332.516 797.225,-333.662 797.225,-334.808L797.225,-338.813C797.225,-342.818 797.796,-343.393 798.372,-346.823C798.372,-349.686 796.08,-349.115 796.08,-352.549C798.943,-352.549 800.66,-353.692 801.802,-354.838C801.802,-354.838 802.376,-355.983 802.376,-357.126C802.376,-364.569 773.187,-369.719 768.037,-369.719C762.885,-369.719 758.309,-368.573 754.3,-366.857C709.086,-345.681 677.609,-274.713 674.75,-227.781C674.75,-218.054 677.609,-208.894 686.194,-203.172C690.774,-199.738 695.925,-198.595 701.076,-198.595C704.51,-198.595 707.37,-199.167 710.232,-200.309C714.238,-202.601 714.812,-206.035 718.817,-210.04C726.832,-208.894 756.017,-262.693 764.602,-291.311C764.602,-291.883 765.748,-295.887 766.89,-297.034C766.319,-288.448 765.748,-278.146 765.748,-267.273C765.748,-244.381 766.319,-184.285 801.802,-184.285C804.093,-184.285 805.811,-184.859 808.099,-185.43C812.679,-185.43 815.538,-185.43 820.118,-186.577C828.703,-190.582 832.137,-190.01 837.859,-196.879C840.147,-200.309 842.439,-200.883 844.727,-202.026C847.015,-203.172 864.76,-224.923 864.76,-224.923C865.903,-226.639 868.195,-228.927 868.766,-230.644C869.336,-230.073 871.628,-233.508 871.054,-233.508C872.2,-235.796 876.205,-239.229 878.493,-242.664C878.493,-244.381 881.356,-246.097 881.356,-246.097L883.073,-248.385C883.073,-248.385 885.361,-256.4 885.936,-256.97C884.79,-257.542 882.501,-254.108 881.927,-253.537M706.798,-219.771C715.383,-249.532 750.866,-333.662 778.91,-347.398C777.193,-346.252 769.182,-337.096 768.607,-331.945C746.29,-291.311 730.261,-259.834 708.515,-220.342C708.515,-220.342 707.37,-219.771 706.798,-219.771M868.766,-248.957C867.048,-247.24 865.332,-242.664 863.043,-242.664C863.043,-242.664 866.477,-254.108 869.336,-254.108C869.336,-253.537 869.912,-255.825 870.483,-256.4C871.054,-256.97 870.483,-259.834 873.345,-259.834C873.345,-259.258 873.917,-258.688 873.917,-258.117C873.917,-255.825 870.483,-255.254 870.483,-252.966C870.483,-251.249 869.912,-251.82 868.766,-248.957M868.195,-242.089C868.195,-242.089 868.195,-242.664 867.048,-243.805C868.766,-246.669 872.2,-250.102 874.488,-252.391C875.059,-251.82 875.633,-251.249 875.633,-250.674C875.633,-250.102 875.059,-249.532 874.488,-248.957C873.345,-247.24 872.771,-245.523 870.483,-244.381L871.054,-246.097C870.483,-246.097 868.766,-242.089 868.195,-242.089M753.729,-294.745C753.158,-294.745 751.441,-293.028 751.441,-293.599C751.441,-295.316 754.3,-301.039 754.875,-301.613C756.017,-301.613 758.309,-304.472 758.88,-305.048L757.734,-301.613C757.734,-300.467 754.3,-294.745 753.729,-294.745M744.573,-274.713C743.998,-274.713 741.138,-274.141 741.138,-272.995C741.138,-276.429 744.573,-278.146 746.29,-279.863C748.578,-281.58 749.724,-282.726 750.294,-282.726C750.866,-282.726 750.294,-281.009 748.006,-279.292C746.861,-278.146 746.861,-275.283 744.573,-274.713M751.441,-287.878C751.441,-284.443 746.861,-281.009 745.144,-280.434C746.29,-282.726 747.432,-286.16 747.432,-285.014C748.006,-287.878 751.441,-286.731 751.441,-287.878M865.332,-229.499C865.332,-231.791 865.903,-232.361 867.048,-232.361C865.903,-232.932 865.903,-233.508 865.903,-234.079C867.62,-238.655 870.483,-239.8 871.628,-243.235C871.628,-240.372 870.483,-239.8 869.912,-238.655C869.336,-235.224 868.195,-233.508 867.048,-232.361L865.332,-229.499ZM880.785,-271.853L883.644,-271.853C883.073,-271.278 877.351,-266.127 877.351,-266.702C877.351,-267.273 876.776,-268.419 876.776,-268.99L879.068,-268.99C879.068,-270.707 879.639,-270.707 880.785,-271.853M767.465,-317.063C766.319,-314.775 764.602,-313.057 764.031,-313.629L765.748,-315.921C766.319,-315.345 767.465,-317.063 767.465,-317.063M751.441,-279.292C751.441,-279.292 752.012,-278.146 752.012,-277.575C750.866,-277.575 749.724,-275.858 749.724,-275.858C749.724,-277.001 750.866,-278.717 751.441,-279.292M750.294,-274.713L754.3,-278.146C753.729,-276.429 751.441,-275.283 750.294,-274.713");
+    			attr_dev(path103, "class", "svelte-9kfwom");
+    			add_location(path103, file$1, 167, 20, 145978);
+    			attr_dev(g22, "transform", "matrix(1,0,0,1,95.0132,694.144)");
+    			add_location(g22, file$1, 166, 16, 145910);
+    			attr_dev(g23, "id", "Layer-1");
+    			attr_dev(g23, "serif:id", "Layer 1");
+    			add_location(g23, file$1, 105, 12, 58291);
+    			attr_dev(svg2, "width", "100%");
+    			attr_dev(svg2, "height", "100%");
+    			attr_dev(svg2, "viewBox", "0 0 1250 750");
+    			attr_dev(svg2, "version", "1.1");
+    			attr_dev(svg2, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg2, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg2, "xml:space", "preserve");
+    			attr_dev(svg2, "xmlns:serif", "http://www.serif.com/");
+    			set_style(svg2, "fill-rule", "evenodd");
+    			set_style(svg2, "clip-rule", "evenodd");
+    			set_style(svg2, "stroke-linejoin", "round");
+    			set_style(svg2, "stroke-miterlimit", "2");
+    			attr_dev(svg2, "class", "svelte-9kfwom");
+    			add_location(svg2, file$1, 104, 8, 57987);
+    			attr_dev(div2, "class", "logo-container djarra svelte-9kfwom");
+    			add_location(div2, file$1, 103, 4, 57940);
+    			attr_dev(rect3, "x", "271.318");
+    			attr_dev(rect3, "y", "390.72");
+    			attr_dev(rect3, "width", "18.254");
+    			attr_dev(rect3, "height", "55.783");
+    			attr_dev(rect3, "class", "svelte-9kfwom");
+    			add_location(rect3, file$1, 176, 20, 170960);
+    			attr_dev(g24, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g24, file$1, 175, 16, 170890);
+    			attr_dev(rect4, "x", "271.318");
+    			attr_dev(rect4, "y", "464.754");
+    			attr_dev(rect4, "width", "18.254");
+    			attr_dev(rect4, "height", "55.782");
+    			attr_dev(rect4, "class", "svelte-9kfwom");
+    			add_location(rect4, file$1, 179, 20, 171130);
+    			attr_dev(g25, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g25, file$1, 178, 16, 171060);
+    			attr_dev(rect5, "x", "368.356");
+    			attr_dev(rect5, "y", "464.754");
+    			attr_dev(rect5, "width", "18.253");
+    			attr_dev(rect5, "height", "55.782");
+    			attr_dev(rect5, "class", "svelte-9kfwom");
+    			add_location(rect5, file$1, 182, 20, 171301);
+    			attr_dev(g26, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g26, file$1, 181, 16, 171231);
+    			attr_dev(rect6, "x", "368.356");
+    			attr_dev(rect6, "y", "390.72");
+    			attr_dev(rect6, "width", "18.253");
+    			attr_dev(rect6, "height", "55.783");
+    			attr_dev(rect6, "class", "svelte-9kfwom");
+    			add_location(rect6, file$1, 185, 20, 171472);
+    			attr_dev(g27, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g27, file$1, 184, 16, 171402);
+    			attr_dev(rect7, "x", "289.584");
+    			attr_dev(rect7, "y", "446.501");
+    			attr_dev(rect7, "width", "78.772");
+    			attr_dev(rect7, "height", "18.253");
+    			attr_dev(rect7, "class", "svelte-9kfwom");
+    			add_location(rect7, file$1, 188, 20, 171642);
+    			attr_dev(g28, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g28, file$1, 187, 16, 171572);
+    			attr_dev(path104, "d", "M458.585,390.064L458.585,414.005L431.894,414.005L431.894,390.064L425.104,390.064L425.104,447.359L431.894,447.359L431.894,420.398L458.585,420.398L458.585,447.359L465.458,447.359L465.458,390.064L458.585,390.064Z");
+    			attr_dev(path104, "class", "svelte-9kfwom");
+    			add_location(path104, file$1, 191, 20, 171813);
+    			attr_dev(g29, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g29, file$1, 190, 16, 171743);
+    			attr_dev(path105, "d", "M481.971,421.959C482.678,412.957 486.905,408.385 494.546,408.385C502.187,408.385 506.416,412.949 507.193,421.953L481.971,421.959ZM494.546,402.394C482.583,402.394 475.441,411.051 475.441,425.553C475.441,439.955 482.583,448.555 494.546,448.555C503.745,448.555 510.098,443.365 512.432,433.941L512.627,433.155L506.571,431.642L506.396,432.466C505.003,439.069 500.904,442.558 494.546,442.558C486.807,442.558 482.448,437.516 481.877,427.957L513.741,427.957L513.741,425.553C513.741,411.051 506.559,402.394 494.546,402.394Z");
+    			attr_dev(path105, "class", "svelte-9kfwom");
+    			add_location(path105, file$1, 194, 20, 172143);
+    			attr_dev(g30, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g30, file$1, 193, 16, 172073);
+    			attr_dev(path106, "d", "M545.193,408.385C553.626,408.385 557.902,414.16 557.902,425.549C557.902,439.6 550.992,442.551 545.193,442.551C537.187,442.551 532.404,437.831 532.404,429.922L532.404,420.303C532.404,412.731 537.064,408.39 545.193,408.39M545.442,402.394C540.675,402.268 536.031,403.922 532.417,407.032L532.417,403.588L526.02,403.588L526.02,465.249L532.417,465.249L532.417,443.929C536.029,447.042 540.677,448.688 545.442,448.545C557.256,448.545 564.307,439.947 564.307,425.543C564.301,411.051 557.256,402.394 545.442,402.394Z");
+    			attr_dev(path106, "class", "svelte-9kfwom");
+    			add_location(path106, file$1, 197, 20, 172778);
+    			attr_dev(g31, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g31, file$1, 196, 16, 172708);
+    			attr_dev(path107, "d", "M595.613,408.393C604.046,408.393 608.322,414.167 608.322,425.555C608.322,433.312 606.117,442.558 595.613,442.558C587.606,442.558 582.824,437.836 582.824,429.929L582.824,420.305C582.824,412.734 587.484,408.393 595.613,408.393ZM582.834,443.939C586.446,447.052 591.094,448.7 595.862,448.555C607.676,448.555 614.727,439.958 614.727,425.555C614.727,411.054 607.676,402.396 595.862,402.396C591.094,402.27 586.451,403.924 582.836,407.035L582.836,390.059L576.437,390.059L576.437,447.354L582.834,447.354L582.834,443.939Z");
+    			attr_dev(path107, "class", "svelte-9kfwom");
+    			add_location(path107, file$1, 200, 20, 173405);
+    			attr_dev(g32, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g32, file$1, 199, 16, 173335);
+    			attr_dev(path108, "d", "M642.383,448.555C646.527,448.705 650.596,447.415 653.898,444.905L653.898,447.364L660.295,447.364L660.295,403.588L653.898,403.588L653.898,431.439C653.898,438.609 649.864,442.558 642.543,442.558C635.22,442.558 631.186,438.609 631.186,431.439L631.186,403.588L624.791,403.588L624.791,430.798C624.791,441.747 631.531,448.55 642.383,448.55");
+    			attr_dev(path108, "class", "svelte-9kfwom");
+    			add_location(path108, file$1, 203, 20, 174037);
+    			attr_dev(g33, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g33, file$1, 202, 16, 173967);
+    			attr_dev(path109, "d", "M699.163,402.394C696.244,402.316 693.386,403.241 691.067,405.015L691.067,403.588L673.06,403.588L673.06,409.579L684.674,409.579L684.674,441.358L672.03,441.358L672.03,447.349L708.726,447.349L708.726,441.358L691.07,441.358L691.07,414.739C691.169,411.118 694.183,408.263 697.804,408.362C697.939,408.366 698.075,408.374 698.21,408.385C703.417,408.385 706.031,411.218 706.947,417.872L707.069,418.77L713.338,417.177L713.245,416.467C711.92,406.092 705.099,402.394 699.163,402.394Z");
+    			attr_dev(path109, "class", "svelte-9kfwom");
+    			add_location(path109, file$1, 206, 20, 174491);
+    			attr_dev(g34, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g34, file$1, 205, 16, 174421);
+    			attr_dev(path110, "d", "M741.302,402.394C737.149,402.259 733.08,403.575 729.794,406.119L729.794,403.588L723.4,403.588L723.4,447.362L729.794,447.362L729.794,419.2C729.874,412.23 733.908,408.39 741.15,408.39C748.471,408.39 752.506,412.34 752.506,419.509L752.506,447.362L758.902,447.362L758.902,420.146C758.904,409.197 752.162,402.394 741.302,402.394Z");
+    			attr_dev(path110, "class", "svelte-9kfwom");
+    			add_location(path110, file$1, 209, 20, 175084);
+    			attr_dev(g35, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g35, file$1, 208, 16, 175014);
+    			attr_dev(path111, "d", "M425.101,521.817L459.412,521.817L459.412,515.421L431.894,515.421L431.894,494.855L456.945,494.855L456.945,488.463L431.894,488.463L431.894,470.918L459.412,470.918L459.412,464.524L425.101,464.524L425.101,521.817Z");
+    			attr_dev(path111, "class", "svelte-9kfwom");
+    			add_location(path111, file$1, 212, 20, 175529);
+    			attr_dev(g36, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g36, file$1, 211, 16, 175459);
+    			attr_dev(path112, "d", "M490.959,476.851C486.806,476.716 482.736,478.033 479.45,480.576L479.45,478.045L473.057,478.045L473.057,521.819L479.45,521.819L479.45,493.657C479.53,486.687 483.564,482.848 490.806,482.848C498.128,482.848 502.162,486.798 502.162,493.967L502.162,521.819L508.558,521.819L508.558,494.603C508.561,483.654 501.818,476.851 490.959,476.851Z");
+    			attr_dev(path112, "class", "svelte-9kfwom");
+    			add_location(path112, file$1, 215, 20, 175859);
+    			attr_dev(g37, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g37, file$1, 214, 16, 175789);
+    			attr_dev(path113, "d", "M527.461,496.416C528.168,487.414 532.394,482.843 540.035,482.843C547.677,482.843 551.906,487.406 552.682,496.411L527.461,496.416ZM540.035,476.851C528.073,476.851 520.93,485.509 520.93,500.01C520.93,514.413 528.073,523.012 540.035,523.012C549.234,523.012 555.588,517.822 557.922,508.398L558.117,507.612L552.06,506.099L551.885,506.924C550.493,513.526 546.393,517.017 540.035,517.017C532.297,517.017 527.937,511.973 527.366,502.415L559.23,502.415L559.23,500.01C559.23,485.509 552.048,476.851 540.035,476.851Z");
+    			attr_dev(path113, "class", "svelte-9kfwom");
+    			add_location(path113, file$1, 218, 20, 176312);
+    			attr_dev(g38, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g38, file$1, 217, 16, 176242);
+    			attr_dev(path114, "d", "M595.78,482.85C600.987,482.85 603.601,485.684 604.517,492.337L604.639,493.235L610.908,491.642L610.818,490.931C609.487,480.556 602.67,476.862 596.731,476.862C593.812,476.784 590.955,477.71 588.635,479.483L588.635,478.057L570.632,478.057L570.632,484.049L582.239,484.049L582.239,515.824L569.595,515.824L569.595,521.814L606.292,521.814L606.292,515.824L588.635,515.824L588.635,489.196C588.738,485.576 591.756,482.724 595.377,482.827C595.51,482.831 595.644,482.839 595.777,482.85");
+    			attr_dev(path114, "class", "svelte-9kfwom");
+    			add_location(path114, file$1, 221, 20, 176938);
+    			attr_dev(g39, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g39, file$1, 220, 16, 176868);
+    			attr_dev(path115, "d", "M637.609,517.017C627.104,517.017 624.9,507.779 624.9,500.013C624.9,488.625 629.177,482.85 637.609,482.85C645.847,482.85 650.398,487.279 650.398,495.333L650.398,504.941C650.398,512.5 645.618,517.013 637.609,517.013M650.398,481.508C646.793,478.378 642.142,476.716 637.37,476.851C625.556,476.851 618.505,485.509 618.505,500.01C618.505,514.413 625.556,523.009 637.37,523.009C642.14,523.168 646.795,521.514 650.398,518.384L650.398,523.551C650.703,529.519 646.111,534.603 640.144,534.908C639.777,534.926 639.409,534.926 639.043,534.908C632.617,534.908 628.557,531.557 626.947,524.95L626.748,524.158L620.757,525.656L620.903,526.405C622.651,535.482 629.441,540.899 639.038,540.899C648.342,541.387 656.28,534.24 656.768,524.936C656.789,524.551 656.796,524.168 656.789,523.785L656.789,478.045L650.396,478.045L650.398,481.508Z");
+    			attr_dev(path115, "class", "svelte-9kfwom");
+    			add_location(path115, file$1, 224, 20, 177532);
+    			attr_dev(g40, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g40, file$1, 223, 16, 177462);
+    			attr_dev(path116, "d", "M688.818,512.647L675.22,478.045L668.453,478.045L685.73,520.384L682.028,530.182C680.42,534.361 679.619,534.99 677.694,534.99C676.066,534.811 674.534,534.134 673.305,533.051L672.614,532.431L669.313,537.274L669.826,537.749C672.029,539.703 674.833,540.847 677.774,540.994C681.894,541.147 685.588,538.468 686.721,534.504L708.622,478.045L702.189,478.045L688.818,512.647Z");
+    			attr_dev(path116, "class", "svelte-9kfwom");
+    			add_location(path116, file$1, 227, 20, 178468);
+    			attr_dev(g41, "transform", "matrix(1,0,0,1,-240.415,-365.229)");
+    			add_location(g41, file$1, 226, 16, 178398);
+    			attr_dev(g42, "transform", "matrix(4.16667,0,0,4.16667,0,0)");
+    			add_location(g42, file$1, 174, 12, 170826);
+    			attr_dev(svg3, "width", "100%");
+    			attr_dev(svg3, "height", "100%");
+    			attr_dev(svg3, "viewBox", "0 0 2200 600");
+    			attr_dev(svg3, "version", "1.1");
+    			attr_dev(svg3, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg3, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg3, "xml:space", "preserve");
+    			attr_dev(svg3, "xmlns:serif", "http://www.serif.com/");
+    			set_style(svg3, "fill-rule", "evenodd");
+    			set_style(svg3, "clip-rule", "evenodd");
+    			set_style(svg3, "stroke-linejoin", "round");
+    			set_style(svg3, "stroke-miterlimit", "2");
+    			attr_dev(svg3, "class", "svelte-9kfwom");
+    			add_location(svg3, file$1, 173, 8, 170522);
+    			attr_dev(div3, "class", "logo-container hepburnEnergy svelte-9kfwom");
+    			add_location(div3, file$1, 172, 4, 170468);
+    			attr_dev(path117, "d", "M232.152,103.523C183.947,105.907 139.679,123.118 103.834,150.65C112.814,152.237 122.334,153.075 132.162,153.075C181.201,153.075 222.166,131.854 232.152,103.523Z");
+    			attr_dev(path117, "class", "svelte-9kfwom");
+    			add_location(path117, file$1, 236, 16, 179329);
+    			attr_dev(path118, "d", "M234.473,90.114C234.473,55.328 188.674,27.136 132.162,27.136C75.658,27.136 29.856,55.328 29.856,90.114C29.856,115.086 53.474,136.679 87.753,146.877C129.399,117.888 179.5,100.121 233.68,98.019C234.211,95.423 234.473,92.799 234.473,90.114Z");
+    			attr_dev(path118, "class", "svelte-9kfwom");
+    			add_location(path118, file$1, 237, 16, 179519);
+    			set_style(path119, "fill", "#000");
+    			attr_dev(path119, "d", "M94.213,89.817C80.797,104.472 84.181,107.794 85.505,110.128C86.819,112.447 93.053,114.384 108.281,109.145C125.531,103.183 137.03,93.275 155.072,73.16C172.182,54.087 186.582,42.926 194.477,40.155C192.93,39.422 191.369,38.72 189.764,38.047C182.209,43.759 169.181,52.497 152.494,58.851C125.552,69.044 107.599,75.147 94.213,89.817Z");
+    			attr_dev(path119, "class", "svelte-9kfwom");
+    			add_location(path119, file$1, 238, 16, 179786);
+    			set_style(path120, "fill", "#000");
+    			attr_dev(path120, "d", "M188.449,61.666C169.637,71.684 161.361,76.904 158.59,82.389C155.841,87.895 161.607,90.415 165.357,89.15C170.185,87.554 175.148,84.653 189.98,69.907C200.766,59.167 205.824,53.601 211.475,50.313C210.588,49.671 209.664,48.989 208.744,48.336C206.365,50.906 202.055,54.469 188.449,61.666Z");
+    			attr_dev(path120, "class", "svelte-9kfwom");
+    			add_location(path120, file$1, 239, 16, 180163);
+    			attr_dev(path121, "d", "M276.414,65.48C274.086,63.433 273.453,60.773 273.453,58.454C273.453,56.853 273.941,54.058 276.266,51.95C277.971,50.394 280.24,49.45 283.803,49.45C285.27,49.45 286.152,49.561 287.23,49.671C288.148,49.801 288.912,50.012 289.629,50.093C289.881,50.123 290.002,50.223 290.002,50.374C290.002,50.569 289.895,50.851 289.865,51.684C289.826,52.461 289.846,53.761 289.801,54.238C289.781,54.59 289.736,54.8 289.504,54.8C289.334,54.8 289.258,54.59 289.258,54.273C289.248,53.52 288.953,52.683 288.34,52.07C287.557,51.247 285.695,50.615 283.506,50.615C281.424,50.615 280.053,51.132 279,52.07C277.299,53.666 276.832,55.925 276.832,58.223C276.832,63.874 281.143,66.665 284.344,66.665C286.463,66.665 287.748,66.444 288.717,65.35C289.123,64.888 289.414,64.216 289.504,63.764C289.58,63.383 289.629,63.303 289.826,63.303C290.002,63.303 290.037,63.453 290.037,63.654C290.037,63.945 289.766,66.033 289.504,66.826C289.395,67.227 289.277,67.337 288.893,67.508C287.943,67.89 286.117,68.05 284.615,68.05C281.334,68.05 278.582,67.337 276.414,65.48Z");
+    			attr_dev(path121, "class", "svelte-9kfwom");
+    			add_location(path121, file$1, 240, 16, 180496);
+    			attr_dev(path122, "d", "M297.781,56.667C297.781,53.044 297.781,52.391 297.725,51.638C297.666,50.826 297.475,50.454 296.695,50.273C296.5,50.223 296.1,50.213 295.758,50.213C295.527,50.213 295.352,50.163 295.352,49.992C295.352,49.837 295.537,49.782 295.893,49.782C297.148,49.782 298.658,49.852 299.311,49.852C300.094,49.852 306.914,49.852 307.361,49.837C307.822,49.782 308.205,49.731 308.385,49.671C308.525,49.651 308.666,49.581 308.777,49.581C308.893,49.581 308.912,49.671 308.912,49.801C308.912,49.962 308.797,50.253 308.736,51.357C308.717,51.568 308.666,52.632 308.602,52.913C308.57,53.034 308.541,53.174 308.365,53.174C308.205,53.174 308.164,53.044 308.164,52.843C308.164,52.667 308.145,52.281 308.023,51.98C307.844,51.568 307.623,51.277 306.398,51.132C306.012,51.076 301.418,51.037 300.941,51.037C300.816,51.037 300.781,51.122 300.781,51.277L300.781,57.28C300.781,57.44 300.801,57.536 300.941,57.536C301.471,57.536 306.287,57.536 306.846,57.485C307.426,57.44 307.783,57.37 307.994,57.149C308.164,56.948 308.244,56.828 308.365,56.828C308.461,56.828 308.541,56.878 308.541,56.999C308.541,57.149 308.41,57.536 308.355,58.745C308.301,59.237 308.244,60.17 308.244,60.341C308.244,60.527 308.244,60.808 308.023,60.808C307.869,60.808 307.822,60.698 307.822,60.572C307.803,60.341 307.803,60.015 307.713,59.729C307.623,59.237 307.271,58.895 306.379,58.805C305.936,58.745 301.5,58.725 300.922,58.725C300.801,58.725 300.781,58.821 300.781,58.966L300.781,60.843C300.781,61.641 300.762,63.814 300.781,64.527C300.816,66.143 303.297,66.515 305.725,66.515C306.338,66.515 307.342,66.515 307.949,66.233C308.57,65.927 308.883,65.431 309.033,64.457C309.088,64.216 309.139,64.105 309.305,64.105C309.504,64.105 309.504,64.306 309.504,64.542C309.504,65.099 309.305,66.695 309.184,67.177C309.008,67.79 308.797,67.79 307.898,67.79C304.295,67.79 300.607,67.659 299.191,67.659C298.658,67.659 297.148,67.709 296.18,67.709C295.893,67.709 295.723,67.659 295.723,67.483C295.723,67.378 295.813,67.277 296.1,67.277C296.451,67.277 296.727,67.257 296.973,67.197C297.434,67.106 297.564,66.575 297.645,65.892C297.781,64.888 297.781,63.011 297.781,60.843L297.781,56.667Z");
+    			attr_dev(path122, "class", "svelte-9kfwom");
+    			add_location(path122, file$1, 241, 16, 181546);
+    			attr_dev(path123, "d", "M317.506,64.487C317.586,66.344 317.881,66.956 318.354,67.137C318.754,67.277 319.221,67.277 319.582,67.277C319.859,67.277 319.998,67.337 319.998,67.483C319.998,67.659 319.787,67.709 319.463,67.709C317.912,67.709 316.947,67.659 316.49,67.659C316.285,67.659 315.162,67.709 313.926,67.709C313.609,67.709 313.398,67.689 313.398,67.483C313.398,67.337 313.52,67.277 313.775,67.277C314.072,67.277 314.51,67.277 314.85,67.177C315.467,66.966 315.568,66.304 315.588,64.226L315.803,50.198C315.803,49.701 315.863,49.38 316.115,49.38C316.381,49.38 316.592,49.671 317.002,50.123C317.295,50.414 320.902,54.298 324.396,57.711C326.002,59.358 329.203,62.75 329.656,63.147L329.746,63.147L329.52,52.486C329.516,51.037 329.279,50.595 328.701,50.363C328.35,50.213 327.793,50.213 327.441,50.213C327.166,50.213 327.055,50.133 327.055,49.992C327.055,49.801 327.338,49.782 327.684,49.782C328.934,49.782 330.076,49.852 330.574,49.852C330.834,49.852 331.729,49.782 332.898,49.782C333.229,49.782 333.445,49.801 333.445,49.992C333.445,50.133 333.324,50.213 333.027,50.213C332.797,50.213 332.592,50.213 332.291,50.273C331.639,50.469 331.457,50.981 331.438,52.29L331.162,67.277C331.162,67.79 331.07,68 330.859,68C330.584,68 330.309,67.739 330.066,67.483C328.551,66.042 325.494,62.951 322.99,60.501C320.41,57.932 317.762,54.971 317.334,54.54L317.264,54.54L317.506,64.487Z");
+    			attr_dev(path123, "class", "svelte-9kfwom");
+    			add_location(path123, file$1, 242, 16, 183685);
+    			attr_dev(path124, "d", "M344.813,51.122L341.26,51.202C339.863,51.247 339.303,51.368 338.951,51.89C338.715,52.261 338.584,52.537 338.539,52.723C338.488,52.913 338.42,52.983 338.277,52.983C338.107,52.983 338.072,52.873 338.072,52.632C338.072,52.261 338.52,50.093 338.568,49.922C338.641,49.581 338.715,49.45 338.85,49.45C339.051,49.45 339.281,49.671 339.863,49.731C340.557,49.801 341.48,49.852 342.273,49.852L351.713,49.852C353.234,49.852 353.813,49.601 354.014,49.601C354.188,49.601 354.188,49.747 354.188,50.123C354.188,50.615 354.107,52.261 354.107,52.863C354.088,53.114 354.047,53.239 353.902,53.239C353.707,53.239 353.656,53.134 353.656,52.778L353.611,52.486C353.582,51.89 352.928,51.237 350.811,51.182L347.793,51.122L347.793,60.843C347.793,63.011 347.793,64.888 347.91,65.922C347.979,66.575 348.121,67.106 348.828,67.197C349.184,67.257 349.695,67.277 350.066,67.277C350.313,67.277 350.453,67.378 350.453,67.483C350.453,67.659 350.254,67.709 349.988,67.709C348.406,67.709 346.92,67.659 346.258,67.659C345.686,67.659 344.191,67.709 343.236,67.709C342.936,67.709 342.76,67.659 342.76,67.483C342.76,67.378 342.859,67.277 343.137,67.277C343.508,67.277 343.799,67.257 344.004,67.197C344.467,67.106 344.627,66.575 344.703,65.892C344.813,64.888 344.813,63.011 344.813,60.843L344.813,51.122Z");
+    			attr_dev(path124, "class", "svelte-9kfwom");
+    			add_location(path124, file$1, 243, 16, 185052);
+    			attr_dev(path125, "d", "M370.098,59.453C372.531,58.133 373.26,56.647 373.26,54.058C373.26,52.461 372.301,51.247 371.623,50.801C370.34,49.922 368.166,49.782 366.654,49.782C365.916,49.782 364.121,49.852 363.303,49.852C362.805,49.852 361.305,49.782 360.02,49.782C359.684,49.782 359.508,49.837 359.508,49.992C359.508,50.163 359.648,50.213 359.914,50.213C360.246,50.213 360.652,50.223 360.822,50.273C361.637,50.454 361.822,50.826 361.881,51.638C361.922,52.391 361.922,53.044 361.922,56.667L361.922,60.843C361.922,63.011 361.922,64.888 361.807,65.892C361.723,66.575 361.576,67.106 361.109,67.197C360.889,67.257 360.592,67.277 360.246,67.277C359.955,67.277 359.85,67.378 359.85,67.483C359.85,67.659 360.02,67.709 360.342,67.709C361.305,67.709 362.805,67.659 363.248,67.659C363.604,67.659 365.381,67.709 366.775,67.709C367.086,67.709 367.227,67.659 367.227,67.483C367.227,67.378 367.146,67.277 366.951,67.277C366.654,67.277 366.139,67.257 365.787,67.197C365.068,67.106 364.914,66.575 364.857,65.892C364.729,64.888 364.729,63.011 364.729,60.813L364.729,60.501C364.729,60.341 364.799,60.296 364.914,60.296L367.578,60.341C367.719,60.341 367.809,60.482 368,60.501C368.822,60.623 369.627,61.54 370.238,63.523C370.82,65.511 371.322,67.106 372.531,67.398C373.723,67.689 374.865,67.709 375.869,67.709C376.111,67.709 376.145,67.609 376.111,67.503C376.111,67.388 376.07,67.277 375.869,67.277C375.168,67.277 374.188,67.072 373.691,64.657C373.35,63.082 372.729,61.074 371.434,60.236C370.434,59.599 370.178,59.579 370.098,59.553C369.992,59.538 370.098,59.453 370.098,59.453ZM364.729,51.317C364.729,51.132 364.787,51.037 364.949,51.001C365.18,50.906 365.611,50.885 366.209,50.885C367.619,50.885 370.434,51.87 370.434,55.222C370.434,57.179 369.756,58.274 369.039,58.805C368.613,59.106 367.719,59.197 366.775,59.197C366.172,59.197 365.439,59.147 364.949,58.966C364.787,58.895 364.729,58.805 364.729,58.524L364.729,51.317Z");
+    			attr_dev(path125, "class", "svelte-9kfwom");
+    			add_location(path125, file$1, 244, 16, 186343);
+    			attr_dev(path126, "d", "M370.514,124.643C372.943,123.318 373.691,121.823 373.691,119.253C373.691,117.657 372.729,116.462 372.064,116C370.77,115.117 368.613,114.956 367.086,114.956C366.348,114.956 364.547,115.042 363.738,115.042C363.248,115.042 361.732,114.956 360.473,114.956C360.115,114.956 359.934,115.017 359.934,115.188C359.934,115.338 360.086,115.388 360.352,115.388C360.682,115.388 361.1,115.423 361.275,115.468C362.063,115.639 362.273,116 362.283,116.813C362.359,117.577 362.359,118.259 362.359,121.837L362.359,126.033C362.359,128.216 362.359,130.073 362.229,131.087C362.129,131.76 362.021,132.298 361.525,132.376C361.314,132.433 361.033,132.492 360.682,132.492C360.391,132.492 360.297,132.558 360.297,132.663C360.297,132.844 360.473,132.909 360.783,132.909C361.732,132.909 363.248,132.844 363.674,132.844C364.051,132.844 365.816,132.909 367.197,132.909C367.508,132.909 367.668,132.844 367.668,132.663C367.668,132.558 367.578,132.492 367.367,132.492C367.086,132.492 366.564,132.433 366.213,132.376C365.496,132.298 365.359,131.76 365.279,131.087C365.18,130.073 365.18,128.216 365.18,126.008L365.18,125.677C365.18,125.536 365.24,125.481 365.359,125.481L368,125.536C368.166,125.536 368.236,125.661 368.436,125.687C369.275,125.817 370.063,126.721 370.66,128.692C371.252,130.696 371.754,132.292 372.969,132.587C374.154,132.884 375.287,132.909 376.287,132.909C376.527,132.909 376.566,132.798 376.557,132.684C376.537,132.567 376.498,132.462 376.287,132.462C375.59,132.462 374.619,132.252 374.133,129.853C373.781,128.286 373.148,126.279 371.854,125.431C370.855,124.783 370.6,124.769 370.514,124.754C370.434,124.738 370.514,124.643 370.514,124.643ZM365.18,116.517C365.18,116.322 365.215,116.231 365.381,116.171C365.611,116.111 366.059,116.081 366.645,116.081C368.051,116.081 370.855,117.055 370.855,120.427C370.855,122.385 370.158,123.469 369.455,123.991C369.039,124.302 368.146,124.387 367.197,124.387C366.594,124.387 365.887,124.312 365.381,124.161C365.215,124.081 365.18,123.991 365.18,123.72L365.18,116.517Z");
+    			attr_dev(path126, "class", "svelte-9kfwom");
+    			add_location(path126, file$1, 245, 16, 188246);
+    			attr_dev(path127, "d", "M389.768,61.54C389.902,61.54 389.973,61.566 390.023,61.691L391.939,66.73C392.031,67.001 391.881,67.227 391.719,67.277C391.473,67.277 391.373,67.337 391.373,67.483C391.373,67.659 391.67,67.659 392.102,67.659C393.998,67.709 395.744,67.709 396.607,67.709C397.49,67.709 397.723,67.659 397.723,67.483C397.723,67.317 397.576,67.277 397.4,67.277C397.1,67.277 396.744,67.277 396.393,67.197C395.885,67.082 395.213,66.755 394.295,64.607C392.758,60.989 388.949,51.317 388.377,50.012C388.135,49.48 387.996,49.259 387.779,49.259C387.539,49.259 387.408,49.531 387.123,50.213L381.109,65.114C380.648,66.304 380.191,67.106 379.102,67.257C378.91,67.277 378.564,67.277 378.385,67.277C378.158,67.277 378.078,67.337 378.078,67.483C378.078,67.659 378.209,67.709 378.523,67.709C379.754,67.709 381.068,67.659 381.33,67.659C382.088,67.659 383.117,67.709 383.859,67.709C384.121,67.709 384.275,67.659 384.275,67.483C384.275,67.337 384.176,67.277 383.91,67.277L383.549,67.277C382.805,67.277 382.609,66.966 382.609,66.545C382.609,66.263 382.715,65.711 382.977,65.114L384.236,61.707C384.307,61.566 384.348,61.54 384.477,61.54L389.768,61.54ZM384.943,60.341C384.844,60.341 384.824,60.266 384.844,60.17L387.041,54.339C387.063,54.238 387.123,54.118 387.191,54.118C387.258,54.118 387.277,54.238 387.297,54.339L389.439,60.201C389.48,60.266 389.439,60.341 389.33,60.341L384.943,60.341Z");
+    			attr_dev(path127, "class", "svelte-9kfwom");
+    			add_location(path127, file$1, 246, 16, 190261);
+    			attr_dev(path128, "d", "M406.766,60.843C406.766,63.874 406.766,65.531 407.277,65.927C407.68,66.304 408.293,66.464 410.133,66.464C411.414,66.464 412.348,66.444 412.943,65.812C413.23,65.48 413.541,64.828 413.557,64.356C413.592,64.166 413.643,64.025 413.834,64.025C414.004,64.025 414.023,64.146 414.023,64.422C414.023,64.688 413.854,66.464 413.672,67.152C413.541,67.659 413.402,67.79 412.176,67.79C408.729,67.79 407.152,67.659 405.209,67.659C404.674,67.659 403.184,67.709 402.209,67.709C401.898,67.709 401.736,67.659 401.736,67.483C401.736,67.378 401.838,67.277 402.109,67.277C402.484,67.277 402.762,67.257 402.986,67.197C403.459,67.106 403.553,66.575 403.664,65.892C403.785,64.888 403.785,63.011 403.785,60.843L403.785,56.667C403.785,53.044 403.785,52.391 403.744,51.638C403.674,50.826 403.479,50.454 402.695,50.273C402.516,50.223 402.219,50.213 401.918,50.213C401.672,50.213 401.537,50.163 401.537,49.992C401.537,49.837 401.688,49.782 402.049,49.782C403.184,49.782 404.674,49.852 405.301,49.852C405.883,49.852 407.619,49.782 408.559,49.782C408.879,49.782 409.045,49.837 409.045,49.992C409.045,50.163 408.93,50.213 408.633,50.213C408.373,50.213 407.986,50.223 407.68,50.273C407.053,50.394 406.846,50.801 406.807,51.638C406.766,52.391 406.766,53.044 406.766,56.667L406.766,60.843Z");
+    			attr_dev(path128, "class", "svelte-9kfwom");
+    			add_location(path128, file$1, 247, 16, 191639);
+    			attr_dev(path129, "d", "M288.289,89.797C288.381,89.797 288.432,89.752 288.432,89.631L288.432,89.12C288.432,85.511 288.432,84.863 288.4,84.11C288.34,83.288 288.148,82.926 287.367,82.756C287.176,82.686 286.77,82.675 286.422,82.675C286.172,82.675 286.041,82.625 286.041,82.475C286.041,82.294 286.191,82.239 286.529,82.239C287.813,82.239 289.334,82.314 289.971,82.314C290.518,82.314 292.053,82.239 292.979,82.239C293.318,82.239 293.479,82.294 293.479,82.475C293.479,82.625 293.338,82.675 293.033,82.675C292.848,82.675 292.631,82.686 292.355,82.756C291.713,82.861 291.502,83.278 291.473,84.11C291.422,84.863 291.422,85.511 291.422,89.12L291.422,93.311C291.422,95.484 291.422,97.371 291.531,98.385C291.602,99.042 291.764,99.559 292.475,99.649C292.807,99.699 293.338,99.78 293.68,99.78C293.951,99.78 294.102,99.83 294.102,99.951C294.102,100.13 293.861,100.201 293.6,100.201C292.053,100.201 290.518,100.13 289.865,100.13C289.334,100.13 287.813,100.201 286.875,100.201C286.543,100.201 286.393,100.13 286.393,99.951C286.393,99.83 286.473,99.78 286.77,99.78C287.125,99.78 287.426,99.699 287.643,99.649C288.109,99.559 288.221,99.042 288.32,98.345C288.432,97.371 288.432,95.484 288.432,93.311L288.432,91.218C288.432,91.127 288.381,91.087 288.289,91.087L279.176,91.087C279.109,91.087 279.02,91.097 279.02,91.218L279.02,93.311C279.02,95.484 279.02,97.371 279.154,98.385C279.246,99.042 279.355,99.559 280.074,99.649C280.43,99.699 280.957,99.78 281.303,99.78C281.596,99.78 281.689,99.83 281.689,99.951C281.689,100.13 281.5,100.201 281.213,100.201C279.662,100.201 278.182,100.13 277.498,100.13C276.953,100.13 275.426,100.201 274.498,100.201C274.178,100.201 274.012,100.13 274.012,99.951C274.012,99.83 274.105,99.78 274.373,99.78C274.744,99.78 275.041,99.699 275.25,99.649C275.723,99.559 275.838,99.042 275.953,98.345C276.068,97.371 276.068,95.484 276.068,93.311L276.068,89.12C276.068,85.511 276.068,84.863 276.008,84.11C275.973,83.288 275.768,82.926 274.984,82.756C274.789,82.686 274.373,82.675 274.045,82.675C273.805,82.675 273.635,82.625 273.635,82.475C273.635,82.294 273.814,82.239 274.146,82.239C275.426,82.239 276.953,82.314 277.584,82.314C278.182,82.314 279.662,82.239 280.602,82.239C280.932,82.239 281.082,82.294 281.082,82.475C281.082,82.625 280.957,82.675 280.666,82.675C280.471,82.675 280.26,82.686 279.979,82.756C279.326,82.861 279.135,83.278 279.086,84.11C279.02,84.863 279.02,85.511 279.02,89.12L279.02,89.631C279.02,89.752 279.109,89.797 279.176,89.797L288.289,89.797Z");
+    			attr_dev(path129, "class", "svelte-9kfwom");
+    			add_location(path129, file$1, 248, 16, 192922);
+    			attr_dev(path130, "d", "M301.158,89.12C301.158,85.511 301.158,84.863 301.113,84.11C301.063,83.288 300.816,82.891 300.289,82.771C300.033,82.686 299.738,82.675 299.438,82.675C299.191,82.675 299.055,82.625 299.055,82.445C299.055,82.294 299.246,82.239 299.643,82.239C300.545,82.239 302.041,82.314 302.725,82.314C303.316,82.314 304.732,82.239 305.635,82.239C305.967,82.239 306.141,82.294 306.141,82.445C306.141,82.625 306.002,82.675 305.766,82.675C305.514,82.675 305.33,82.686 305.027,82.756C304.381,82.861 304.229,83.278 304.16,84.11C304.119,84.863 304.119,85.511 304.119,89.12L304.119,93.311C304.119,95.619 304.119,97.491 304.229,98.505C304.279,99.147 304.461,99.559 305.188,99.649C305.5,99.699 306.021,99.78 306.367,99.78C306.629,99.78 306.76,99.83 306.76,99.951C306.76,100.13 306.578,100.201 306.313,100.201C304.732,100.201 303.23,100.13 302.584,100.13C302.041,100.13 300.545,100.201 299.582,100.201C299.266,100.201 299.096,100.13 299.096,99.951C299.096,99.83 299.191,99.78 299.492,99.78C299.863,99.78 300.125,99.699 300.334,99.649C300.816,99.559 300.977,99.167 301.021,98.475C301.158,97.491 301.158,95.619 301.158,93.311L301.158,89.12Z");
+    			attr_dev(path130, "class", "svelte-9kfwom");
+    			add_location(path130, file$1, 249, 16, 195392);
+    			attr_dev(path131, "d", "M328.326,98.605C328.326,99.233 328.301,99.298 328.02,99.478C326.484,100.271 324.115,100.522 322.273,100.522C316.426,100.522 311.256,97.772 311.256,91.218C311.256,87.434 313.238,84.764 315.387,83.468C317.68,82.093 319.828,81.923 321.811,81.923C323.457,81.923 325.564,82.204 326.043,82.294C326.543,82.404 327.377,82.535 327.908,82.575C328.211,82.585 328.26,82.675 328.26,82.856C328.26,83.117 328.09,83.769 328.09,86.741C328.09,87.123 328.02,87.233 327.824,87.233C327.643,87.233 327.613,87.123 327.584,86.921C327.523,86.39 327.387,85.622 326.775,84.959C326.082,84.191 324.154,83.117 321.449,83.117C320.141,83.117 318.402,83.177 316.736,84.578C315.387,85.702 314.549,87.463 314.549,90.384C314.549,95.484 317.791,99.308 322.85,99.308C323.457,99.308 324.295,99.308 324.863,99.042C325.234,98.876 325.324,98.585 325.324,98.169L325.324,95.945C325.324,94.761 325.324,93.843 325.295,93.13C325.283,92.342 325.068,91.96 324.275,91.79C324.094,91.74 323.668,91.72 323.332,91.72C323.125,91.72 322.971,91.679 322.971,91.534C322.971,91.338 323.141,91.278 323.488,91.278C324.727,91.278 326.244,91.383 326.926,91.383C327.684,91.383 328.943,91.278 329.727,91.278C330.066,91.278 330.223,91.338 330.223,91.534C330.223,91.679 330.076,91.72 329.902,91.72C329.717,91.72 329.541,91.74 329.26,91.79C328.621,91.895 328.359,92.311 328.35,93.13C328.326,93.843 328.326,94.801 328.326,95.986L328.326,98.605Z");
+    			attr_dev(path131, "class", "svelte-9kfwom");
+    			add_location(path131, file$1, 250, 16, 196533);
+    			attr_dev(path132, "d", "M350.313,89.797C350.404,89.797 350.484,89.752 350.484,89.631L350.484,89.12C350.484,85.511 350.484,84.863 350.424,84.11C350.395,83.288 350.188,82.926 349.381,82.756C349.205,82.686 348.787,82.675 348.467,82.675C348.199,82.675 348.07,82.625 348.07,82.475C348.07,82.294 348.221,82.239 348.566,82.239C349.846,82.239 351.338,82.314 351.984,82.314C352.572,82.314 354.078,82.239 355.012,82.239C355.342,82.239 355.492,82.294 355.492,82.475C355.492,82.625 355.363,82.675 355.07,82.675C354.877,82.675 354.67,82.686 354.389,82.756C353.73,82.861 353.535,83.278 353.506,84.11C353.455,84.863 353.455,85.511 353.455,89.12L353.455,93.311C353.455,95.484 353.455,97.371 353.582,98.385C353.656,99.042 353.781,99.559 354.51,99.649C354.836,99.699 355.363,99.78 355.729,99.78C355.99,99.78 356.09,99.83 356.09,99.951C356.09,100.13 355.908,100.201 355.619,100.201C354.078,100.201 352.572,100.13 351.9,100.13C351.338,100.13 349.846,100.201 348.918,100.201C348.576,100.201 348.406,100.13 348.406,99.951C348.406,99.83 348.512,99.78 348.787,99.78C349.164,99.78 349.439,99.699 349.656,99.649C350.133,99.559 350.254,99.042 350.344,98.345C350.484,97.371 350.484,95.484 350.484,93.311L350.484,91.218C350.484,91.127 350.404,91.087 350.313,91.087L341.209,91.087C341.139,91.087 341.053,91.097 341.053,91.218L341.053,93.311C341.053,95.484 341.053,97.371 341.188,98.385C341.26,99.042 341.416,99.559 342.107,99.649C342.443,99.699 342.967,99.78 343.338,99.78C343.584,99.78 343.723,99.83 343.723,99.951C343.723,100.13 343.533,100.201 343.236,100.201C341.691,100.201 340.186,100.13 339.518,100.13C338.971,100.13 337.48,100.201 336.521,100.201C336.211,100.201 336.029,100.13 336.029,99.951C336.029,99.83 336.121,99.78 336.426,99.78C336.783,99.78 337.059,99.699 337.264,99.649C337.756,99.559 337.881,99.042 337.971,98.345C338.072,97.371 338.072,95.484 338.072,93.311L338.072,89.12C338.072,85.511 338.072,84.863 338.037,84.11C338.002,83.288 337.822,82.926 337.018,82.756C336.832,82.686 336.426,82.675 336.109,82.675C335.814,82.675 335.703,82.625 335.703,82.475C335.703,82.294 335.848,82.239 336.17,82.239C337.48,82.239 338.971,82.314 339.598,82.314C340.186,82.314 341.691,82.239 342.619,82.239C342.955,82.239 343.105,82.294 343.105,82.475C343.105,82.625 342.967,82.675 342.689,82.675C342.504,82.675 342.283,82.686 342.006,82.756C341.34,82.861 341.188,83.278 341.104,84.11C341.053,84.863 341.053,85.511 341.053,89.12L341.053,89.631C341.053,89.752 341.139,89.797 341.209,89.797L350.313,89.797Z");
+    			attr_dev(path132, "class", "svelte-9kfwom");
+    			add_location(path132, file$1, 251, 16, 197937);
+    			attr_dev(path133, "d", "M367.348,93.311C367.348,96.347 367.348,97.983 367.854,98.415C368.266,98.786 368.883,98.947 370.74,98.947C372.01,98.947 372.943,98.921 373.535,98.249C373.813,97.953 374.109,97.306 374.154,96.844C374.188,96.638 374.223,96.478 374.42,96.478C374.58,96.478 374.609,96.608 374.609,96.879C374.609,97.144 374.439,98.947 374.254,99.629C374.109,100.151 373.977,100.271 372.748,100.271C369.305,100.271 373.977,100.271 372.064,100.271C371.518,100.271 363.754,100.201 362.805,100.201C362.479,100.201 362.318,100.13 362.318,99.951C362.318,99.83 362.424,99.78 362.689,99.78C363.063,99.78 363.342,99.699 363.553,99.649C364.039,99.559 364.15,99.042 364.262,98.345C364.377,97.371 364.377,95.484 364.377,93.311L364.377,89.12C364.377,85.511 364.377,84.863 364.326,84.11C364.281,83.288 364.096,82.926 363.303,82.756C363.111,82.686 362.826,82.675 362.51,82.675C362.273,82.675 362.117,82.625 362.117,82.475C362.117,82.294 362.273,82.239 362.631,82.239C363.754,82.239 365.27,82.314 365.887,82.314C366.479,82.314 368.217,82.239 369.154,82.239C369.496,82.239 369.637,82.294 369.637,82.475C369.637,82.625 369.496,82.675 369.215,82.675C368.953,82.675 368.572,82.686 368.285,82.756C367.648,82.861 367.438,83.278 367.398,84.11C367.348,84.863 367.348,85.511 367.348,89.12L367.348,93.311Z");
+    			attr_dev(path133, "class", "svelte-9kfwom");
+    			add_location(path133, file$1, 252, 16, 200413);
+    			attr_dev(path134, "d", "M388.648,93.998C388.783,93.998 388.834,94.048 388.908,94.159L390.801,99.198C390.936,99.488 390.752,99.689 390.59,99.74C390.359,99.78 390.258,99.81 390.258,99.951C390.258,100.13 390.561,100.13 390.996,100.151C392.879,100.201 394.625,100.201 395.51,100.201C396.361,100.201 396.578,100.151 396.578,99.951C396.578,99.8 396.463,99.78 396.281,99.78C395.975,99.78 395.623,99.74 395.264,99.649C394.756,99.549 394.078,99.218 393.176,97.09C391.639,93.466 387.824,83.805 387.258,82.499C387.012,81.942 386.861,81.722 386.664,81.722C386.424,81.722 386.279,81.983 385.988,82.675L380,97.571C379.518,98.786 379.063,99.559 377.982,99.699C377.787,99.74 377.445,99.78 377.24,99.78C377.049,99.78 376.924,99.81 376.924,99.951C376.924,100.151 377.105,100.201 377.395,100.201C378.625,100.201 379.955,100.13 380.23,100.13C380.949,100.13 381.973,100.201 382.746,100.201C383.016,100.201 383.137,100.151 383.137,99.951C383.137,99.81 383.078,99.78 382.795,99.78L382.439,99.78C381.701,99.78 381.48,99.478 381.48,99.042C381.48,98.746 381.607,98.169 381.832,97.571L383.137,94.179C383.178,94.048 383.217,93.998 383.348,93.998L388.648,93.998ZM383.795,92.799C383.709,92.799 383.699,92.733 383.709,92.653L385.908,86.801C385.928,86.721 385.988,86.585 386.059,86.585C386.139,86.585 386.158,86.721 386.178,86.801L388.332,92.683C388.355,92.733 388.332,92.799 388.211,92.799L383.795,92.799Z");
+    			attr_dev(path134, "class", "svelte-9kfwom");
+    			add_location(path134, file$1, 253, 16, 201699);
+    			attr_dev(path135, "d", "M402.555,96.964C402.605,98.806 402.938,99.438 403.393,99.594C403.814,99.74 404.268,99.78 404.643,99.78C404.904,99.78 405.055,99.81 405.055,99.951C405.055,100.151 404.834,100.201 404.492,100.201C402.967,100.201 401.998,100.13 401.547,100.13C401.336,100.13 400.201,100.201 398.961,100.201C398.65,100.201 398.439,100.171 398.439,99.951C398.439,99.81 398.59,99.78 398.826,99.78C399.137,99.78 399.559,99.74 399.885,99.649C400.508,99.478 400.629,98.786 400.648,96.698L400.85,82.645C400.85,82.173 400.908,81.852 401.164,81.852C401.426,81.852 401.637,82.153 402.049,82.585C402.32,82.891 405.943,86.761 409.445,90.214C411.057,91.805 414.279,95.238 414.691,95.619L414.797,95.619L414.57,84.959C414.551,83.519 414.334,83.057 413.758,82.826C413.402,82.675 412.834,82.675 412.486,82.675C412.217,82.675 412.105,82.6 412.105,82.475C412.105,82.279 412.367,82.239 412.713,82.239C413.963,82.239 415.113,82.314 415.629,82.314C415.885,82.314 416.789,82.239 417.959,82.239C418.279,82.239 418.49,82.279 418.49,82.475C418.49,82.6 418.369,82.675 418.078,82.675C417.842,82.675 417.646,82.675 417.336,82.756C416.688,82.957 416.492,83.438 416.473,84.764L416.232,99.74C416.232,100.271 416.121,100.482 415.895,100.482C415.65,100.482 415.359,100.221 415.104,99.951C413.592,98.535 410.535,95.413 408.066,92.974C405.451,90.415 402.811,87.454 402.389,87.007L402.32,87.007L402.555,96.964Z");
+    			attr_dev(path135, "class", "svelte-9kfwom");
+    			add_location(path135, file$1, 254, 16, 203079);
+    			attr_dev(path136, "d", "M426.461,93.311C426.461,95.484 426.461,97.371 426.32,98.345C426.234,99.042 426.119,99.559 425.646,99.649C425.422,99.699 425.146,99.78 424.779,99.78C424.482,99.78 424.402,99.83 424.402,99.951C424.402,100.13 424.553,100.201 424.859,100.201C425.834,100.201 427.324,100.13 427.895,100.13C429.064,100.13 431.213,100.392 432.949,100.392C437.377,100.392 439.871,98.706 440.945,97.607C442.275,96.247 443.564,93.968 443.564,90.967C443.564,88.156 442.426,86.204 441.236,84.959C438.637,82.239 434.672,82.239 431.68,82.239C430.244,82.239 428.738,82.314 428.002,82.314C427.324,82.314 425.834,82.239 424.553,82.239C424.201,82.239 424.025,82.294 424.025,82.475C424.025,82.625 424.182,82.675 424.428,82.675C424.779,82.675 425.191,82.686 425.371,82.756C426.154,82.926 426.365,83.288 426.41,84.11C426.461,84.863 426.461,85.511 426.461,89.12L426.461,93.311ZM429.416,88.748C429.416,86.881 429.416,84.818 429.457,83.98C429.457,83.745 429.518,83.619 429.752,83.539C429.934,83.438 430.811,83.368 431.293,83.368C433.156,83.368 435.875,83.639 438.064,85.737C439.072,86.721 440.363,88.663 440.363,91.679C440.363,94.099 439.891,96.276 438.344,97.571C436.936,98.806 435.289,99.298 432.879,99.298C430.988,99.298 430.064,98.801 429.752,98.334C429.551,98.088 429.496,97.13 429.486,96.528C429.457,96.086 429.416,94.259 429.416,91.74L429.416,88.748Z");
+    			attr_dev(path136, "class", "svelte-9kfwom");
+    			add_location(path136, file$1, 255, 16, 204462);
+    			attr_dev(path137, "d", "M450.1,99.931C449.691,99.74 449.623,99.629 449.623,99.097C449.623,97.808 449.744,96.382 449.748,95.986C449.768,95.649 449.867,95.373 450.059,95.373C450.254,95.373 450.266,95.579 450.266,95.775C450.266,96.086 450.375,96.593 450.49,96.974C451.023,98.746 452.428,99.378 453.889,99.378C456.061,99.378 457.096,97.943 457.096,96.678C457.096,95.523 456.734,94.394 454.756,92.864L453.688,92.041C451.033,89.983 450.15,88.327 450.15,86.41C450.15,83.805 452.357,81.923 455.645,81.923C457.207,81.923 458.234,82.153 458.832,82.314C459.033,82.374 459.154,82.445 459.154,82.6C459.154,82.926 459.033,83.594 459.033,85.456C459.033,85.968 458.979,86.169 458.791,86.169C458.631,86.169 458.561,86.023 458.561,85.737C458.561,85.511 458.445,84.803 457.953,84.171C457.592,83.709 456.885,83.012 455.354,83.012C453.568,83.012 452.504,84.036 452.504,85.456C452.504,86.555 453.051,87.378 455.018,88.869L455.686,89.371C458.561,91.574 459.621,93.165 459.621,95.413C459.621,96.793 459.082,98.415 457.381,99.549C456.162,100.311 454.826,100.522 453.568,100.522C452.188,100.522 451.117,100.341 450.1,99.931Z");
+    			attr_dev(path137, "class", "svelte-9kfwom");
+    			add_location(path137, file$1, 256, 16, 205808);
+    			attr_dev(path138, "d", "M273.932,117.285C273.635,116.422 273.383,115.855 273.063,115.619C272.791,115.458 272.324,115.388 272.088,115.388C271.863,115.388 271.703,115.368 271.703,115.188C271.703,115.017 271.912,114.956 272.26,114.956C273.479,114.956 274.789,115.042 275.01,115.042C275.23,115.042 276.275,114.956 277.654,114.956C277.98,114.956 278.182,115.042 278.182,115.188C278.182,115.368 277.971,115.388 277.725,115.388C277.533,115.388 277.299,115.388 277.139,115.503C276.922,115.584 276.867,115.755 276.867,116C276.867,116.322 277.098,117.129 277.404,118.188C277.811,119.759 280.014,126.952 280.461,128.286L280.525,128.286L285.152,115.91C285.418,115.238 285.555,115.077 285.756,115.077C286.012,115.077 286.117,115.423 286.422,116.171L291.41,128.106L291.473,128.106C291.898,126.53 293.811,120.252 294.645,117.496C294.818,116.929 294.891,116.462 294.891,116.111C294.891,115.739 294.658,115.388 293.734,115.388C293.5,115.388 293.338,115.323 293.338,115.188C293.338,115.017 293.51,114.956 293.861,114.956C295.146,114.956 296.141,115.042 296.355,115.042C296.531,115.042 297.564,114.956 298.363,114.956C298.598,114.956 298.773,115.017 298.773,115.152C298.773,115.323 298.658,115.388 298.428,115.388C298.197,115.388 297.865,115.423 297.615,115.519C297.018,115.739 296.768,116.668 296.275,118.028C295.166,121.03 292.682,128.578 291.502,132.132C291.23,132.96 291.105,133.245 290.805,133.245C290.549,133.245 290.428,132.96 290.061,132.081L285.104,120.186L285.053,120.186C284.615,121.411 281.424,129.827 280.391,131.98C279.939,132.96 279.822,133.245 279.537,133.245C279.297,133.245 279.176,132.995 278.99,132.362L273.932,117.285Z");
+    			attr_dev(path138, "class", "svelte-9kfwom");
+    			add_location(path138, file$1, 257, 16, 206912);
+    			attr_dev(path139, "d", "M310.484,126.721C310.609,126.721 310.664,126.761 310.744,126.877L312.631,131.911C312.752,132.212 312.586,132.402 312.41,132.462C312.17,132.492 312.09,132.522 312.09,132.663C312.09,132.844 312.35,132.844 312.793,132.884C314.699,132.909 316.445,132.909 317.295,132.909C318.193,132.909 318.402,132.884 318.402,132.663C318.402,132.522 318.283,132.492 318.102,132.492C317.791,132.492 317.43,132.462 317.098,132.376C316.592,132.267 315.914,131.95 315.006,129.827C313.471,126.194 309.67,116.517 309.088,115.208C308.838,114.676 308.707,114.445 308.475,114.445C308.244,114.445 308.105,114.706 307.813,115.388L301.83,130.305C301.334,131.493 300.922,132.298 299.773,132.433C299.602,132.462 299.266,132.492 299.055,132.492C298.869,132.492 298.773,132.522 298.773,132.663C298.773,132.884 298.916,132.909 299.236,132.909C300.477,132.909 301.781,132.844 302.041,132.844C302.789,132.844 303.814,132.909 304.582,132.909C304.842,132.909 304.957,132.884 304.957,132.663C304.957,132.522 304.889,132.492 304.611,132.492L304.26,132.492C303.521,132.492 303.316,132.182 303.316,131.739C303.316,131.464 303.412,130.896 303.658,130.305L304.957,126.911C304.998,126.761 305.027,126.721 305.188,126.721L310.484,126.721ZM305.635,125.536C305.541,125.536 305.514,125.466 305.541,125.351L307.732,119.524C307.773,119.429 307.813,119.313 307.889,119.313C307.949,119.313 307.975,119.429 307.994,119.524L310.152,125.386C310.182,125.466 310.152,125.536 310.021,125.536L305.635,125.536Z");
+    			attr_dev(path139, "class", "svelte-9kfwom");
+    			add_location(path139, file$1, 258, 16, 208538);
+    			attr_dev(path140, "d", "M325.152,116.301L321.6,116.392C320.219,116.462 319.664,116.562 319.297,117.084C319.031,117.446 318.926,117.727 318.875,117.907C318.824,118.108 318.754,118.188 318.619,118.188C318.443,118.188 318.402,118.089 318.402,117.837C318.402,117.446 318.846,115.268 318.904,115.086C318.996,114.786 319.031,114.645 319.191,114.645C319.387,114.645 319.613,114.882 320.219,114.927C320.902,114.997 321.811,115.042 322.604,115.042L332.045,115.042C333.58,115.042 334.152,114.816 334.348,114.816C334.504,114.816 334.553,114.956 334.553,115.308C334.553,115.819 334.453,117.446 334.453,118.043C334.453,118.289 334.383,118.44 334.252,118.44C334.043,118.44 334.008,118.314 333.998,117.958L333.967,117.702C333.926,117.084 333.264,116.422 331.141,116.392L328.15,116.301L328.15,126.033C328.15,128.216 328.15,130.073 328.26,131.117C328.326,131.76 328.477,132.298 329.193,132.376C329.52,132.433 330.066,132.492 330.418,132.492C330.66,132.492 330.795,132.558 330.795,132.663C330.795,132.844 330.584,132.909 330.334,132.909C328.762,132.909 327.246,132.844 326.584,132.844C326.053,132.844 324.531,132.909 323.578,132.909C323.262,132.909 323.105,132.844 323.105,132.663C323.105,132.558 323.201,132.492 323.488,132.492C323.838,132.492 324.135,132.433 324.352,132.376C324.838,132.298 324.959,131.76 325.039,131.087C325.152,130.073 325.152,128.216 325.152,126.033L325.152,116.301Z");
+    			attr_dev(path140, "class", "svelte-9kfwom");
+    			add_location(path140, file$1, 259, 16, 210015);
+    			attr_dev(path141, "d", "M342.037,121.837C342.037,118.259 342.037,117.577 341.977,116.813C341.928,116 341.736,115.639 340.947,115.468C340.758,115.423 340.355,115.388 340.014,115.388C339.748,115.388 339.607,115.338 339.607,115.188C339.607,115.017 339.789,114.956 340.156,114.956C341.416,114.956 342.91,115.042 343.584,115.042C344.33,115.042 351.172,115.042 351.623,115.017C352.08,114.956 352.451,114.927 352.656,114.882C352.773,114.856 352.908,114.786 353.029,114.786C353.154,114.786 353.164,114.882 353.164,114.997C353.164,115.152 353.049,115.458 352.988,116.542C352.949,116.763 352.908,117.837 352.863,118.108C352.844,118.219 352.803,118.359 352.627,118.359C352.451,118.359 352.412,118.259 352.412,118.028C352.412,117.873 352.381,117.446 352.275,117.165C352.105,116.763 351.85,116.462 350.664,116.322C350.254,116.272 345.66,116.231 345.203,116.231C345.068,116.231 345.027,116.301 345.027,116.462L345.027,122.465C345.027,122.636 345.049,122.741 345.203,122.741C345.717,122.741 350.543,122.741 351.096,122.686C351.693,122.636 352.025,122.565 352.256,122.344C352.412,122.133 352.502,122.018 352.627,122.018C352.732,122.018 352.803,122.069 352.803,122.204C352.803,122.364 352.662,122.741 352.617,123.945C352.572,124.422 352.502,125.351 352.502,125.536C352.502,125.731 352.502,125.978 352.285,125.978C352.125,125.978 352.08,125.897 352.08,125.767C352.061,125.536 352.061,125.225 351.984,124.924C351.85,124.442 351.518,124.081 350.65,123.991C350.188,123.945 345.752,123.92 345.168,123.92C345.049,123.92 345.027,124.026 345.027,124.161L345.027,126.033C345.027,126.842 344.979,129.03 345.027,129.698C345.068,131.349 347.537,131.694 349.988,131.694C350.6,131.694 351.604,131.694 352.215,131.413C352.844,131.128 353.129,130.636 353.295,129.662C353.334,129.401 353.375,129.3 353.535,129.3C353.73,129.3 353.73,129.502 353.73,129.731C353.73,130.265 353.535,131.88 353.436,132.362C353.275,132.995 353.049,132.995 352.145,132.995C348.547,132.995 344.854,132.844 343.463,132.844C342.91,132.844 341.416,132.909 340.451,132.909C340.156,132.909 339.969,132.844 339.969,132.663C339.969,132.558 340.061,132.492 340.355,132.492C340.697,132.492 340.998,132.433 341.209,132.376C341.691,132.298 341.816,131.76 341.906,131.087C342.037,130.073 342.037,128.216 342.037,126.033L342.037,121.837Z");
+    			attr_dev(path141, "class", "svelte-9kfwom");
+    			add_location(path141, file$1, 260, 16, 211391);
+    			attr_dev(path142, "d", "M65.871,172.814C112.788,127.91 175.564,100.467 244.561,100.467C247.441,100.467 250.342,100.522 253.229,100.607L253.83,97.968C250.768,97.853 247.656,97.808 244.561,97.808C186.18,97.808 132.162,115.93 87.753,146.877C85.013,148.783 81.726,151.444 78.87,153.934C69.524,161.963 66.991,167.193 65.871,172.814Z");
+    			attr_dev(path142, "class", "svelte-9kfwom");
+    			add_location(path142, file$1, 261, 16, 213662);
+    			attr_dev(g43, "transform", "matrix(4.16667,0,0,4.16667,0,0)");
+    			add_location(g43, file$1, 235, 12, 179265);
+    			attr_dev(svg4, "width", "100%");
+    			attr_dev(svg4, "height", "100%");
+    			attr_dev(svg4, "viewBox", "100 0 1820 830");
+    			attr_dev(svg4, "version", "1.1");
+    			attr_dev(svg4, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg4, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg4, "xml:space", "preserve");
+    			attr_dev(svg4, "xmlns:serif", "http://www.serif.com/");
+    			set_style(svg4, "fill-rule", "evenodd");
+    			set_style(svg4, "clip-rule", "evenodd");
+    			set_style(svg4, "stroke-linejoin", "round");
+    			set_style(svg4, "stroke-miterlimit", "2");
+    			attr_dev(svg4, "class", "svelte-9kfwom");
+    			add_location(svg4, file$1, 234, 8, 178959);
+    			attr_dev(div4, "class", "logo-container chw svelte-9kfwom");
+    			add_location(div4, file$1, 233, 4, 178915);
+    			attr_dev(section, "class", "svelte-9kfwom");
+    			add_location(section, file$1, 4, 0, 21);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, section, anchor);
+    			append_dev(section, div0);
+    			append_dev(div0, svg0);
+    			append_dev(svg0, g0);
+    			append_dev(g0, path0);
+    			append_dev(g0, path1);
+    			append_dev(g0, rect0);
+    			append_dev(g0, path2);
+    			append_dev(g0, path3);
+    			append_dev(g0, path4);
+    			append_dev(g0, path5);
+    			append_dev(g0, path6);
+    			append_dev(g0, path7);
+    			append_dev(g0, path8);
+    			append_dev(g0, rect1);
+    			append_dev(g0, path9);
+    			append_dev(g0, path10);
+    			append_dev(g0, path11);
+    			append_dev(section, t0);
+    			append_dev(section, div1);
+    			append_dev(div1, svg1);
+    			append_dev(svg1, g1);
+    			append_dev(g1, path12);
+    			append_dev(g1, path13);
+    			append_dev(g1, path14);
+    			append_dev(g1, path15);
+    			append_dev(g1, path16);
+    			append_dev(g1, path17);
+    			append_dev(g1, path18);
+    			append_dev(g1, path19);
+    			append_dev(g1, path20);
+    			append_dev(g1, path21);
+    			append_dev(g1, path22);
+    			append_dev(g1, path23);
+    			append_dev(g1, path24);
+    			append_dev(g1, path25);
+    			append_dev(g1, path26);
+    			append_dev(g1, path27);
+    			append_dev(g1, path28);
+    			append_dev(g1, path29);
+    			append_dev(g1, path30);
+    			append_dev(g1, path31);
+    			append_dev(g1, path32);
+    			append_dev(g1, path33);
+    			append_dev(g1, path34);
+    			append_dev(g1, path35);
+    			append_dev(g1, path36);
+    			append_dev(g1, path37);
+    			append_dev(g1, path38);
+    			append_dev(g1, path39);
+    			append_dev(g1, path40);
+    			append_dev(g1, path41);
+    			append_dev(g1, path42);
+    			append_dev(g1, path43);
+    			append_dev(g1, path44);
+    			append_dev(g1, path45);
+    			append_dev(g1, path46);
+    			append_dev(g1, path47);
+    			append_dev(g1, path48);
+    			append_dev(g1, path49);
+    			append_dev(g1, path50);
+    			append_dev(g1, path51);
+    			append_dev(g1, path52);
+    			append_dev(g1, path53);
+    			append_dev(g1, path54);
+    			append_dev(g1, path55);
+    			append_dev(g1, path56);
+    			append_dev(g1, path57);
+    			append_dev(g1, path58);
+    			append_dev(g1, path59);
+    			append_dev(g1, path60);
+    			append_dev(g1, path61);
+    			append_dev(g1, path62);
+    			append_dev(g1, path63);
+    			append_dev(g1, path64);
+    			append_dev(g1, path65);
+    			append_dev(g1, path66);
+    			append_dev(g1, path67);
+    			append_dev(g1, path68);
+    			append_dev(g1, path69);
+    			append_dev(g1, path70);
+    			append_dev(g1, path71);
+    			append_dev(g1, path72);
+    			append_dev(g1, path73);
+    			append_dev(g1, path74);
+    			append_dev(g1, path75);
+    			append_dev(g1, path76);
+    			append_dev(g1, path77);
+    			append_dev(g1, rect2);
+    			append_dev(g1, path78);
+    			append_dev(g1, path79);
+    			append_dev(g1, path80);
+    			append_dev(g1, path81);
+    			append_dev(g1, path82);
+    			append_dev(section, t1);
+    			append_dev(section, div2);
+    			append_dev(div2, svg2);
+    			append_dev(svg2, g23);
+    			append_dev(g23, g2);
+    			append_dev(g2, path83);
+    			append_dev(g23, g3);
+    			append_dev(g3, path84);
+    			append_dev(g23, g4);
+    			append_dev(g4, path85);
+    			append_dev(g23, g5);
+    			append_dev(g5, path86);
+    			append_dev(g23, g6);
+    			append_dev(g6, path87);
+    			append_dev(g23, g7);
+    			append_dev(g7, path88);
+    			append_dev(g23, g8);
+    			append_dev(g8, path89);
+    			append_dev(g23, g9);
+    			append_dev(g9, path90);
+    			append_dev(g23, g10);
+    			append_dev(g10, path91);
+    			append_dev(g23, g11);
+    			append_dev(g11, path92);
+    			append_dev(g23, g12);
+    			append_dev(g12, path93);
+    			append_dev(g23, g13);
+    			append_dev(g13, path94);
+    			append_dev(g23, g14);
+    			append_dev(g14, path95);
+    			append_dev(g23, g15);
+    			append_dev(g15, path96);
+    			append_dev(g23, g16);
+    			append_dev(g16, path97);
+    			append_dev(g23, g17);
+    			append_dev(g17, path98);
+    			append_dev(g23, g18);
+    			append_dev(g18, path99);
+    			append_dev(g23, g19);
+    			append_dev(g19, path100);
+    			append_dev(g23, g20);
+    			append_dev(g20, path101);
+    			append_dev(g23, g21);
+    			append_dev(g21, path102);
+    			append_dev(g23, g22);
+    			append_dev(g22, path103);
+    			append_dev(section, t2);
+    			append_dev(section, div3);
+    			append_dev(div3, svg3);
+    			append_dev(svg3, g42);
+    			append_dev(g42, g24);
+    			append_dev(g24, rect3);
+    			append_dev(g42, g25);
+    			append_dev(g25, rect4);
+    			append_dev(g42, g26);
+    			append_dev(g26, rect5);
+    			append_dev(g42, g27);
+    			append_dev(g27, rect6);
+    			append_dev(g42, g28);
+    			append_dev(g28, rect7);
+    			append_dev(g42, g29);
+    			append_dev(g29, path104);
+    			append_dev(g42, g30);
+    			append_dev(g30, path105);
+    			append_dev(g42, g31);
+    			append_dev(g31, path106);
+    			append_dev(g42, g32);
+    			append_dev(g32, path107);
+    			append_dev(g42, g33);
+    			append_dev(g33, path108);
+    			append_dev(g42, g34);
+    			append_dev(g34, path109);
+    			append_dev(g42, g35);
+    			append_dev(g35, path110);
+    			append_dev(g42, g36);
+    			append_dev(g36, path111);
+    			append_dev(g42, g37);
+    			append_dev(g37, path112);
+    			append_dev(g42, g38);
+    			append_dev(g38, path113);
+    			append_dev(g42, g39);
+    			append_dev(g39, path114);
+    			append_dev(g42, g40);
+    			append_dev(g40, path115);
+    			append_dev(g42, g41);
+    			append_dev(g41, path116);
+    			append_dev(section, t3);
+    			append_dev(section, div4);
+    			append_dev(div4, svg4);
+    			append_dev(svg4, g43);
+    			append_dev(g43, path117);
+    			append_dev(g43, path118);
+    			append_dev(g43, path119);
+    			append_dev(g43, path120);
+    			append_dev(g43, path121);
+    			append_dev(g43, path122);
+    			append_dev(g43, path123);
+    			append_dev(g43, path124);
+    			append_dev(g43, path125);
+    			append_dev(g43, path126);
+    			append_dev(g43, path127);
+    			append_dev(g43, path128);
+    			append_dev(g43, path129);
+    			append_dev(g43, path130);
+    			append_dev(g43, path131);
+    			append_dev(g43, path132);
+    			append_dev(g43, path133);
+    			append_dev(g43, path134);
+    			append_dev(g43, path135);
+    			append_dev(g43, path136);
+    			append_dev(g43, path137);
+    			append_dev(g43, path138);
+    			append_dev(g43, path139);
+    			append_dev(g43, path140);
+    			append_dev(g43, path141);
+    			append_dev(g43, path142);
+    		},
+    		p: noop$4,
+    		i: noop$4,
+    		o: noop$4,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(section);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$1($$self, $$props) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('LogoGroup', slots, []);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<LogoGroup> was created with unknown prop '${key}'`);
+    	});
+
+    	return [];
+    }
+
+    class LogoGroup extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init$1(this, options, instance$1, create_fragment$1, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "LogoGroup",
     			options,
     			id: create_fragment$1.name
     		});
@@ -51306,7 +53517,7 @@ var app = (function (exports) {
     const { console: console_1 } = globals;
     const file = "src/App.svelte";
 
-    // (234:43) 
+    // (235:43) 
     function create_if_block_2(ctx) {
     	let postcards;
     	let current;
@@ -51338,14 +53549,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(234:43) ",
+    		source: "(235:43) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (233:41) 
+    // (234:41) 
     function create_if_block_1(ctx) {
     	let actions;
     	let current;
@@ -51377,14 +53588,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(233:41) ",
+    		source: "(234:41) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (232:8) {#if  $ui.page === 'adaptation'}
+    // (233:8) {#if  $ui.page === 'adaptation'}
     function create_if_block(ctx) {
     	let adaptation;
     	let current;
@@ -51416,7 +53627,7 @@ var app = (function (exports) {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(232:8) {#if  $ui.page === 'adaptation'}",
+    		source: "(233:8) {#if  $ui.page === 'adaptation'}",
     		ctx
     	});
 
@@ -51432,10 +53643,10 @@ var app = (function (exports) {
     	let button;
     	let t1;
     	let section1;
+    	let div15;
     	let div14;
     	let div13;
-    	let div12;
-    	let div4;
+    	let div5;
     	let div1;
     	let h1;
     	let t3;
@@ -51445,39 +53656,42 @@ var app = (function (exports) {
     	let div2;
     	let logo;
     	let t5;
-    	let div11;
-    	let div6;
-    	let div5;
+    	let div4;
+    	let logogroup;
     	let t6;
-    	let a0;
-    	let t8;
-    	let div8;
+    	let div12;
     	let div7;
+    	let div6;
+    	let t7;
+    	let a0;
     	let t9;
-    	let a1;
-    	let t11;
-    	let div10;
     	let div9;
+    	let div8;
+    	let t10;
+    	let a1;
     	let t12;
+    	let div11;
+    	let div10;
+    	let t13;
     	let a2;
-    	let t14;
-    	let h2;
     	let t15;
-    	let br0;
+    	let h2;
     	let t16;
+    	let br0;
+    	let t17;
     	let span;
     	let br1;
-    	let t18;
     	let t19;
-    	let section2;
-    	let div16;
-    	let div15;
     	let t20;
-    	let div18;
+    	let section2;
     	let div17;
+    	let div16;
     	let t21;
-    	let div20;
     	let div19;
+    	let div18;
+    	let t22;
+    	let div21;
+    	let div20;
     	let current;
     	let mounted;
     	let dispose;
@@ -51500,6 +53714,8 @@ var app = (function (exports) {
     			$$inline: true
     		});
 
+    	logogroup = new LogoGroup({ $$inline: true });
+
     	const block = {
     		c: function create() {
     			main = element("main");
@@ -51509,10 +53725,10 @@ var app = (function (exports) {
     			button = element("button");
     			t1 = space();
     			section1 = element("section");
+    			div15 = element("div");
     			div14 = element("div");
     			div13 = element("div");
-    			div12 = element("div");
-    			div4 = element("div");
+    			div5 = element("div");
     			div1 = element("div");
     			h1 = element("h1");
     			h1.textContent = "Hepburn Shire —— guide to adaptation action";
@@ -51523,117 +53739,122 @@ var app = (function (exports) {
     			div2 = element("div");
     			create_component(logo.$$.fragment);
     			t5 = space();
-    			div11 = element("div");
-    			div6 = element("div");
-    			div5 = element("div");
+    			div4 = element("div");
+    			create_component(logogroup.$$.fragment);
     			t6 = space();
+    			div12 = element("div");
+    			div7 = element("div");
+    			div6 = element("div");
+    			t7 = space();
     			a0 = element("a");
     			a0.textContent = "context + concepts";
-    			t8 = space();
-    			div8 = element("div");
-    			div7 = element("div");
     			t9 = space();
+    			div9 = element("div");
+    			div8 = element("div");
+    			t10 = space();
     			a1 = element("a");
     			a1.textContent = "action collection";
-    			t11 = space();
-    			div10 = element("div");
-    			div9 = element("div");
     			t12 = space();
+    			div11 = element("div");
+    			div10 = element("div");
+    			t13 = space();
     			a2 = element("a");
     			a2.textContent = "action postcards";
-    			t14 = space();
+    			t15 = space();
     			h2 = element("h2");
-    			t15 = text$1("Climate change");
+    			t16 = text$1("Climate change");
     			br0 = element("br");
-    			t16 = space();
+    			t17 = space();
     			span = element("span");
     			span.textContent = "adaptation";
     			br1 = element("br");
-    			t18 = text$1("\n                        in Hepburn Shire");
-    			t19 = space();
-    			section2 = element("section");
-    			div16 = element("div");
-    			div15 = element("div");
+    			t19 = text$1("\n                        in Hepburn Shire");
     			t20 = space();
-    			div18 = element("div");
+    			section2 = element("section");
     			div17 = element("div");
+    			div16 = element("div");
     			t21 = space();
-    			div20 = element("div");
     			div19 = element("div");
+    			div18 = element("div");
+    			t22 = space();
+    			div21 = element("div");
+    			div20 = element("div");
     			attr_dev(section0, "class", "chapters");
-    			add_location(section0, file, 230, 4, 9605);
-    			attr_dev(button, "class", "back svelte-17i1sst");
+    			add_location(section0, file, 231, 4, 9677);
+    			attr_dev(button, "class", "back svelte-hd5m4r");
     			attr_dev(button, "aria-label", "Back to homepage");
-    			add_location(button, file, 237, 4, 9851);
-    			attr_dev(h1, "class", "frame__title svelte-17i1sst");
-    			add_location(h1, file, 246, 28, 10246);
-    			attr_dev(div0, "class", "frame__links svelte-17i1sst");
-    			add_location(div0, file, 247, 28, 10361);
-    			attr_dev(div1, "class", "frame__title-wrapper svelte-17i1sst");
-    			add_location(div1, file, 245, 24, 10183);
+    			add_location(button, file, 238, 4, 9923);
+    			attr_dev(h1, "class", "frame__title svelte-hd5m4r");
+    			add_location(h1, file, 247, 28, 10318);
+    			attr_dev(div0, "class", "frame__links svelte-hd5m4r");
+    			add_location(div0, file, 248, 28, 10433);
+    			attr_dev(div1, "class", "frame__title-wrapper svelte-hd5m4r");
+    			add_location(div1, file, 246, 24, 10255);
     			attr_dev(div2, "class", "logo-container");
-    			add_location(div2, file, 250, 28, 10514);
-    			attr_dev(div3, "class", "frame__logo-wrapper svelte-17i1sst");
-    			add_location(div3, file, 249, 24, 10450);
-    			attr_dev(div4, "class", "frame svelte-17i1sst");
-    			add_location(div4, file, 244, 20, 10139);
-    			attr_dev(div5, "class", "hero__img svelte-17i1sst");
-    			set_style(div5, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
-    			add_location(div5, file, 259, 28, 10823);
-    			attr_dev(a0, "class", "hero__menu-label svelte-17i1sst");
+    			add_location(div2, file, 251, 28, 10586);
+    			attr_dev(div3, "class", "frame__logo-wrapper svelte-hd5m4r");
+    			add_location(div3, file, 250, 24, 10522);
+    			attr_dev(div4, "class", "frame__logo-group-container svelte-hd5m4r");
+    			add_location(div4, file, 255, 24, 10763);
+    			attr_dev(div5, "class", "frame svelte-hd5m4r");
+    			add_location(div5, file, 245, 20, 10211);
+    			attr_dev(div6, "class", "hero__img svelte-hd5m4r");
+    			set_style(div6, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
+    			add_location(div6, file, 262, 28, 11034);
+    			attr_dev(a0, "class", "hero__menu-label svelte-hd5m4r");
     			attr_dev(a0, "name", "adaptation");
-    			add_location(a0, file, 260, 28, 10998);
-    			attr_dev(div6, "class", "hero__menu-item");
-    			add_location(div6, file, 258, 24, 10765);
-    			attr_dev(div7, "class", "hero__img svelte-17i1sst");
-    			set_style(div7, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
-    			add_location(div7, file, 263, 28, 11233);
-    			attr_dev(a1, "class", "hero__menu-label svelte-17i1sst");
+    			add_location(a0, file, 263, 28, 11209);
+    			attr_dev(div7, "class", "hero__menu-item");
+    			add_location(div7, file, 261, 24, 10976);
+    			attr_dev(div8, "class", "hero__img svelte-hd5m4r");
+    			set_style(div8, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
+    			add_location(div8, file, 266, 28, 11444);
+    			attr_dev(a1, "class", "hero__menu-label svelte-hd5m4r");
     			attr_dev(a1, "name", "actions");
-    			add_location(a1, file, 264, 28, 11425);
-    			attr_dev(div8, "class", "hero__menu-item");
-    			add_location(div8, file, 262, 24, 11175);
-    			attr_dev(div9, "class", "hero__img svelte-17i1sst");
-    			set_style(div9, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
-    			add_location(div9, file, 267, 28, 11657);
-    			attr_dev(a2, "class", "hero__menu-label svelte-17i1sst");
+    			add_location(a1, file, 267, 28, 11636);
+    			attr_dev(div9, "class", "hero__menu-item");
+    			add_location(div9, file, 265, 24, 11386);
+    			attr_dev(div10, "class", "hero__img svelte-hd5m4r");
+    			set_style(div10, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
+    			add_location(div10, file, 270, 28, 11868);
+    			attr_dev(a2, "class", "hero__menu-label svelte-hd5m4r");
     			attr_dev(a2, "name", "postcards");
-    			add_location(a2, file, 268, 28, 11852);
-    			attr_dev(div10, "class", "hero__menu-item");
-    			add_location(div10, file, 266, 24, 11599);
-    			attr_dev(div11, "class", "hero__menu svelte-17i1sst");
-    			add_location(div11, file, 257, 20, 10716);
-    			add_location(br0, file, 273, 38, 12113);
-    			attr_dev(span, "class", "highlight svelte-17i1sst");
-    			add_location(span, file, 274, 24, 12142);
-    			add_location(br1, file, 274, 67, 12185);
-    			attr_dev(h2, "class", "hero__title svelte-17i1sst");
-    			add_location(h2, file, 272, 20, 12050);
-    			attr_dev(div12, "class", "hero__container svelte-17i1sst");
-    			add_location(div12, file, 243, 16, 10089);
-    			attr_dev(div13, "class", "content__reverse");
-    			add_location(div13, file, 242, 12, 10042);
-    			attr_dev(div14, "class", "content__move svelte-17i1sst");
-    			add_location(div14, file, 241, 8, 10002);
-    			attr_dev(section1, "class", "homepage svelte-17i1sst");
-    			add_location(section1, file, 240, 4, 9967);
-    			attr_dev(div15, "class", "overlay__inner overlay__inner--color-1 svelte-17i1sst");
-    			add_location(div15, file, 284, 12, 12443);
-    			attr_dev(div16, "class", "overlay overlay--1 svelte-17i1sst");
-    			add_location(div16, file, 283, 8, 12398);
-    			attr_dev(div17, "class", "overlay__inner overlay__inner--color-2 svelte-17i1sst");
-    			add_location(div17, file, 287, 12, 12570);
-    			attr_dev(div18, "class", "overlay overlay--2 svelte-17i1sst");
-    			add_location(div18, file, 286, 8, 12525);
-    			attr_dev(div19, "class", "overlay__inner overlay__inner--color-3 svelte-17i1sst");
-    			add_location(div19, file, 290, 12, 12697);
-    			attr_dev(div20, "class", "overlay overlay--3 svelte-17i1sst");
-    			add_location(div20, file, 289, 8, 12652);
-    			attr_dev(section2, "class", "transitions svelte-17i1sst");
-    			add_location(section2, file, 282, 4, 12358);
+    			add_location(a2, file, 271, 28, 12063);
+    			attr_dev(div11, "class", "hero__menu-item");
+    			add_location(div11, file, 269, 24, 11810);
+    			attr_dev(div12, "class", "hero__menu svelte-hd5m4r");
+    			add_location(div12, file, 260, 20, 10927);
+    			add_location(br0, file, 276, 38, 12324);
+    			attr_dev(span, "class", "highlight svelte-hd5m4r");
+    			add_location(span, file, 277, 24, 12353);
+    			add_location(br1, file, 277, 67, 12396);
+    			attr_dev(h2, "class", "hero__title svelte-hd5m4r");
+    			add_location(h2, file, 275, 20, 12261);
+    			attr_dev(div13, "class", "hero__container svelte-hd5m4r");
+    			add_location(div13, file, 244, 16, 10161);
+    			attr_dev(div14, "class", "content__reverse");
+    			add_location(div14, file, 243, 12, 10114);
+    			attr_dev(div15, "class", "content__move svelte-hd5m4r");
+    			add_location(div15, file, 242, 8, 10074);
+    			attr_dev(section1, "class", "homepage svelte-hd5m4r");
+    			add_location(section1, file, 241, 4, 10039);
+    			attr_dev(div16, "class", "overlay__inner overlay__inner--color-1 svelte-hd5m4r");
+    			add_location(div16, file, 287, 12, 12654);
+    			attr_dev(div17, "class", "overlay overlay--1 svelte-hd5m4r");
+    			add_location(div17, file, 286, 8, 12609);
+    			attr_dev(div18, "class", "overlay__inner overlay__inner--color-2 svelte-hd5m4r");
+    			add_location(div18, file, 290, 12, 12781);
+    			attr_dev(div19, "class", "overlay overlay--2 svelte-hd5m4r");
+    			add_location(div19, file, 289, 8, 12736);
+    			attr_dev(div20, "class", "overlay__inner overlay__inner--color-3 svelte-hd5m4r");
+    			add_location(div20, file, 293, 12, 12908);
+    			attr_dev(div21, "class", "overlay overlay--3 svelte-hd5m4r");
+    			add_location(div21, file, 292, 8, 12863);
+    			attr_dev(section2, "class", "transitions svelte-hd5m4r");
+    			add_location(section2, file, 285, 4, 12569);
     			attr_dev(main, "id", "app-container");
-    			attr_dev(main, "class", "svelte-17i1sst");
-    			add_location(main, file, 228, 0, 9520);
+    			attr_dev(main, "class", "svelte-hd5m4r");
+    			add_location(main, file, 229, 0, 9592);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51650,52 +53871,55 @@ var app = (function (exports) {
     			append_dev(main, button);
     			append_dev(main, t1);
     			append_dev(main, section1);
-    			append_dev(section1, div14);
+    			append_dev(section1, div15);
+    			append_dev(div15, div14);
     			append_dev(div14, div13);
-    			append_dev(div13, div12);
-    			append_dev(div12, div4);
-    			append_dev(div4, div1);
+    			append_dev(div13, div5);
+    			append_dev(div5, div1);
     			append_dev(div1, h1);
     			append_dev(div1, t3);
     			append_dev(div1, div0);
-    			append_dev(div4, t4);
-    			append_dev(div4, div3);
+    			append_dev(div5, t4);
+    			append_dev(div5, div3);
     			append_dev(div3, div2);
     			mount_component(logo, div2, null);
-    			append_dev(div12, t5);
+    			append_dev(div5, t5);
+    			append_dev(div5, div4);
+    			mount_component(logogroup, div4, null);
+    			append_dev(div13, t6);
+    			append_dev(div13, div12);
+    			append_dev(div12, div7);
+    			append_dev(div7, div6);
+    			append_dev(div7, t7);
+    			append_dev(div7, a0);
+    			append_dev(div12, t9);
+    			append_dev(div12, div9);
+    			append_dev(div9, div8);
+    			append_dev(div9, t10);
+    			append_dev(div9, a1);
+    			append_dev(div12, t12);
     			append_dev(div12, div11);
-    			append_dev(div11, div6);
-    			append_dev(div6, div5);
-    			append_dev(div6, t6);
-    			append_dev(div6, a0);
-    			append_dev(div11, t8);
-    			append_dev(div11, div8);
-    			append_dev(div8, div7);
-    			append_dev(div8, t9);
-    			append_dev(div8, a1);
-    			append_dev(div11, t11);
     			append_dev(div11, div10);
-    			append_dev(div10, div9);
-    			append_dev(div10, t12);
-    			append_dev(div10, a2);
-    			append_dev(div12, t14);
-    			append_dev(div12, h2);
-    			append_dev(h2, t15);
-    			append_dev(h2, br0);
+    			append_dev(div11, t13);
+    			append_dev(div11, a2);
+    			append_dev(div13, t15);
+    			append_dev(div13, h2);
     			append_dev(h2, t16);
+    			append_dev(h2, br0);
+    			append_dev(h2, t17);
     			append_dev(h2, span);
     			append_dev(h2, br1);
-    			append_dev(h2, t18);
-    			append_dev(main, t19);
+    			append_dev(h2, t19);
+    			append_dev(main, t20);
     			append_dev(main, section2);
-    			append_dev(section2, div16);
-    			append_dev(div16, div15);
-    			append_dev(section2, t20);
-    			append_dev(section2, div18);
-    			append_dev(div18, div17);
+    			append_dev(section2, div17);
+    			append_dev(div17, div16);
     			append_dev(section2, t21);
-    			append_dev(section2, div20);
-    			append_dev(div20, div19);
+    			append_dev(section2, div19);
+    			append_dev(div19, div18);
+    			append_dev(section2, t22);
+    			append_dev(section2, div21);
+    			append_dev(div21, div20);
     			current = true;
 
     			if (!mounted) {
@@ -51810,11 +54034,13 @@ var app = (function (exports) {
     			if (current) return;
     			transition_in(if_block);
     			transition_in(logo.$$.fragment, local);
+    			transition_in(logogroup.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(if_block);
     			transition_out(logo.$$.fragment, local);
+    			transition_out(logogroup.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
@@ -51825,6 +54051,7 @@ var app = (function (exports) {
     			}
 
     			destroy_component(logo);
+    			destroy_component(logogroup);
     			mounted = false;
     			run_all(dispose);
     		}
@@ -52112,6 +54339,7 @@ var app = (function (exports) {
     		Adaptation,
     		Actions,
     		Logo,
+    		LogoGroup,
     		actionData,
     		schemaData,
     		climateData,
@@ -52220,11 +54448,12 @@ var app = (function (exports) {
     (function(f){{module.exports=f();}})(function(){return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof commonjsRequire&&commonjsRequire;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t);}return n[i].exports}for(var u="function"==typeof commonjsRequire&&commonjsRequire,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
     // istanbul ignore file
     var AbortController;
-    if (typeof window === 'undefined') {
+    var browserGlobal = typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : null; // self is the global in web workers
+    if (!browserGlobal) {
         AbortController = require('abort-controller');
     }
     else if ('signal' in new Request('')) {
-        AbortController = window.AbortController;
+        AbortController = browserGlobal.AbortController;
     }
     else {
         /* eslint-disable @typescript-eslint/no-var-requires */
@@ -52538,7 +54767,8 @@ var app = (function (exports) {
     };
     // istanbul ignore file
     var node_fetch_1 = __importDefault(require("node-fetch"));
-    module.exports = typeof window === 'undefined' ? node_fetch_1.default : window.fetch.bind(window);
+    var browserGlobal = typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : null; // self is the global in web workers
+    module.exports = !browserGlobal ? node_fetch_1.default : browserGlobal.fetch.bind(browserGlobal);
 
     },{"node-fetch":20}],8:[function(require,module,exports){
     /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -52651,7 +54881,7 @@ var app = (function (exports) {
     module.exports = objectToQueryParamString;
 
     },{"lodash/isArray":79,"lodash/isNil":85,"lodash/keys":93}],12:[function(require,module,exports){
-    module.exports = "0.11.4";
+    module.exports = "0.11.6";
 
     },{}],13:[function(require,module,exports){
     var __assign = (this && this.__assign) || function () {
@@ -52674,6 +54904,7 @@ var app = (function (exports) {
     var callback_to_promise_1 = __importDefault(require("./callback_to_promise"));
     var has_1 = __importDefault(require("./has"));
     var query_params_1 = require("./query_params");
+    var object_to_query_param_string_1 = __importDefault(require("./object_to_query_param_string"));
     /**
      * Builds a query object. Won't fetch until `firstPage` or
      * or `eachPage` is called.
@@ -52761,10 +54992,40 @@ var app = (function (exports) {
         if (!isFunction_1.default(done) && done !== void 0) {
             throw new Error('The second parameter to `eachPage` must be a function or undefined');
         }
-        var path = "/" + this._table._urlEncodedNameOrId();
         var params = __assign({}, this._params);
+        var pathAndParamsAsString = "/" + this._table._urlEncodedNameOrId() + "?" + object_to_query_param_string_1.default(params);
+        var queryParams = {};
+        var requestData = null;
+        var method;
+        var path;
+        if (params.method === 'post' || pathAndParamsAsString.length > query_params_1.URL_CHARACTER_LENGTH_LIMIT) {
+            // There is a 16kb limit on GET requests. Since the URL makes up nearly all of the request size, we check for any requests that
+            // that come close to this limit and send it as a POST instead. Additionally, we'll send the request as a post if it is specified
+            // with the request params
+            requestData = params;
+            method = 'post';
+            path = "/" + this._table._urlEncodedNameOrId() + "/listRecords";
+            var paramNames = Object.keys(params);
+            for (var _i = 0, paramNames_1 = paramNames; _i < paramNames_1.length; _i++) {
+                var paramName = paramNames_1[_i];
+                if (query_params_1.shouldListRecordsParamBePassedAsParameter(paramName)) {
+                    // timeZone and userLocale is parsed from the GET request separately from the other params. This parsing
+                    // does not occurring within the body parser we use for POST requests, so this will still need to be passed
+                    // via query params
+                    queryParams[paramName] = params[paramName];
+                }
+                else {
+                    requestData[paramName] = params[paramName];
+                }
+            }
+        }
+        else {
+            method = 'get';
+            queryParams = params;
+            path = "/" + this._table._urlEncodedNameOrId();
+        }
         var inner = function () {
-            _this._table._base.runAction('get', path, params, null, function (err, response, result) {
+            _this._table._base.runAction(method, path, queryParams, requestData, function (err, response, result) {
                 if (err) {
                     done(err, null);
                 }
@@ -52810,12 +55071,12 @@ var app = (function (exports) {
     }
     module.exports = Query;
 
-    },{"./callback_to_promise":4,"./has":8,"./query_params":14,"./record":15,"lodash/isFunction":83,"lodash/keys":93}],14:[function(require,module,exports){
+    },{"./callback_to_promise":4,"./has":8,"./object_to_query_param_string":11,"./query_params":14,"./record":15,"lodash/isFunction":83,"lodash/keys":93}],14:[function(require,module,exports){
     var __importDefault = (this && this.__importDefault) || function (mod) {
         return (mod && mod.__esModule) ? mod : { "default": mod };
     };
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.paramValidators = void 0;
+    exports.shouldListRecordsParamBePassedAsParameter = exports.URL_CHARACTER_LENGTH_LIMIT = exports.paramValidators = void 0;
     var typecheck_1 = __importDefault(require("./typecheck"));
     var isString_1 = __importDefault(require("lodash/isString"));
     var isNumber_1 = __importDefault(require("lodash/isNumber"));
@@ -52840,7 +55101,14 @@ var app = (function (exports) {
         }, 'the value for `cellFormat` should be "json" or "string"'),
         timeZone: typecheck_1.default(isString_1.default, 'the value for `timeZone` should be a string'),
         userLocale: typecheck_1.default(isString_1.default, 'the value for `userLocale` should be a string'),
+        method: typecheck_1.default(function (method) {
+            return isString_1.default(method) && ['get', 'post'].includes(method);
+        }, 'the value for `method` should be "get" or "post"'),
         returnFieldsByFieldId: typecheck_1.default(isBoolean_1.default, 'the value for `returnFieldsByFieldId` should be a boolean'),
+    };
+    exports.URL_CHARACTER_LENGTH_LIMIT = 15000;
+    exports.shouldListRecordsParamBePassedAsParameter = function (paramName) {
+        return paramName === 'timeZone' || paramName === 'userLocale';
     };
 
     },{"./typecheck":18,"lodash/isBoolean":81,"lodash/isNumber":86,"lodash/isPlainObject":89,"lodash/isString":90}],15:[function(require,module,exports){
@@ -53043,6 +55311,8 @@ var app = (function (exports) {
     var isPlainObject_1 = __importDefault(require("lodash/isPlainObject"));
     var deprecate_1 = __importDefault(require("./deprecate"));
     var query_1 = __importDefault(require("./query"));
+    var query_params_1 = require("./query_params");
+    var object_to_query_param_string_1 = __importDefault(require("./object_to_query_param_string"));
     var record_1 = __importDefault(require("./record"));
     var callback_to_promise_1 = __importDefault(require("./callback_to_promise"));
     var Table = /** @class */ (function () {
@@ -53181,15 +55451,42 @@ var app = (function (exports) {
                 record.destroy(done);
             }
         };
-        Table.prototype._listRecords = function (limit, offset, opts, done) {
+        Table.prototype._listRecords = function (pageSize, offset, opts, done) {
             var _this = this;
             if (!done) {
                 done = opts;
                 opts = {};
             }
-            var listRecordsParameters = __assign({ limit: limit,
-                offset: offset }, opts);
-            this._base.runAction('get', "/" + this._urlEncodedNameOrId() + "/", listRecordsParameters, null, function (err, response, results) {
+            var pathAndParamsAsString = "/" + this._urlEncodedNameOrId() + "?" + object_to_query_param_string_1.default(opts);
+            var path;
+            var listRecordsParameters = {};
+            var listRecordsData = null;
+            var method;
+            if ((typeof opts !== 'function' && opts.method === 'post') ||
+                pathAndParamsAsString.length > query_params_1.URL_CHARACTER_LENGTH_LIMIT) {
+                // // There is a 16kb limit on GET requests. Since the URL makes up nearly all of the request size, we check for any requests that
+                // that come close to this limit and send it as a POST instead. Additionally, we'll send the request as a post if it is specified
+                // with the request params
+                path = "/" + this._urlEncodedNameOrId() + "/listRecords";
+                listRecordsData = __assign(__assign({}, (pageSize && { pageSize: pageSize })), (offset && { offset: offset }));
+                method = 'post';
+                var paramNames = Object.keys(opts);
+                for (var _i = 0, paramNames_1 = paramNames; _i < paramNames_1.length; _i++) {
+                    var paramName = paramNames_1[_i];
+                    if (query_params_1.shouldListRecordsParamBePassedAsParameter(paramName)) {
+                        listRecordsParameters[paramName] = opts[paramName];
+                    }
+                    else {
+                        listRecordsData[paramName] = opts[paramName];
+                    }
+                }
+            }
+            else {
+                method = 'get';
+                path = "/" + this._urlEncodedNameOrId() + "/";
+                listRecordsParameters = __assign({ limit: pageSize, offset: offset }, opts);
+            }
+            this._base.runAction(method, path, listRecordsParameters, listRecordsData, function (err, response, results) {
                 if (err) {
                     done(err);
                     return;
@@ -53233,7 +55530,7 @@ var app = (function (exports) {
     }());
     module.exports = Table;
 
-    },{"./callback_to_promise":4,"./deprecate":5,"./query":13,"./record":15,"lodash/isPlainObject":89}],18:[function(require,module,exports){
+    },{"./callback_to_promise":4,"./deprecate":5,"./object_to_query_param_string":11,"./query":13,"./query_params":14,"./record":15,"lodash/isPlainObject":89}],18:[function(require,module,exports){
     /* eslint-enable @typescript-eslint/no-explicit-any */
     function check(fn, error) {
         return function (value) {
@@ -55853,7 +58150,7 @@ var app = (function (exports) {
             return {
                 endpointUrl: 'https://api.airtable.com',
                 apiVersion: '0.1.0',
-                apiKey: undefined,
+                apiKey: "",
                 noRetryIfRateLimited: false,
                 requestTimeout: 300 * 1000,
             };

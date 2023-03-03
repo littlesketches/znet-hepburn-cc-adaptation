@@ -8,6 +8,7 @@
 	import Adaptation 		    from './pages/Adaptation.svelte'
 	import Actions 		        from './pages/Actions.svelte'
 	import Logo 		        from './components/shared/Logo.svelte'
+	import LogoGroup 		        from './components/shared/LogoGroup.svelte'
 
 	export let actionData;
 	export let schemaData;
@@ -251,7 +252,9 @@
                             <div class = 'logo-container'>
                                 <Logo type={'height'}/>
                             </div>
-
+                        </div>
+                        <div class = "frame__logo-group-container">
+                            <LogoGroup/>
                         </div>
                     </div>
 
@@ -391,6 +394,10 @@
         align-content:          center;
         justify-content:        flex-end;
     }
+    .frame__logo-group-container{
+        grid-area:              3 / 1 / 4 / 3;
+        height:                 80px
+    }
 
     .hero__container {
         position:               relative;
@@ -405,7 +412,7 @@
     .hero__menu{
         width:                  80vw;
         height:                 100%;
-        max-height:             600px;
+        max-height:             400px;
         grid-row:               2 / span 2;
         grid-column:            1;
         display:                grid;

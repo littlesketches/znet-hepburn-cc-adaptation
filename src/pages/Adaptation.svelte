@@ -25,10 +25,10 @@
         <h1 class="hero-content__title">
             <span class = "title--mute">Adapting to</span><br/>
             climate change<br/>
-            <span class = "title--highlight">in Hepburn</span>
+            <span class = "title--highlight">in Hepburn Shire</span>
         </h1>
         <div class="hero-content__text">
-            <p>The climate is changing and we need to make sure our community is ready to adapt to future with more frequent and severe climate-related events like bushfires, floods, droughts and heatwaves. In this section, we will: summarise the latest climate change modelling for Hepburn; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.
+            <p>The climate is changing and we need to make sure our community is ready to adapt to future with more frequent and severe climate-related events like bushfires, floods, droughts and heatwaves. In this section, we will: summarise the latest climate change modelling for Hepburn Shire; introduce the key concepts that underpin climate change adaptation; and identify the climate risks facing our community.
             </p>
         </div>
         <div class ="select">
@@ -52,7 +52,7 @@
             <div scene = 0>
                 <hr>
                 <h2>Climate change adaptation</h2>
-                <p>Our climate <em>is</em> changing. The Paris Agreement - the legally binding international treaty on climate change - sets the goal of <strong>limiting global warming to well below 2, preferably to 1.5 degrees celsius</strong>, compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and draw down greenhouse gas emissions. And in Hepburn, we've been coordinating actions to reduce emissions through <a class ='underline' href = "https://hepburnznet.org.au/" target="_blank">Z-NET Hepburn</a>. These emissions reduction actions also known as <em>mitigation</em> actions. But how do we deal with the climate change we're already locked into? 
+                <p>Our climate <em>is</em> changing. The Paris Agreement - the legally binding international treaty on climate change - sets the goal of <strong>limiting global warming to well below 2, preferably to 1.5 degrees celsius</strong>, compared to pre-industrial levels. To achieve this, the world needs to reduce, eliminate and draw down greenhouse gas emissions. And in Hepburn Shire, we've been coordinating actions to reduce emissions through <a class ='underline' href = "https://hepburnznet.org.au/" target="_blank">Z-NET Hepburn</a>. These emissions reduction actions also known as <em>mitigation</em> actions. But how do we deal with the climate change we're already locked into? 
                 </p>
                 <p>This is where climate change adaptation comes in: it's the "process of adjustment to actual or expected climate and its effects". In other words, making sure our community is prepared and able to cope with climate change. On the surface, adaptation seems <em>fairly</em> straightforward however it encompasses a chain of concepts - many of which overlap with other domains and 'ways of seeing the world' - which can make adaptation difficult to fully grasp. 
                 </p>
@@ -74,9 +74,9 @@
                 <h2>How the climate is changing</h2>
                 <p>Let's start with some definitions (and data!) <strong>Climate variables</strong> are observations that you might recognise from weather forecasts and meteorological data. These are ways we can describe and measure climate change.
                 </p>
-                <p>It gets more interesting when we look at climate models that project how these variables might change over time. Modelling by <a href = "https://www.climatechange.vic.gov.au/victorias-changing-climate" target ="_blank"> CSIRO for the Victorian Government (DEWLP)</a> for the Central Highlands region (which includes Hepburn) <a href = "https://www.climatechangeinaustralia.gov.au/en/projects/victorian-climate-projections-2019/vcp19-accessing-datasets/" target ="_blank">projects the change in each climate variable</a> between 2019 and 2090. Each model projection assumes an emissions scenarios that corresponds to a "Representative Concentration Pathway" (RCP) that corresponds to different levels of average global warming by 2100. The <strong>RCP4.5</strong> and <strong>RCP8.5</strong> scenarios shown here and correspond to global warming of 4.5&#8451; and 8.5&#8451; respectively, by 2100. 
+                <p>It gets more interesting when we look at climate models that project how these variables might change over time. Modelling by <a href = "https://www.climatechange.vic.gov.au/victorias-changing-climate" target ="_blank"> CSIRO for the Victorian Government (DEWLP)</a> for the Central Highlands region (which includes Hepburn Shire) <a href = "https://www.climatechangeinaustralia.gov.au/en/projects/victorian-climate-projections-2019/vcp19-accessing-datasets/" target ="_blank">projects the change in each climate variable</a> between 2019 and 2090. Each model projection assumes an emissions scenarios that corresponds to a "Representative Concentration Pathway" (RCP) that corresponds to different levels of average global warming by 2100. The <strong>RCP4.5</strong> and <strong>RCP8.5</strong> scenarios shown here and correspond to global warming of 4.5&#8451; and 8.5&#8451; respectively, by 2100. 
                 </p>
-                <p>We can (very simply) think of these as medium and higher warming scenarios. But more importantly, together they are illustrate<strong> the general trend and level of uncertainty</strong> of climate modelling for Hepburn.
+                <p>We can (very simply) think of these as medium and higher warming scenarios. But more importantly, together they are illustrate<strong> the general trend and level of uncertainty</strong> of climate modelling for Hepburn Shire.
                 </p>
                 <p>The last idea we'll consider here is <strong>climate hazards</strong> and how they are driven by climate variables. Four hazards were identified in a <a href ="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target="_blank">situational analysis</a> (by RMIT) that supports the regional <a href="https://adaptgrampians.com.au/"target="_blank" >Adapt Grampians</a>  initiative, which includes Hepburn Shire. These <strong> hazards represent threats to our community </strong>that will be <strong> amplified under all climate change scenarios</strong>.    
                </p>
@@ -99,7 +99,7 @@
                     <li><strong>Shocks</strong>: these are intense, shortly sustained events that are commonly known natural (or climate) disasters; and </li>
                     <li><strong>Stresses</strong>: these are events that build and compound over longer periods.</li>
                 </ul>
-                <p>Climate scientists - aided by models and projections - tell us that climate change will lead to <strong>more frequent and more intense climate events</strong>. Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn.
+                <p>Climate scientists - aided by models and projections - tell us that climate change will lead to <strong>more frequent and more intense climate events</strong>. Armed with these warnings, our next challenge is to understand what climate risks means to Hepburn Shire.
                 </p> 
             </div>
         </div>
@@ -121,7 +121,7 @@
                 </p>
                 <p>Exposure to a hazard (related event) is hopefully an easy concept to grasp, because events are spatial and protection often involves a physical response or intervention. Vulnerability is trickier as it involves our individual and collective capacities to adapt to and cope with "adverse consequences". Vulnerability is closely associated with <strong>adaptive capacity</strong> and  <strong>resilience</strong> (which is often be used in other closely related contexts). For our purposes, we think of resilience and adaptive capacity as having similar qualities that reduce vulnerability.
                 </p>
-                <p>The <strong>response</strong> to climate change can also <a href = "https://www.sciencedirect.com/science/article/pii/S2590332221001792" target="_blank">be considered as a fourth determinant or risk</a>. We'll look at this in more detail by examining Hepburn's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in community level.
+                <p>The <strong>response</strong> to climate change can also <a href = "https://www.sciencedirect.com/science/article/pii/S2590332221001792" target="_blank">be considered as a fourth determinant or risk</a>. We'll look at this in more detail by examining Hepburn Shire's adaptation actions (in the next module). But before we do that, let's take a closer look at climate risk in community level.
                 </p> 
             </div>
         </div>
@@ -137,7 +137,7 @@
             <div scene = 0>
                 <hr>
                 <h2>Climate risks and community impacts </h2>
-                <p>We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn, and help us to understand what's at stake.
+                <p>We've traversed a number concepts of concepts and definitions that help us link projected climate change to risk. But we haven't yet given a concrete example of a risk to the community. The following table of risks frame a wide range of climate risks as potential impacts on the community. These are tangible examples of what climate risk means to Hepburn Shire, and help us to understand what's at stake.
                 </p> 
                 <p>Risks are grouped into "risk areas" that help to classify them into broader themes that can help us think about the wide-ranging impacts of climate hazards and events. Risks and risk areas have been sourced and reviewed by the Hepburn community and reflect their concerns, inputs and experience of how these known climate hazards affect the community.</p>
             </div>

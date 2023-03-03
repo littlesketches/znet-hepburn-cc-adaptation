@@ -174,7 +174,7 @@
             <div scene = 2 act="intro" force = "arrow-down">
                 <p>So how can we see how these actions match up to <em>our</em> adaptation needs? How can we tell if what we're doing is effective? Are we doing <em>enough</em>? And are we doing enough in the <em>right places?</em>
                 </p>
-                <p>This guide walks you through some key ways to view Hepburn's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.
+                <p>This guide walks you through some key ways to view Hepburn Shire's adaptation actions. It won't definitively answer these questions - because 'adaptation' doesn't have a single, measurable goal - but it will hopefully equip you with an understanding of what's being done, where there might be gaps, and potentially where you might be able to help our community adapt to climate change.
                 </p>
             </div>
         </div>
@@ -183,7 +183,7 @@
             <div act="hazards" scene = 0 force="cluster-center" >
                 <hr>
                 <h2>Actions vs climate hazards</h2>
-                <p>There are <strong>four climate hazards</strong> facing Hepburn, each of which increases the likelihood of climate events that pose risks to the community.
+                <p>There are <strong>four climate hazards</strong> facing Hepburn Shire, each of which increases the likelihood of climate events that pose risks to the community.
                 </p>
             </div>
             <div scene = 1 force="cluster-hazard" nodeBase="true" nodeArcs = "false" nodeShapes = "false" nodeShadow = "false">
@@ -226,7 +226,7 @@
                 </p>
             </div>
             <div scene = 1 force="cluster-scale" nodeBase="false" nodeArcs = "true" nodeShapes = "true" nodeShadow = "true" nodeSymbol = "false" >
-                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; maybe we could adjust the overall size of each action? However, <strong>we're interested in how these actions affect Hepburn</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!
+                <p>How might we visualise scale? The obvious indicator for scale is size &mdash; maybe we could adjust the overall size of each action? However, <strong>we're interested in how these actions affect Hepburn Shire</strong>, so it doesn't make much sense to visually weight a national action over a local one. So what we'll do is add a subtle, shadow-y ring around the actions that are beyond local scale and move on!
                 </p>
             </div>
         </div>
@@ -254,7 +254,7 @@
                 <hr>
                 <h2>Adaptation focus areas</h2>
                 <p><strong>Five focus areas</strong> have were identified through a <a href="https://adaptgrampians.com.au/wp-content/uploads/2021/06/Grampians_Region_Climate_Adaptation_Strategy_Situation_Analysis_Final_.pdf" target ="_blank">climate adaptation situational analysis study</a> for broader <a href="https://adaptgrampians.com.au/" target ="_blank"> Grampians region</a>. These areas are another useful lens for assessing how well distributed our adaptation actions are across <strong> areas that matter to Hepburn Shire</strong>.</p>
-                <p>For Hepburn, we've added a sixth important focus area of <strong>healing country</strong> to highlight the importance of actions that embrace the views and practices of Traditional Owners to manage climate risk.</p>
+                <p>For Hepburn Shire, we've added a sixth important focus area of <strong>healing country</strong> to highlight the importance of actions that embrace the views and practices of Traditional Owners to manage climate risk.</p>
                 <p>Now of course, many actions address multiple focus areas - so we'll another way to show which actions gravitate to a given focus area. To do this, <strong>you can tap on any of the focus area names to see which actions relate to that area.</strong></p>
             </div>
         </div>
