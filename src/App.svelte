@@ -313,15 +313,15 @@
     }
 
     a {
-        text-decoration: none;
-        color: var(--color-link);
-        outline: none;
+        text-decoration:        none;
+        color:                  var(--color-link);
+        outline:                none;
     }
 
     a:hover,
     a:focus {
-        color: var(--color-link-hover);
-        outline: none;
+        color:                  var(--color-link-hover);
+        outline:                none;
     }
  
 
@@ -383,9 +383,9 @@
     }
 
     .frame__title {
-        font-size: 1rem;
-        margin: 0 0 1rem;
-        font-weight: normal;
+        font-size:              1rem;
+        margin:                 0 0 1rem;
+        font-weight:            normal;
     }
     .frame__logo-wrapper{
         display:                flex;
@@ -412,7 +412,7 @@
     .hero__menu{
         width:                  80vw;
         height:                 100%;
-        max-height:             400px;
+        max-height:             800px;
         grid-row:               2 / span 2;
         grid-column:            1;
         display:                grid;
@@ -440,15 +440,15 @@
         transition:             opacity 0.3s, transform 0.3s;
     }
     .hero__menu-label:hover::after {
-        opacity: 1;
-        transform: scale3d(1,1,1);
+        opacity:                1;
+        transform:              scale3d(1,1,1);
     }
     .hero__img {
         background-position:    50% 0%;
         background-size:        cover;
         height:                 100%;
         width:                  100%;
-        max-height:             600px;
+        max-height:             800px;
         transition:             all 300ms;
         filter:                 grayscale(1) brightness(0.5);
     }
@@ -504,8 +504,6 @@
     }
 
 
-
-
     /**** MEDIA QUERIES ****/
     @media screen and (min-width: 53em) {
         .frame {
@@ -534,11 +532,6 @@
         .frame__title {
             margin: 0;
         }
-        .frame__demos {
-            margin: 0;
-            grid-area: demos;
-            justify-self: end;
-        }
         .frame__links {
             grid-area: links;
             padding: 0;
@@ -546,8 +539,6 @@
             margin: 0 0 0 2rem;
         }
     }
-
-
 
 
     /**************** PRINT STYLESHEET  ************/
