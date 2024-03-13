@@ -1,12 +1,15 @@
 import App          from './App.svelte';
-import airtable     from 'airtable'
+import Airtable     from 'airtable'
 import {tsv}        from 'd3'
 import { schema }   from './data/schema.js'
 
 export { app };
 
 let app
-initWithAirtableContent(initSvelteApp)
+ initWithAirtableContent(initSvelteApp)
+
+
+
 
 // Instantiate Svelte App with content and queryParams as props
 function initSvelteApp(actionData, schemaData, climateData){
@@ -36,14 +39,23 @@ function initSvelteApp(actionData, schemaData, climateData){
 };
 
 // Get Airtable + GSheet content before instantiating Svelte app
-function initWithAirtableContent(initApp){
-    const apiKey = 'key3EFjfpM7LqvZGK'
-    const dataBase = new airtable({apiKey}).base('appBfnKX8Pf8oHvRt');
-    const airtableData = {}
+async function  initWithAirtableContent(initApp){
+    console.log('GETTING DATA')
+
+    const AIRTABLE_PAT = 'patGbuD9ZFjsqSwPy.4c88712dc6b79a68e9ad5dda8637079c99a4faad088ce0e8b6c397d66085c206'
+    const AIRTABLE_BASE_ID_HEPBURN = 'appBfnKX8Pf8oHvRt'
+
+    // Authenticate and connect to base
+    Airtable.configure({
+        endpointUrl: 'https://api.airtable.com',
+        apiKey: AIRTABLE_PAT
+    });
+
+    const base = new Airtable().base(AIRTABLE_BASE_ID_HEPBURN);
 
     // Schema data
     for (const tableName of Object.keys(schema) ){
-        dataBase(`s_${tableName}`).select({
+        base(`s_${tableName}`).select({
             maxRecords: 50,
             view: "Grid view",
         }).eachPage(function page(records, fetchNextPage) {
@@ -57,15 +69,18 @@ function initWithAirtableContent(initApp){
             fetchNextPage()
         })
     }
+
     // Content database
+    const airtableData = {}
     const dataTableNames = ['Adaptation actions', 'Stakeholders', 'References']
     for (const tableName of dataTableNames) {
         airtableData[tableName] = []
-        dataBase(tableName).select({
+        base(tableName).select({
             maxRecords: 200,
             sort: [{field: "Name", direction: "asc"}]
         }).eachPage(function page(records, fetchNextPage) {
             records.forEach(record => airtableData[tableName].push(record.fields) )
+
             fetchNextPage()
         }).then( async() => {
         

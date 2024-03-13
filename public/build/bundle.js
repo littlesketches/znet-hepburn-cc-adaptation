@@ -53352,7 +53352,7 @@ var app = (function (exports) {
     const { console: console_1 } = globals;
     const file = "src/App.svelte";
 
-    // (235:43) 
+    // (238:43) 
     function create_if_block_2(ctx) {
     	let postcards;
     	let current;
@@ -53384,14 +53384,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(235:43) ",
+    		source: "(238:43) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (234:41) 
+    // (237:41) 
     function create_if_block_1(ctx) {
     	let actions;
     	let current;
@@ -53423,14 +53423,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(234:41) ",
+    		source: "(237:41) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (233:8) {#if  $ui.page === 'adaptation'}
+    // (236:8) {#if  $ui.page === 'adaptation'}
     function create_if_block(ctx) {
     	let adaptation;
     	let current;
@@ -53462,7 +53462,7 @@ var app = (function (exports) {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(233:8) {#if  $ui.page === 'adaptation'}",
+    		source: "(236:8) {#if  $ui.page === 'adaptation'}",
     		ctx
     	});
 
@@ -53615,81 +53615,81 @@ var app = (function (exports) {
     			div21 = element("div");
     			div20 = element("div");
     			attr_dev(section0, "class", "chapters");
-    			add_location(section0, file, 231, 4, 9677);
+    			add_location(section0, file, 234, 4, 9881);
     			attr_dev(button, "class", "back svelte-x58pwh");
     			attr_dev(button, "aria-label", "Back to homepage");
-    			add_location(button, file, 238, 4, 9923);
+    			add_location(button, file, 241, 4, 10127);
     			attr_dev(h1, "class", "frame__title svelte-x58pwh");
-    			add_location(h1, file, 247, 28, 10318);
+    			add_location(h1, file, 250, 28, 10522);
     			attr_dev(div0, "class", "frame__links svelte-x58pwh");
-    			add_location(div0, file, 248, 28, 10433);
+    			add_location(div0, file, 251, 28, 10637);
     			attr_dev(div1, "class", "frame__title-wrapper svelte-x58pwh");
-    			add_location(div1, file, 246, 24, 10255);
+    			add_location(div1, file, 249, 24, 10459);
     			attr_dev(div2, "class", "logo-container");
-    			add_location(div2, file, 251, 28, 10586);
+    			add_location(div2, file, 254, 28, 10790);
     			attr_dev(div3, "class", "frame__logo-wrapper svelte-x58pwh");
-    			add_location(div3, file, 250, 24, 10522);
+    			add_location(div3, file, 253, 24, 10726);
     			attr_dev(div4, "class", "frame__logo-group-container svelte-x58pwh");
-    			add_location(div4, file, 255, 24, 10763);
+    			add_location(div4, file, 258, 24, 10967);
     			attr_dev(div5, "class", "frame svelte-x58pwh");
-    			add_location(div5, file, 245, 20, 10211);
+    			add_location(div5, file, 248, 20, 10415);
     			attr_dev(div6, "class", "hero__img svelte-x58pwh");
     			set_style(div6, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
-    			add_location(div6, file, 262, 28, 11034);
+    			add_location(div6, file, 265, 28, 11238);
     			attr_dev(a0, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a0, "name", "adaptation");
-    			add_location(a0, file, 263, 28, 11209);
+    			add_location(a0, file, 266, 28, 11413);
     			attr_dev(div7, "class", "hero__menu-item");
-    			add_location(div7, file, 261, 24, 10976);
+    			add_location(div7, file, 264, 24, 11180);
     			attr_dev(div8, "class", "hero__img svelte-x58pwh");
     			set_style(div8, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
-    			add_location(div8, file, 266, 28, 11444);
+    			add_location(div8, file, 269, 28, 11648);
     			attr_dev(a1, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a1, "name", "actions");
-    			add_location(a1, file, 267, 28, 11636);
+    			add_location(a1, file, 270, 28, 11840);
     			attr_dev(div9, "class", "hero__menu-item");
-    			add_location(div9, file, 265, 24, 11386);
+    			add_location(div9, file, 268, 24, 11590);
     			attr_dev(div10, "class", "hero__img svelte-x58pwh");
     			set_style(div10, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
-    			add_location(div10, file, 270, 28, 11868);
+    			add_location(div10, file, 273, 28, 12072);
     			attr_dev(a2, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a2, "name", "postcards");
-    			add_location(a2, file, 271, 28, 12063);
+    			add_location(a2, file, 274, 28, 12267);
     			attr_dev(div11, "class", "hero__menu-item");
-    			add_location(div11, file, 269, 24, 11810);
+    			add_location(div11, file, 272, 24, 12014);
     			attr_dev(div12, "class", "hero__menu svelte-x58pwh");
-    			add_location(div12, file, 260, 20, 10927);
-    			add_location(br0, file, 276, 38, 12324);
+    			add_location(div12, file, 263, 20, 11131);
+    			add_location(br0, file, 279, 38, 12528);
     			attr_dev(span, "class", "highlight svelte-x58pwh");
-    			add_location(span, file, 277, 24, 12353);
-    			add_location(br1, file, 277, 67, 12396);
+    			add_location(span, file, 280, 24, 12557);
+    			add_location(br1, file, 280, 67, 12600);
     			attr_dev(h2, "class", "hero__title svelte-x58pwh");
-    			add_location(h2, file, 275, 20, 12261);
+    			add_location(h2, file, 278, 20, 12465);
     			attr_dev(div13, "class", "hero__container svelte-x58pwh");
-    			add_location(div13, file, 244, 16, 10161);
+    			add_location(div13, file, 247, 16, 10365);
     			attr_dev(div14, "class", "content__reverse");
-    			add_location(div14, file, 243, 12, 10114);
+    			add_location(div14, file, 246, 12, 10318);
     			attr_dev(div15, "class", "content__move svelte-x58pwh");
-    			add_location(div15, file, 242, 8, 10074);
+    			add_location(div15, file, 245, 8, 10278);
     			attr_dev(section1, "class", "homepage svelte-x58pwh");
-    			add_location(section1, file, 241, 4, 10039);
+    			add_location(section1, file, 244, 4, 10243);
     			attr_dev(div16, "class", "overlay__inner overlay__inner--color-1 svelte-x58pwh");
-    			add_location(div16, file, 287, 12, 12654);
+    			add_location(div16, file, 290, 12, 12858);
     			attr_dev(div17, "class", "overlay overlay--1 svelte-x58pwh");
-    			add_location(div17, file, 286, 8, 12609);
+    			add_location(div17, file, 289, 8, 12813);
     			attr_dev(div18, "class", "overlay__inner overlay__inner--color-2 svelte-x58pwh");
-    			add_location(div18, file, 290, 12, 12781);
+    			add_location(div18, file, 293, 12, 12985);
     			attr_dev(div19, "class", "overlay overlay--2 svelte-x58pwh");
-    			add_location(div19, file, 289, 8, 12736);
+    			add_location(div19, file, 292, 8, 12940);
     			attr_dev(div20, "class", "overlay__inner overlay__inner--color-3 svelte-x58pwh");
-    			add_location(div20, file, 293, 12, 12908);
+    			add_location(div20, file, 296, 12, 13112);
     			attr_dev(div21, "class", "overlay overlay--3 svelte-x58pwh");
-    			add_location(div21, file, 292, 8, 12863);
+    			add_location(div21, file, 295, 8, 13067);
     			attr_dev(section2, "class", "transitions svelte-x58pwh");
-    			add_location(section2, file, 285, 4, 12569);
+    			add_location(section2, file, 288, 4, 12773);
     			attr_dev(main, "id", "app-container");
     			attr_dev(main, "class", "svelte-x58pwh");
-    			add_location(main, file, 229, 0, 9592);
+    			add_location(main, file, 232, 0, 9796);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -53902,6 +53902,8 @@ var app = (function (exports) {
 
     	return block;
     }
+
+    const at = 'patLHdXaU3q59itCt.3ff73bbfd3601838b164a012dc5cd1b2f2d0065ce203873732fa3511b8eaef0f';
 
     function instance($$self, $$props, $$invalidate) {
     	let $ui;
@@ -54179,6 +54181,7 @@ var app = (function (exports) {
     		schemaData,
     		climateData,
     		queryParams,
+    		at,
     		showPage,
     		showMenu,
     		onEnterHoverFn,
@@ -54287,7 +54290,7 @@ var app = (function (exports) {
     if (!browserGlobal) {
         AbortController = require('abort-controller');
     }
-    else if ('signal' in new Request('')) {
+    else if ('signal' in new Request('https://airtable.com')) {
         AbortController = browserGlobal.AbortController;
     }
     else {
@@ -54716,7 +54719,7 @@ var app = (function (exports) {
     module.exports = objectToQueryParamString;
 
     },{"lodash/isArray":79,"lodash/isNil":85,"lodash/keys":93}],12:[function(require,module,exports){
-    module.exports = "0.11.6";
+    module.exports = "0.12.2";
 
     },{}],13:[function(require,module,exports){
     var __assign = (this && this.__assign) || function () {
@@ -54940,6 +54943,7 @@ var app = (function (exports) {
             return isString_1.default(method) && ['get', 'post'].includes(method);
         }, 'the value for `method` should be "get" or "post"'),
         returnFieldsByFieldId: typecheck_1.default(isBoolean_1.default, 'the value for `returnFieldsByFieldId` should be a boolean'),
+        recordMetadata: typecheck_1.default(typecheck_1.default.isArrayOf(isString_1.default), 'the value for `recordMetadata` should be an array of strings'),
     };
     exports.URL_CHARACTER_LENGTH_LIMIT = 15000;
     exports.shouldListRecordsParamBePassedAsParameter = function (paramName) {
@@ -54966,6 +54970,9 @@ var app = (function (exports) {
         function Record(table, recordId, recordJson) {
             this._table = table;
             this.id = recordId || recordJson.id;
+            if (recordJson) {
+                this.commentCount = recordJson.commentCount;
+            }
             this.setRawJson(recordJson);
             this.save = callback_to_promise_1.default(save, this);
             this.patchUpdate = callback_to_promise_1.default(patchUpdate, this);
@@ -58013,10 +58020,13 @@ var app = (function (exports) {
     });
     });
 
-    var airtable = /*@__PURE__*/getDefaultExportFromCjs(airtable_umd);
+    var Airtable = /*@__PURE__*/getDefaultExportFromCjs(airtable_umd);
 
     exports.app = void 0;
-    initWithAirtableContent(initSvelteApp);
+     initWithAirtableContent(initSvelteApp);
+
+
+
 
     // Instantiate Svelte App with content and queryParams as props
     function initSvelteApp(actionData, schemaData, climateData){
@@ -58045,14 +58055,23 @@ var app = (function (exports) {
         });
     }
     // Get Airtable + GSheet content before instantiating Svelte app
-    function initWithAirtableContent(initApp){
-        const apiKey = 'key3EFjfpM7LqvZGK';
-        const dataBase = new airtable({apiKey}).base('appBfnKX8Pf8oHvRt');
-        const airtableData = {};
+    async function  initWithAirtableContent(initApp){
+        console.log('GETTING DATA');
+
+        const AIRTABLE_PAT = 'patGbuD9ZFjsqSwPy.4c88712dc6b79a68e9ad5dda8637079c99a4faad088ce0e8b6c397d66085c206';
+        const AIRTABLE_BASE_ID_HEPBURN = 'appBfnKX8Pf8oHvRt';
+
+        // Authenticate and connect to base
+        Airtable.configure({
+            endpointUrl: 'https://api.airtable.com',
+            apiKey: AIRTABLE_PAT
+        });
+
+        const base = new Airtable().base(AIRTABLE_BASE_ID_HEPBURN);
 
         // Schema data
         for (const tableName of Object.keys(schema) ){
-            dataBase(`s_${tableName}`).select({
+            base(`s_${tableName}`).select({
                 maxRecords: 50,
                 view: "Grid view",
             }).eachPage(function page(records, fetchNextPage) {
@@ -58066,15 +58085,18 @@ var app = (function (exports) {
                 fetchNextPage();
             });
         }
+
         // Content database
+        const airtableData = {};
         const dataTableNames = ['Adaptation actions', 'Stakeholders', 'References'];
         for (const tableName of dataTableNames) {
             airtableData[tableName] = [];
-            dataBase(tableName).select({
+            base(tableName).select({
                 maxRecords: 200,
                 sort: [{field: "Name", direction: "asc"}]
             }).eachPage(function page(records, fetchNextPage) {
                 records.forEach(record => airtableData[tableName].push(record.fields) );
+
                 fetchNextPage();
             }).then( async() => {
             
