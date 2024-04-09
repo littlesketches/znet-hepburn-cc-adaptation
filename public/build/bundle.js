@@ -53352,7 +53352,7 @@ var app = (function (exports) {
     const { console: console_1 } = globals;
     const file = "src/App.svelte";
 
-    // (238:43) 
+    // (236:43) 
     function create_if_block_2(ctx) {
     	let postcards;
     	let current;
@@ -53384,14 +53384,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_2.name,
     		type: "if",
-    		source: "(238:43) ",
+    		source: "(236:43) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (237:41) 
+    // (235:41) 
     function create_if_block_1(ctx) {
     	let actions;
     	let current;
@@ -53423,14 +53423,14 @@ var app = (function (exports) {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(237:41) ",
+    		source: "(235:41) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (236:8) {#if  $ui.page === 'adaptation'}
+    // (234:8) {#if  $ui.page === 'adaptation'}
     function create_if_block(ctx) {
     	let adaptation;
     	let current;
@@ -53462,7 +53462,7 @@ var app = (function (exports) {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(236:8) {#if  $ui.page === 'adaptation'}",
+    		source: "(234:8) {#if  $ui.page === 'adaptation'}",
     		ctx
     	});
 
@@ -53615,81 +53615,81 @@ var app = (function (exports) {
     			div21 = element("div");
     			div20 = element("div");
     			attr_dev(section0, "class", "chapters");
-    			add_location(section0, file, 234, 4, 9881);
+    			add_location(section0, file, 232, 4, 9678);
     			attr_dev(button, "class", "back svelte-x58pwh");
     			attr_dev(button, "aria-label", "Back to homepage");
-    			add_location(button, file, 241, 4, 10127);
+    			add_location(button, file, 239, 4, 9924);
     			attr_dev(h1, "class", "frame__title svelte-x58pwh");
-    			add_location(h1, file, 250, 28, 10522);
+    			add_location(h1, file, 248, 28, 10319);
     			attr_dev(div0, "class", "frame__links svelte-x58pwh");
-    			add_location(div0, file, 251, 28, 10637);
+    			add_location(div0, file, 249, 28, 10434);
     			attr_dev(div1, "class", "frame__title-wrapper svelte-x58pwh");
-    			add_location(div1, file, 249, 24, 10459);
+    			add_location(div1, file, 247, 24, 10256);
     			attr_dev(div2, "class", "logo-container");
-    			add_location(div2, file, 254, 28, 10790);
+    			add_location(div2, file, 252, 28, 10587);
     			attr_dev(div3, "class", "frame__logo-wrapper svelte-x58pwh");
-    			add_location(div3, file, 253, 24, 10726);
+    			add_location(div3, file, 251, 24, 10523);
     			attr_dev(div4, "class", "frame__logo-group-container svelte-x58pwh");
-    			add_location(div4, file, 258, 24, 10967);
+    			add_location(div4, file, 256, 24, 10764);
     			attr_dev(div5, "class", "frame svelte-x58pwh");
-    			add_location(div5, file, 248, 20, 10415);
+    			add_location(div5, file, 246, 20, 10212);
     			attr_dev(div6, "class", "hero__img svelte-x58pwh");
     			set_style(div6, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-About-2.jpg)");
-    			add_location(div6, file, 265, 28, 11238);
+    			add_location(div6, file, 263, 28, 11035);
     			attr_dev(a0, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a0, "name", "adaptation");
-    			add_location(a0, file, 266, 28, 11413);
+    			add_location(a0, file, 264, 28, 11210);
     			attr_dev(div7, "class", "hero__menu-item");
-    			add_location(div7, file, 264, 24, 11180);
+    			add_location(div7, file, 262, 24, 10977);
     			attr_dev(div8, "class", "hero__img svelte-x58pwh");
     			set_style(div8, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/06/Zero-Net-Emissions-Hepburn-Wind-Farm-Home-3.jpg)");
-    			add_location(div8, file, 269, 28, 11648);
+    			add_location(div8, file, 267, 28, 11445);
     			attr_dev(a1, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a1, "name", "actions");
-    			add_location(a1, file, 270, 28, 11840);
+    			add_location(a1, file, 268, 28, 11637);
     			attr_dev(div9, "class", "hero__menu-item");
-    			add_location(div9, file, 268, 24, 11590);
+    			add_location(div9, file, 266, 24, 11387);
     			attr_dev(div10, "class", "hero__img svelte-x58pwh");
     			set_style(div10, "background-image", "url(https://hepburnznet.org.au/wp-content/uploads/2020/08/Zero-Net-Emissions-Hepburn-Wind-Community-Hero.jpg)");
-    			add_location(div10, file, 273, 28, 12072);
+    			add_location(div10, file, 271, 28, 11869);
     			attr_dev(a2, "class", "hero__menu-label svelte-x58pwh");
     			attr_dev(a2, "name", "postcards");
-    			add_location(a2, file, 274, 28, 12267);
+    			add_location(a2, file, 272, 28, 12064);
     			attr_dev(div11, "class", "hero__menu-item");
-    			add_location(div11, file, 272, 24, 12014);
+    			add_location(div11, file, 270, 24, 11811);
     			attr_dev(div12, "class", "hero__menu svelte-x58pwh");
-    			add_location(div12, file, 263, 20, 11131);
-    			add_location(br0, file, 279, 38, 12528);
+    			add_location(div12, file, 261, 20, 10928);
+    			add_location(br0, file, 277, 38, 12325);
     			attr_dev(span, "class", "highlight svelte-x58pwh");
-    			add_location(span, file, 280, 24, 12557);
-    			add_location(br1, file, 280, 67, 12600);
+    			add_location(span, file, 278, 24, 12354);
+    			add_location(br1, file, 278, 67, 12397);
     			attr_dev(h2, "class", "hero__title svelte-x58pwh");
-    			add_location(h2, file, 278, 20, 12465);
+    			add_location(h2, file, 276, 20, 12262);
     			attr_dev(div13, "class", "hero__container svelte-x58pwh");
-    			add_location(div13, file, 247, 16, 10365);
+    			add_location(div13, file, 245, 16, 10162);
     			attr_dev(div14, "class", "content__reverse");
-    			add_location(div14, file, 246, 12, 10318);
+    			add_location(div14, file, 244, 12, 10115);
     			attr_dev(div15, "class", "content__move svelte-x58pwh");
-    			add_location(div15, file, 245, 8, 10278);
+    			add_location(div15, file, 243, 8, 10075);
     			attr_dev(section1, "class", "homepage svelte-x58pwh");
-    			add_location(section1, file, 244, 4, 10243);
+    			add_location(section1, file, 242, 4, 10040);
     			attr_dev(div16, "class", "overlay__inner overlay__inner--color-1 svelte-x58pwh");
-    			add_location(div16, file, 290, 12, 12858);
+    			add_location(div16, file, 288, 12, 12655);
     			attr_dev(div17, "class", "overlay overlay--1 svelte-x58pwh");
-    			add_location(div17, file, 289, 8, 12813);
+    			add_location(div17, file, 287, 8, 12610);
     			attr_dev(div18, "class", "overlay__inner overlay__inner--color-2 svelte-x58pwh");
-    			add_location(div18, file, 293, 12, 12985);
+    			add_location(div18, file, 291, 12, 12782);
     			attr_dev(div19, "class", "overlay overlay--2 svelte-x58pwh");
-    			add_location(div19, file, 292, 8, 12940);
+    			add_location(div19, file, 290, 8, 12737);
     			attr_dev(div20, "class", "overlay__inner overlay__inner--color-3 svelte-x58pwh");
-    			add_location(div20, file, 296, 12, 13112);
+    			add_location(div20, file, 294, 12, 12909);
     			attr_dev(div21, "class", "overlay overlay--3 svelte-x58pwh");
-    			add_location(div21, file, 295, 8, 13067);
+    			add_location(div21, file, 293, 8, 12864);
     			attr_dev(section2, "class", "transitions svelte-x58pwh");
-    			add_location(section2, file, 288, 4, 12773);
+    			add_location(section2, file, 286, 4, 12570);
     			attr_dev(main, "id", "app-container");
     			attr_dev(main, "class", "svelte-x58pwh");
-    			add_location(main, file, 232, 0, 9796);
+    			add_location(main, file, 230, 0, 9593);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -53902,8 +53902,6 @@ var app = (function (exports) {
 
     	return block;
     }
-
-    const at = 'patLHdXaU3q59itCt.3ff73bbfd3601838b164a012dc5cd1b2f2d0065ce203873732fa3511b8eaef0f';
 
     function instance($$self, $$props, $$invalidate) {
     	let $ui;
@@ -54181,7 +54179,6 @@ var app = (function (exports) {
     		schemaData,
     		climateData,
     		queryParams,
-    		at,
     		showPage,
     		showMenu,
     		onEnterHoverFn,
