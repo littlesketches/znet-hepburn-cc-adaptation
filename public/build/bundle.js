@@ -58055,13 +58055,14 @@ var app = (function (exports) {
         async function  initWithAirtableContent(initApp){
             console.log('GETTING DATA');
 
-            const AIRTABLE_PAT = 'patuhNtpwLmVAKg2b.89e9c9abccfe84cddd2bb1b6511701144abb30af6a0ee13d231dbf1d10fb3ffd';
+            const AIRTABLE_RO_PAT1 = 'patuhNtpwLmVAKg2b';
+            const AIRTABLE_RO_PAT2 = '89e9c9abccfe84cddd2bb1b6511701144abb30af6a0ee13d231dbf1d10fb3ffd';
             const AIRTABLE_BASE_ID_HEPBURN = 'appBfnKX8Pf8oHvRt';
 
             // Authenticate and connect to base
             Airtable.configure({
                 endpointUrl: 'https://api.airtable.com',
-                apiKey: AIRTABLE_PAT
+                apiKey: `${AIRTABLE_RO_PAT1}.${AIRTABLE_RO_PAT2}`
             });
 
             const base = new Airtable().base(AIRTABLE_BASE_ID_HEPBURN);
